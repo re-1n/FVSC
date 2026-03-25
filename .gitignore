@@ -1,0 +1,19 @@
+# Personal data — chat exports and generated maps with personal content
+экспорты чатов/
+диалог о llm и fvsc с key7.txt
+NEXT_SESSION.md
+
+# Generated maps (contain personal semantic data)
+core/semantic_map*.html
+core/test_sphere_map.html
+core/semantic_graph.png
+
+# Large data files (download separately)
+data/conceptnet-assertions-5.7.0.csv.gz
+
+# Misc
+*.jpg
+*.png
+__pycache__/
+*.pyc
+.claude/
