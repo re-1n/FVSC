@@ -30,6 +30,7 @@ class Judgment:
     source_text: str = ""
     condition_id: Optional[int] = None       # links conditional pairs (if→then)
     condition_role: Optional[str] = None     # "ANTECEDENT" | "CONSEQUENT"
+    anomaly_score: Optional[float] = None    # 0.0=normal, 1.0=max anomaly vs existing map
 
 
 @dataclass
@@ -280,6 +281,23 @@ class SemanticSpace:
             return "relation"
         return "action"
 
+    def _compute_anomaly(self, term: str, v_new: np.ndarray) -> float:
+        """How anomalous is v_new relative to existing ρ(term)?
+
+        Returns 0.0 (aligned with existing map) to 1.0 (perpendicular/opposite).
+        Returns 0.0 if concept is new or has too few components.
+        """
+        concept = self.concepts.get(term)
+        if concept is None or len(concept.components) < 3:
+            return 0.0
+        rho_n = concept.rho_norm
+        if rho_n is None:
+            return 0.0
+        # Projection of new vector onto normalized density matrix
+        v = v_new.reshape(-1, 1)
+        alignment = float(np.sum((v @ v.T) * rho_n.T))  # Tr(|v><v| · ρ_norm)
+        return float(np.clip(1.0 - alignment, 0.0, 1.0))
+
     def materialize_judgment(self, j: Judgment):
         """Process a judgment: create ASYMMETRIC vectors, update density matrices.
 
@@ -290,10 +308,22 @@ class SemanticSpace:
           - relation ("я хочу X") → lighter weight into [self]
           - action ("я делаю X") → NOT into [self], only activates object
         - Verbs are also concepts (dual nature)
+        - Computes anomaly_score BEFORE adding component (compares with existing ρ)
         """
         w = j.modality * j.intensity
         subj_is_pronoun = j.subject.lower() in PRONOUNS
         obj_is_pronoun = j.object.lower() in PRONOUNS
+
+        # Compute anomaly BEFORE modifying density matrices
+        anomaly_scores = []
+        if not subj_is_pronoun and j.subject.lower() not in ("я", "себя"):
+            v_subj = self.encode_judgment_for_subject(j)
+            anomaly_scores.append(self._compute_anomaly(j.subject, v_subj))
+        if not obj_is_pronoun:
+            v_obj = self.encode_judgment_for_object(j)
+            anomaly_scores.append(self._compute_anomaly(j.object, v_obj))
+        if anomaly_scores:
+            j.anomaly_score = max(anomaly_scores)
 
         # Skip if both are pronouns/noise
         if subj_is_pronoun and obj_is_pronoun:

@@ -75,6 +75,7 @@ def build_map_data(space: SemanticSpace, min_components: int = 3,
                 "source_text": j.source_text[:200],
                 "condition_id": j.condition_id,
                 "condition_role": j.condition_role,
+                "anomaly": round(j.anomaly_score, 3) if j.anomaly_score else 0,
             })
 
         nodes.append({
@@ -171,6 +172,8 @@ body { background: #111; color: #ccc; font-family: 'Segoe UI', system-ui, sans-s
 .judgment .source { color: #666; font-style: italic; line-height: 1.5; margin-top: 4px; }
 .judgment.neg { border-left-color: #944; }
 .judgment.cond { border-left-color: #885; }
+.judgment.anomaly { border-left-color: #d90; background: #1f1c18; }
+.anomaly-badge { display: inline-block; background: #d90; color: #111; font-size: 9px; padding: 1px 6px; border-radius: 8px; margin-left: 6px; font-weight: 600; }
 
 .contains-item { padding: 4px 0; font-size: 12px; display: flex; justify-content: space-between; border-bottom: 1px solid #1c1c1c; cursor: pointer; }
 .contains-item:hover { background: #1e1e1e; }
@@ -555,12 +558,14 @@ function showNodePanel(n) {
 
     h += `<h3>суждения (${n.judgments.length})</h3>`;
     n.judgments.forEach(j => {
-        const cls = j.quality === 'NEGATIVE' ? 'neg' : (j.condition_id ? 'cond' : '');
+        const isAnomaly = j.anomaly >= 0.85;
+        const cls = isAnomaly ? 'anomaly' : (j.quality === 'NEGATIVE' ? 'neg' : (j.condition_id ? 'cond' : ''));
         const neg = j.quality === 'NEGATIVE' ? ' [НЕТ]' : '';
         const mod = j.modality !== 1.0 ? ` mod=${j.modality}` : '';
         const cond = j.condition_role ? ` [${j.condition_role}]` : '';
+        const anom = isAnomaly ? `<span class="anomaly-badge">аномалия ${(j.anomaly * 100).toFixed(0)}%</span>` : '';
         h += `<div class="judgment ${cls}">`;
-        h += `<div class="triple">${esc(j.subject)} —[${esc(j.verb)}]→ ${esc(j.object)}${neg}${mod}${cond}</div>`;
+        h += `<div class="triple">${esc(j.subject)} —[${esc(j.verb)}]→ ${esc(j.object)}${neg}${mod}${cond}${anom}</div>`;
         h += `<div class="source">"${esc(j.source_text)}"</div>`;
         h += `</div>`;
     });
