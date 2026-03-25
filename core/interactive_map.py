@@ -700,11 +700,12 @@ def main():
     print(f"  Terms with vectors: {len(seed_vectors)}/{len(all_terms)}")
 
     # Load thesaurus (if available)
-    thesaurus_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "conceptnet_ru.json")
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+    thesaurus_path = os.path.join(data_dir, "conceptnet_ru.json")
     th_loader = None
     if os.path.exists(thesaurus_path):
         print(f"\nLoading thesaurus layer...")
-        th_loader = ThesaurusLoader(conceptnet_cache=thesaurus_path)
+        th_loader = ThesaurusLoader(conceptnet_cache=thesaurus_path, ruwordnet_dir=data_dir)
     else:
         print(f"\n  [thesaurus] No cache — skipping (run build_conceptnet_cache.py)")
 

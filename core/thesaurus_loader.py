@@ -21,6 +21,7 @@ Usage:
 
 import json
 import os
+import xml.etree.ElementTree as ET
 from typing import Optional
 
 from density_core import Judgment
@@ -133,59 +134,71 @@ def load_conceptnet_judgments(cache_path: str,
 # RuWordNet loader (for when XML files are available)
 # ---------------------------------------------------------------------------
 
-def load_ruwordnet_judgments(db_path: Optional[str] = None,
+def load_ruwordnet_judgments(xml_dir: Optional[str] = None,
                               modality: float = THESAURUS_MODALITY_RUWORDNET
                               ) -> list[Judgment]:
-    """Load judgments from RuWordNet database.
+    """Load judgments from RuWordNet XML files (from ruwordnet.ru).
 
-    Requires: pip install ruwordnet + database file.
-    If DB not available, returns empty list.
+    Args:
+        xml_dir: directory containing synsets.N.xml, synset_relations.N.xml, senses.N.xml, etc.
     """
-    try:
-        from ruwordnet import RuWordNet
-        wn = RuWordNet(filename=db_path) if db_path else RuWordNet()
-    except (ImportError, FileNotFoundError) as e:
-        print(f"  [thesaurus] RuWordNet not available: {e}")
+    if xml_dir is None or not os.path.isdir(xml_dir):
+        print(f"  [thesaurus] RuWordNet XML dir not found: {xml_dir}")
         return []
 
-    judgments = []
-
-    for synset in wn.get_all_synsets():
-        # Get the most common lemma for this synset
-        senses = synset.senses
-        if not senses:
+    # Step 1: Build synset_id → first lemma mapping from senses files
+    # senses.X.xml: flat list of <sense name="..." synset_id="..." synt_type="..."/>
+    # We take the first single-word sense (synt_type="N"/"V"/"A") per synset
+    synset_lemma = {}
+    for pos in ("N", "V", "A"):
+        senses_path = os.path.join(xml_dir, f"senses.{pos}.xml")
+        if not os.path.exists(senses_path):
             continue
-        term = senses[0].lemma.lower()
+        tree = ET.parse(senses_path)
+        for sense_el in tree.getroot():
+            sid = sense_el.attrib.get("synset_id", "")
+            if sid in synset_lemma:
+                continue
+            # Prefer single-word senses (synt_type N/V/A, not NG/VG)
+            name = sense_el.attrib.get("name", "").strip()
+            synt = sense_el.attrib.get("synt_type", "")
+            if name and " " not in name and len(synt) <= 2:
+                synset_lemma[sid] = name.lower()
 
-        # Hypernyms: term → hypernym (is-a)
-        for hyper in synset.hypernyms:
-            hyper_senses = hyper.senses
-            if hyper_senses:
-                hyper_term = hyper_senses[0].lemma.lower()
-                judgments.append(Judgment(
-                    subject=term,
-                    verb="является_видом",
-                    object=hyper_term,
-                    quality="AFFIRMATIVE",
-                    modality=modality,
-                    intensity=0.9,
-                    source_text="[thesaurus:ruwordnet:hypernym]",
-                ))
+    # Step 2: Parse relations and convert to Judgments
+    judgments = []
+    for pos in ("N", "V", "A"):
+        rels_path = os.path.join(xml_dir, f"synset_relations.{pos}.xml")
+        if not os.path.exists(rels_path):
+            continue
+        tree = ET.parse(rels_path)
+        for rel_el in tree.getroot():
+            rel_name = rel_el.attrib.get("name", "")
+            child_id = rel_el.attrib.get("child_id", "")
+            parent_id = rel_el.attrib.get("parent_id", "")
 
-        # Hyponyms: term → hyponym (includes)
-        for hypo in synset.hyponyms:
-            hypo_senses = hypo.senses
-            if hypo_senses:
-                hypo_term = hypo_senses[0].lemma.lower()
-                judgments.append(Judgment(
-                    subject=term,
-                    verb="включает_вид",
-                    object=hypo_term,
-                    quality="AFFIRMATIVE",
-                    modality=modality,
-                    intensity=0.9,
-                    source_text="[thesaurus:ruwordnet:hyponym]",
-                ))
+            child_lemma = synset_lemma.get(child_id)
+            parent_lemma = synset_lemma.get(parent_id)
+            if not child_lemma or not parent_lemma or child_lemma == parent_lemma:
+                continue
+            if len(child_lemma) < 2 or len(parent_lemma) < 2:
+                continue
+
+            mapping = RUWORDNET_RELATION_MAP.get(rel_name)
+            if mapping is None:
+                continue
+
+            verb, intensity, is_negative = mapping
+            # parent_id is the "container", child_id is what's inside
+            judgments.append(Judgment(
+                subject=parent_lemma,
+                verb=verb,
+                object=child_lemma,
+                quality="NEGATIVE" if is_negative else "AFFIRMATIVE",
+                modality=modality,
+                intensity=intensity,
+                source_text=f"[thesaurus:ruwordnet:{rel_name}]",
+            ))
 
     return judgments
 
@@ -199,10 +212,10 @@ class ThesaurusLoader:
 
     def __init__(self,
                  conceptnet_cache: Optional[str] = None,
-                 ruwordnet_db: Optional[str] = None,
+                 ruwordnet_dir: Optional[str] = None,
                  conceptnet_min_weight: float = 1.0):
         self.conceptnet_cache = conceptnet_cache
-        self.ruwordnet_db = ruwordnet_db
+        self.ruwordnet_dir = ruwordnet_dir
         self.conceptnet_min_weight = conceptnet_min_weight
 
     def load_all(self) -> list[Judgment]:
@@ -217,8 +230,8 @@ class ThesaurusLoader:
             print(f"  [thesaurus] ConceptNet: {len(cn)} judgments loaded")
             all_judgments.extend(cn)
 
-        if self.ruwordnet_db:
-            rwn = load_ruwordnet_judgments(self.ruwordnet_db)
+        if self.ruwordnet_dir:
+            rwn = load_ruwordnet_judgments(self.ruwordnet_dir)
             print(f"  [thesaurus] RuWordNet: {len(rwn)} judgments loaded")
             all_judgments.extend(rwn)
 

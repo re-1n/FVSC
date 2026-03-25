@@ -249,10 +249,11 @@ def main():
     space = SemanticSpace(dim=dim, seed_vectors=seed_vectors, min_components_for_query=3)
 
     # Load thesaurus layer (base knowledge — low modality)
-    thesaurus_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "conceptnet_ru.json")
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+    thesaurus_path = os.path.join(data_dir, "conceptnet_ru.json")
     if os.path.exists(thesaurus_path):
         print("\nLoading thesaurus layer...")
-        loader = ThesaurusLoader(conceptnet_cache=thesaurus_path)
+        loader = ThesaurusLoader(conceptnet_cache=thesaurus_path, ruwordnet_dir=data_dir)
         thesaurus_judgments = loader.load_for_terms(all_terms)
         for j in thesaurus_judgments:
             space.materialize_judgment(j)
