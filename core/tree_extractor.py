@@ -128,11 +128,19 @@ def _next_condition_id() -> int:
 # Core: recursive tree walk
 # ---------------------------------------------------------------------------
 
-def extract_judgments_recursive(nlp, texts: list[str]) -> list[Judgment]:
+def extract_judgments_recursive(nlp, texts: list[str],
+                                normalize: bool = True) -> list[Judgment]:
     """Extract S→V→O judgments from texts using recursive dependency tree walk.
 
-    Drop-in replacement for the flat extract_judgments().
+    Args:
+        nlp: spaCy language model
+        texts: list of raw texts
+        normalize: if True, normalize chat/social media text before parsing
     """
+    if normalize:
+        from text_normalizer import normalize_texts
+        texts = normalize_texts(texts)
+
     results: list[Judgment] = []
 
     for doc in nlp.pipe(texts, batch_size=50):
