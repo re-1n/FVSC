@@ -81,15 +81,68 @@
 
 ---
 
+## v0.5 — Эпистемологические основания + временная динамика
+
+**Файлы:** `density_core.py` (расширен), `FVSC whitepaper.md` (XVII, XVIII)
+
+### F1: Слоистая модель интерпретации (Judgment)
+| Поле | Тип | Назначение |
+|---|---|---|
+| `interpretation_layer` | int (0/1/2) | L0=синтаксис, L1=инференция, L2=LLM |
+| `defeasible` | bool | Отменяемое ли суждение |
+| `inference_chain` | list[str] | Цепочка обоснования для L1+ |
+| `extraction_confidence` | float | Уверенность в корректности извлечения |
+
+Новый метод `Concept.rho_layer(max_layer)` — density matrix только из суждений до указанного слоя.
+
+### F3: Степенной decay + консолидация + архивация (Component, Concept)
+| Механизм | Реализация |
+|---|---|
+| Степенной decay | `w(t) = w₀ · activation_count · (1 + Δt/τ)^{-0.5}` (ACT-R) |
+| Архивация | `w < 0.01·max(w)` → `archived=True`, provenance сохранён |
+| Консолидация | cosine > 0.85 → `activation_count += 1`, обновление timestamp |
+| Восстановление | `Concept.reactivate()` — возврат из архива |
+
+Новые поля Component: `activation_count`, `archived`.
+
+### T6: Сравнение карт двух пользователей
+Новый метод `SemanticSpace.compare_maps(space_a, space_b)`:
+- Для каждого общего понятия: `Tr(ρ_A^norm · ρ_B^norm)`
+- Возвращает: divergent (расхождения), aligned (совпадения), global_similarity
+
+### Whitepaper
+- Раздел XVII: Эпистемологические основания (17.1–17.3)
+- Раздел XVIII: Временная динамика (18.1–18.5)
+- 21 новых академических источников
+- Обновлён "Принцип", раздел XII (Антураж), XV (открытые вопросы)
+
+### F2: Персональный прогрев (grounding)
+`get_term_vector()` трёхуровневый: PCA (>50 компонентов) → spaCy → хеш. `_personal_basis()` через SVD.
+
+### T5: Relation-dependent transform
+`_relation_transform(ρ, relation)`: R_r·ρ·R_r†. `_dominant_relation(A,B)` находит глагол связи.
+
+### T10: Интерактивный канал обратной связи
+Новый `core/feedback.py`: FeedbackEngine генерирует вопросы (anomaly, contradiction, defeasible, archive, contrast, milestone), обрабатывает ответы (confirm/reject/promote/contextualize).
+
+### Антураж — живой LLM-диалог
+Новый `core/antourage_server.py`: HTTP-сервер localhost:8731. Ollama qwen2.5:7b. FeedbackEngine → контекст → LLM → естественная речь. Персистентность в `data/sessions/*.jsonl`. Извлечение суждений из ответов пользователя → L0.
+
+Новые поля Judgment: `confirmation_status`, `context_tags`.
+
+---
+
 ## Архитектура пайплайна (текущая)
 
 ```
 текст
+  → text_normalizer (чатовый сленг, повторы)
   → spaCy (токенизация, морфология, дерево зависимостей)
   → context_classifier (clause type + NP ref status)
   → tree_extractor (рекурсивный обход дерева + ExtractionContext)
-  → density_core (материализация в ρ, recursive deepening)
-  → interactive_map / visualize_graph (визуализация)
+  → density_core (материализация в ρ, decay, consolidation, recursive deepening)
+  → feedback (FeedbackEngine: генерация вопросов, обработка ответов)
+  → interactive_map + antourage_server (визуализация + LLM-диалог)
 ```
 
 ---
@@ -98,11 +151,13 @@
 
 | Файл | Строк | Назначение |
 |---|---|---|
-| `FVSC whitepaper.md` | ~1830 | Спецификация |
-| `core/density_core.py` | ~530 | Ядро: матрицы плотности, SemanticSpace |
-| `core/context_classifier.py` | ~300 | Контекстная классификация NP |
-| `core/tree_extractor.py` | ~450 | Рекурсивное извлечение суждений |
-| `core/live_test.py` | ~370 | Тест на Telegram данных |
-| `core/interactive_map.py` | ~350 | Интерактивная HTML-карта (vis.js) |
+| `FVSC whitepaper.md` | ~2300 | Спецификация (I–XVIII + Приложение A) |
+| `core/density_core.py` | ~700 | Ядро: density matrices, decay, layers, comparison |
+| `core/feedback.py` | ~280 | FeedbackEngine: вопросы + ответы |
+| `core/antourage_server.py` | ~450 | HTTP-сервер: карта + Ollama + persistence |
+| `core/context_classifier.py` | ~420 | Контекстная классификация NP |
+| `core/tree_extractor.py` | ~700 | Рекурсивное извлечение суждений |
+| `core/interactive_map.py` | ~820 | Интерактивная HTML-карта + Антураж-панель |
+| `core/live_test.py` | ~420 | Telegram pipeline |
 | `core/visualize_graph.py` | ~200 | Статичный PNG-граф (networkx) |
 | `core/test_poc.py` | ~190 | Юнит-тест на ручных суждениях |

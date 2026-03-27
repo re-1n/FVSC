@@ -14,6 +14,12 @@ data/conceptnet-assertions-5.7.0.csv.gz
 data/*.xml
 data/ruwordnet.tar.gz
 
+# Session data (personal dialogue logs)
+data/sessions/
+
+# Generated demo/feedback maps
+demo_feedback.html
+
 # Misc
 *.jpg
 *.png

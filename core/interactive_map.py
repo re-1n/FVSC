@@ -76,6 +76,11 @@ def build_map_data(space: SemanticSpace, min_components: int = 3,
                 "condition_id": j.condition_id,
                 "condition_role": j.condition_role,
                 "anomaly": round(j.anomaly_score, 3) if j.anomaly_score else 0,
+                # Feedback fields
+                "layer": j.interpretation_layer,
+                "defeasible": j.defeasible,
+                "confirmation": j.confirmation_status,
+                "confidence": round(j.extraction_confidence, 2),
             })
 
         nodes.append({
@@ -136,7 +141,24 @@ def build_map_data(space: SemanticSpace, min_components: int = 3,
             "judgments": self_judgments,
         }
 
-    return {"nodes": nodes, "edges": edges, "self": self_data}
+    # Feedback questions (generated from FeedbackEngine if available)
+    feedback_questions = []
+    try:
+        from feedback import FeedbackEngine
+        engine = FeedbackEngine(space)
+        for q in engine.generate_questions(max_count=10):
+            feedback_questions.append({
+                "type": q.question_type,
+                "priority": round(q.priority, 2),
+                "prompt": q.prompt_text,
+                "options": q.options,
+                "concepts": q.related_concepts,
+            })
+    except ImportError:
+        pass
+
+    return {"nodes": nodes, "edges": edges, "self": self_data,
+            "feedback": feedback_questions}
 
 
 HTML_TEMPLATE = r"""<!DOCTYPE html>
@@ -202,6 +224,38 @@ body { background: #111; color: #ccc; font-family: 'Segoe UI', system-ui, sans-s
 
 /* Hint for double-click */
 #hint { position: absolute; bottom: 16px; right: 420px; background: rgba(22,22,22,0.8); padding: 4px 12px; border-radius: 4px; font-size: 10px; color: #444; z-index: 10; }
+
+/* Antourage feedback panel */
+#antourage { position: fixed; bottom: 0; left: 0; right: 400px; background: #141418; border-top: 1px solid #282828;
+  z-index: 20; transition: transform 0.3s ease; }
+#antourage.hidden { transform: translateY(100%); }
+#antourage-toggle { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 21;
+  background: #1c1c24; border: 1px solid #333; color: #888; padding: 6px 18px; border-radius: 20px;
+  cursor: pointer; font-size: 12px; transition: all 0.2s; }
+#antourage-toggle:hover { background: #252530; color: #bbb; }
+#antourage-toggle .badge { background: #d90; color: #111; font-size: 10px; padding: 1px 6px; border-radius: 8px; margin-left: 6px; }
+
+#ant-inner { padding: 16px 24px; max-height: 220px; overflow-y: auto; }
+#ant-prompt { color: #bbb; font-size: 14px; line-height: 1.6; margin-bottom: 12px; }
+#ant-options { display: flex; flex-wrap: wrap; gap: 8px; }
+#ant-options button { background: #1e1e28; border: 1px solid #333; color: #aaa; padding: 6px 16px;
+  border-radius: 16px; cursor: pointer; font-size: 12px; transition: all 0.15s; }
+#ant-options button:hover { background: #282838; color: #ddd; border-color: #555; }
+#ant-options button.skip { color: #555; border-color: #222; }
+
+#ant-progress { display: flex; align-items: center; gap: 12px; padding: 8px 24px; border-top: 1px solid #1c1c1c; }
+#ant-progress-bar { flex: 1; height: 3px; background: #222; border-radius: 2px; overflow: hidden; }
+#ant-progress-fill { height: 100%; background: #5a5a8a; transition: width 0.3s; }
+#ant-progress-text { color: #444; font-size: 10px; white-space: nowrap; }
+#ant-milestone { color: #8a8a5a; font-size: 12px; padding: 8px 24px; display: none; }
+
+/* Layer indicators in judgments */
+.layer-badge { display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 6px; margin-left: 4px; }
+.layer-badge.l0 { background: #2a3a2a; color: #6a8a6a; }
+.layer-badge.l1 { background: #3a3a2a; color: #8a8a5a; }
+.layer-badge.l2 { background: #3a2a3a; color: #8a5a8a; }
+.confirmed-badge { display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 6px; margin-left: 4px; background: #2a3a2a; color: #5a9a5a; }
+.rejected-badge { display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 6px; margin-left: 4px; background: #3a2a2a; color: #9a5a5a; }
 </style>
 </head>
 <body>
@@ -224,6 +278,20 @@ body { background: #111; color: #ccc; font-family: 'Segoe UI', system-ui, sans-s
   <div id="panel-content">
     <h2 style="color:#555">Кликните на понятие</h2>
     <p style="color:#444;font-size:13px;line-height:1.6;margin-top:8px;">Нажмите на узел — параметры и суждения.<br>Двойной клик — войти внутрь понятия.<br>Внутри: клик на пустоту — выйти обратно.<br><br>Перетаскивайте узлы. Граф пружинный.</p>
+  </div>
+</div>
+
+<!-- Antourage feedback panel -->
+<button id="antourage-toggle" onclick="toggleAntourage()">Антураж <span class="badge" id="ant-badge">0</span></button>
+<div id="antourage" class="hidden">
+  <div id="ant-inner">
+    <div id="ant-prompt">Загрузка...</div>
+    <div id="ant-options"></div>
+  </div>
+  <div id="ant-milestone"></div>
+  <div id="ant-progress">
+    <div id="ant-progress-bar"><div id="ant-progress-fill" style="width:0%"></div></div>
+    <div id="ant-progress-text">0% проверено</div>
   </div>
 </div>
 
@@ -564,8 +632,11 @@ function showNodePanel(n) {
         const mod = j.modality !== 1.0 ? ` mod=${j.modality}` : '';
         const cond = j.condition_role ? ` [${j.condition_role}]` : '';
         const anom = isAnomaly ? `<span class="anomaly-badge">аномалия ${(j.anomaly * 100).toFixed(0)}%</span>` : '';
+        const layerBadge = j.layer > 0 ? `<span class="layer-badge l${j.layer}">L${j.layer}</span>` : '';
+        const confBadge = j.confirmation === 'confirmed' ? '<span class="confirmed-badge">подтверждено</span>'
+            : j.confirmation === 'rejected' ? '<span class="rejected-badge">отклонено</span>' : '';
         h += `<div class="judgment ${cls}">`;
-        h += `<div class="triple">${esc(j.subject)} —[${esc(j.verb)}]→ ${esc(j.object)}${neg}${mod}${cond}${anom}</div>`;
+        h += `<div class="triple">${esc(j.subject)} —[${esc(j.verb)}]→ ${esc(j.object)}${neg}${mod}${cond}${anom}${layerBadge}${confBadge}</div>`;
         h += `<div class="source">"${esc(j.source_text)}"</div>`;
         h += `</div>`;
     });
@@ -590,6 +661,124 @@ function showSelf() {
 }
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ============================================================
+// Antourage Feedback System
+// ============================================================
+
+const feedbackQuestions = DATA.feedback || [];
+let fbIndex = 0;
+let fbAnswered = 0;
+let fbTotal = feedbackQuestions.length;
+let fbLog = []; // collected feedback for export
+
+function toggleAntourage() {
+    const el = document.getElementById('antourage');
+    el.classList.toggle('hidden');
+    if (!el.classList.contains('hidden') && fbIndex < fbTotal) {
+        showFeedbackQuestion(fbIndex);
+    }
+}
+
+function showFeedbackQuestion(idx) {
+    if (idx >= fbTotal) {
+        document.getElementById('ant-prompt').innerHTML =
+            '<span style="color:#5a8a5a">Все вопросы рассмотрены. Спасибо!</span>';
+        document.getElementById('ant-options').innerHTML = '';
+        showMilestone('Карта стала точнее. Ты помог мне лучше тебя понять.');
+        return;
+    }
+    const q = feedbackQuestions[idx];
+    document.getElementById('ant-prompt').textContent = q.prompt;
+
+    let btns = '';
+    q.options.forEach((opt, i) => {
+        const cls = opt.toLowerCase().includes('пропустить') || opt.toLowerCase().includes('потом')
+            ? 'skip' : '';
+        btns += `<button class="${cls}" onclick="answerFeedback(${idx},${i})">${esc(opt)}</button>`;
+    });
+    document.getElementById('ant-options').innerHTML = btns;
+    updateProgress();
+
+    // Highlight related concepts on the graph
+    if (q.concepts && q.concepts.length > 0) {
+        const first = q.concepts[0];
+        if (!isInside && nodeMap[first]) {
+            applyGlobalFocus(first);
+            const n = nodeMap[first];
+            if (n) showNodePanel(n);
+        }
+    }
+}
+
+function answerFeedback(qIdx, optIdx) {
+    const q = feedbackQuestions[qIdx];
+    const answer = q.options[optIdx] || 'skip';
+
+    // Log the answer
+    fbLog.push({
+        type: q.type,
+        prompt: q.prompt,
+        answer: answer,
+        concepts: q.concepts,
+        timestamp: Date.now() / 1000,
+    });
+
+    const isSkip = answer.toLowerCase().includes('пропустить') || answer.toLowerCase().includes('потом');
+    if (!isSkip) {
+        fbAnswered++;
+        // Visual feedback on related judgments in panel
+        if (answer.toLowerCase().includes('да') || answer.toLowerCase().includes('верно') ||
+            answer.toLowerCase().includes('факт') || answer.toLowerCase().includes('важно') ||
+            answer.toLowerCase().includes('по-прежнему')) {
+            showMilestone('Записано. Твоя карта стала точнее.');
+        } else if (answer.toLowerCase().includes('нет') || answer.toLowerCase().includes('убери') ||
+                   answer.toLowerCase().includes('всерьёз')) {
+            showMilestone('Понял, убрал. Спасибо за уточнение.');
+        } else if (answer.toLowerCase().includes('контекст') || answer.toLowerCase().includes('зависит') ||
+                   answer.toLowerCase().includes('частично')) {
+            showMilestone('Интересно. Отметил как контекстуальное.');
+        }
+    }
+
+    fbIndex++;
+    updateProgress();
+
+    // Small delay before next question for visual feedback
+    setTimeout(() => showFeedbackQuestion(fbIndex), 600);
+}
+
+function updateProgress() {
+    const totalJ = DATA.nodes.reduce((s, n) => s + n.judgments.length, 0);
+    const reviewedJ = DATA.nodes.reduce((s, n) =>
+        s + n.judgments.filter(j => j.confirmation !== 'unreviewed').length, 0);
+    const pct = totalJ > 0 ? Math.round((reviewedJ + fbAnswered) / totalJ * 100) : 0;
+
+    document.getElementById('ant-progress-fill').style.width = Math.min(pct, 100) + '%';
+    document.getElementById('ant-progress-text').textContent = pct + '% проверено';
+    document.getElementById('ant-badge').textContent = Math.max(0, fbTotal - fbIndex);
+}
+
+function showMilestone(text) {
+    const el = document.getElementById('ant-milestone');
+    el.textContent = text;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+function exportFeedback() {
+    const blob = new Blob([JSON.stringify(fbLog, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'feedback_' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+}
+
+// Init badge count
+document.getElementById('ant-badge').textContent = fbTotal;
+if (fbTotal === 0) {
+    document.getElementById('antourage-toggle').style.display = 'none';
+}
 </script>
 </body>
 </html>"""

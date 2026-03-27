@@ -9,6 +9,7 @@ No external dependencies beyond numpy.
 """
 
 import numpy as np
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -31,15 +32,25 @@ class Judgment:
     condition_id: Optional[int] = None       # links conditional pairs (if→then)
     condition_role: Optional[str] = None     # "ANTECEDENT" | "CONSEQUENT"
     anomaly_score: Optional[float] = None    # 0.0=normal, 1.0=max anomaly vs existing map
+    # --- F1: Layered interpretation (XVII.1) ---
+    interpretation_layer: int = 0            # 0=L0 (syntax), 1=L1 (linguistic inference), 2=L2 (LLM)
+    defeasible: bool = False                 # L1/L2 inferences are retractable
+    inference_chain: list[str] = field(default_factory=list)  # reasoning trail for L1+
+    extraction_confidence: float = 1.0       # 0.0–1.0, confidence in extraction quality
+    # --- Feedback loop (interactive channel) ---
+    confirmation_status: str = "unreviewed"  # "unreviewed" | "confirmed" | "rejected" | "contextualized"
+    context_tags: list[str] = field(default_factory=list)  # ["work", "family", etc.]
 
 
 @dataclass
 class Component:
     """A rank-1 component of a density matrix, with provenance."""
     vector: np.ndarray                # |v> in R^d
-    weight: float
+    weight: float                     # original weight (modality × intensity)
     judgment: Judgment
     timestamp: float = 0.0
+    activation_count: int = 1         # how many times this was confirmed (F3: consolidation)
+    archived: bool = False            # True = in archive, not in ρ (F3: trace preservation)
 
 
 @dataclass
@@ -49,6 +60,34 @@ class Concept:
     components: list[Component] = field(default_factory=list)
     _rho: Optional[np.ndarray] = field(default=None, repr=False)
     _rho_recursive: Optional[np.ndarray] = field(default=None, repr=False)
+
+    def rho_layer(self, max_layer: int = 0, now: Optional[float] = None) -> Optional[np.ndarray]:
+        """Density matrix filtered by interpretation layer (F1, XVII.1).
+        max_layer=0: only L0 (hard core). max_layer=1: L0+L1. max_layer=2: all.
+        """
+        active = [c for c in self.components
+                  if not c.archived and c.judgment.interpretation_layer <= max_layer]
+        if not active:
+            return None
+        if now is None:
+            now = time.time()
+        d = active[0].vector.shape[0]
+        rho = np.zeros((d, d))
+        for c in active:
+            w = self._decayed_weight(c, now)
+            v = c.vector.reshape(-1, 1)
+            rho += w * (v @ v.T)
+        return rho
+
+    def reactivate(self, term_filter: Optional[str] = None):
+        """Restore archived components (F3, XVIII.3).
+        Archived traces are never deleted — they can be reactivated.
+        """
+        for c in self.components:
+            if c.archived:
+                if term_filter is None or c.judgment.object == term_filter or c.judgment.subject == term_filter:
+                    c.archived = False
+        self.invalidate()
 
     @property
     def rho(self) -> np.ndarray:
@@ -90,15 +129,49 @@ class Concept:
             return r
         return r / tr
 
-    def _recompute_rho(self):
-        if not self.components:
+    # --- F3: Decay parameters (XVIII) ---
+    # Power-law decay: w(t) = w0 * (1 + dt/tau)^{-d}
+    # d ≈ 0.5 (ACT-R, Anderson 1993), tau = characteristic time in seconds
+    DECAY_EXPONENT: float = 0.5
+    DECAY_TAU: float = 30 * 86400       # 30 days in seconds (default)
+    ARCHIVE_EPSILON: float = 0.01       # archive threshold: w < eps * max(w)
+    CONSOLIDATION_THRESHOLD: float = 0.85  # cosine similarity for consolidation
+
+    def _decayed_weight(self, c: 'Component', now: float) -> float:
+        """Power-law decay: w(t) = base_activation * (1 + dt/tau)^{-d}.
+        ACT-R: base activation = sum over all confirmations.
+        """
+        dt = max(0.0, now - c.timestamp)
+        decay = (1.0 + dt / self.DECAY_TAU) ** (-self.DECAY_EXPONENT)
+        return c.weight * c.activation_count * decay
+
+    def _recompute_rho(self, now: Optional[float] = None):
+        """Build density matrix with power-law decay (F3, XVIII.2).
+        Components below archive threshold are marked archived but preserved.
+        """
+        active = [c for c in self.components if not c.archived]
+        if not active:
             self._rho = None
             return
-        d = self.components[0].vector.shape[0]
+
+        if now is None:
+            now = time.time()
+
+        # Compute decayed weights
+        decayed = [(c, self._decayed_weight(c, now)) for c in active]
+
+        # Archive threshold: relative to max weight
+        max_w = max(w for _, w in decayed) if decayed else 0.0
+        threshold = self.ARCHIVE_EPSILON * max_w
+
+        d = active[0].vector.shape[0]
         rho = np.zeros((d, d))
-        for c in self.components:
+        for c, w in decayed:
+            if w < threshold and max_w > 1e-12:
+                c.archived = True  # preserve provenance, remove from ρ
+                continue
             v = c.vector.reshape(-1, 1)
-            rho += c.weight * (v @ v.T)
+            rho += w * (v @ v.T)
         # NO normalization — trace = total mass
         self._rho = rho
 
@@ -107,6 +180,25 @@ class Concept:
         self._rho_recursive = None
 
     def add_component(self, vector: np.ndarray, weight: float, judgment: Judgment):
+        """Add component with consolidation (F3, XVIII.4).
+        If a similar component exists (cosine > threshold), reinforce it
+        instead of adding a duplicate.
+        """
+        # Consolidation: check if this confirms an existing component
+        v_norm = vector / (np.linalg.norm(vector) + 1e-12)
+        for c in self.components:
+            if c.archived:
+                continue
+            c_norm = c.vector / (np.linalg.norm(c.vector) + 1e-12)
+            cosine = float(np.dot(v_norm, c_norm))
+            if cosine > self.CONSOLIDATION_THRESHOLD:
+                # Reinforce: update timestamp, increment activation
+                c.activation_count += 1
+                c.timestamp = judgment.timestamp
+                self.invalidate()
+                return
+
+        # New component
         self.components.append(Component(
             vector=vector, weight=weight,
             judgment=judgment, timestamp=judgment.timestamp
@@ -217,16 +309,51 @@ class SemanticSpace:
             self.concepts[term] = Concept(term=term)
         return self.concepts[term]
 
+    # --- F2: Personal grounding threshold (XVII.3) ---
+    PERSONAL_GROUNDING_THRESHOLD: int = 50  # components needed to switch from spaCy to personal basis
+
     def get_term_vector(self, term: str) -> np.ndarray:
-        """Get a base vector for a term. Uses seed if available, else deterministic hash."""
+        """Get a base vector for a term.
+        F2 (XVII.3): Personal grounding — once a concept has enough components,
+        rebuild its seed from PCA over personal contexts instead of using spaCy.
+        Priority: personal basis > spaCy seed > deterministic hash.
+        """
+        # F2: Check if personal basis is available
+        concept = self.concepts.get(term)
+        if concept is not None and len(concept.components) >= self.PERSONAL_GROUNDING_THRESHOLD:
+            v = self._personal_basis(concept)
+            if v is not None:
+                return v
+
+        # spaCy seed
         if term in self.seed_vectors:
             v = self.seed_vectors[term]
             return v / (np.linalg.norm(v) + 1e-10)
+
         # Deterministic pseudo-random vector from term hash
         h = hash(term) % (2**31)
         rng = np.random.default_rng(h)
         v = rng.standard_normal(self.dim)
         return v / (np.linalg.norm(v) + 1e-10)
+
+    def _personal_basis(self, concept: Concept) -> Optional[np.ndarray]:
+        """F2 (XVII.3): Build personal seed vector via PCA over accumulated contexts.
+        Returns the first principal component — the dominant personal meaning direction.
+        """
+        active = [c for c in concept.components if not c.archived]
+        if len(active) < self.PERSONAL_GROUNDING_THRESHOLD:
+            return None
+        # Stack component vectors into matrix (n_components × dim)
+        V = np.array([c.vector for c in active])
+        # Center
+        V_centered = V - V.mean(axis=0)
+        # PCA via SVD: first principal component = dominant meaning direction
+        try:
+            _, s, Vt = np.linalg.svd(V_centered, full_matrices=False)
+            pc1 = Vt[0]
+            return pc1 / (np.linalg.norm(pc1) + 1e-10)
+        except np.linalg.LinAlgError:
+            return None
 
     def _role_transform(self, v: np.ndarray, role: str) -> np.ndarray:
         """Apply a deterministic role-dependent rotation to a vector.
@@ -366,9 +493,50 @@ class SemanticSpace:
         verb_concept.add_component(v_verb, w * 0.2, j)
         verb_concept._is_verb = True  # tag for separate display
 
+    def _relation_transform(self, rho: np.ndarray, relation: str) -> np.ndarray:
+        """T5 (whitepaper XV.12): Role-dependent similarity transform.
+        Transforms ρ(B) when embedding it into ρ(A) through relation r:
+            Φ_r(ρ) = R_r · ρ · R_r†
+
+        R_r is a deterministic orthogonal matrix derived from the relation.
+        This ensures that "свобода contains ответственность via требовать"
+        transforms ρ(ответственность) differently than "via включать".
+
+        R_r is orthogonal, so Φ_r preserves trace (mass) and eigenvalues,
+        but rotates the meaning facets into a relation-dependent subspace.
+        """
+        role_seed = hash(f"transform:{relation}") % (2**31)
+        rng = np.random.default_rng(role_seed)
+        M = rng.standard_normal((self.dim, self.dim))
+        R, _ = np.linalg.qr(M)
+        return R @ rho @ R.T
+
+    def _dominant_relation(self, term_a: str, term_b: str) -> str:
+        """Find the most frequent verb connecting A → B in judgments.
+        Used by recursive_deepen to select the relation for transform.
+        """
+        concept_a = self.concepts.get(term_a)
+        if concept_a is None:
+            return "_default"
+        verb_counts: dict[str, float] = {}
+        for c in concept_a.components:
+            if c.archived:
+                continue
+            j = c.judgment
+            if j.subject == term_a and j.object == term_b:
+                verb_counts[j.verb] = verb_counts.get(j.verb, 0) + c.weight
+            elif j.object == term_a and j.subject == term_b:
+                verb_counts[j.verb] = verb_counts.get(j.verb, 0) + c.weight * 0.5
+        if not verb_counts:
+            return "_default"
+        return max(verb_counts, key=verb_counts.get)
+
     def recursive_deepen(self, iterations: int = 3, alpha: float = 0.7):
-        """Recursive deepening: rho(A) = alpha * rho_direct(A) + (1-alpha) * sum(transform(rho(Bi))).
-        This makes each concept's density matrix reflect its contents' density matrices.
+        """Recursive deepening: ρ(A) = α·ρ_direct(A) + (1−α)·Σ wᵢ·Φ_rᵢ(ρ(Bᵢ)).
+
+        T5: Each contained concept's ρ is transformed through the dominant relation
+        connecting A→B, via _relation_transform(). This ensures "свобода contains
+        ответственность via требовать" contributes differently than "via включать".
         """
         terms = list(self.concepts.keys())
 
@@ -389,17 +557,19 @@ class SemanticSpace:
                         continue
                     c = containment(rho_direct, other_rho)
                     if c > 0.1:  # threshold
-                        contained.append((c, other_rho))
+                        contained.append((c, other_term, other_rho))
 
                 if not contained:
                     concept._rho_recursive = rho_direct.copy()
                     continue
 
-                # Build recursive component
+                # Build recursive component with relation-dependent transform (T5)
                 rho_recursive = np.zeros_like(rho_direct)
                 total_w = 0.0
-                for weight, other_rho in contained:
-                    rho_recursive += weight * other_rho
+                for weight, other_term, other_rho in contained:
+                    relation = self._dominant_relation(term, other_term)
+                    transformed = self._relation_transform(other_rho, relation)
+                    rho_recursive += weight * transformed
                     total_w += weight
 
                 if total_w > 1e-12:
@@ -481,6 +651,52 @@ class SemanticSpace:
         if a is None or b is None or a.rho_deep_norm is None or b.rho_deep_norm is None:
             return 0.0
         return trace_inner_product(a.rho_deep_norm, b.rho_deep_norm)
+
+    # -------------------------------------------------------------------
+    # T6: Cross-map comparison (whitepaper XI)
+    # -------------------------------------------------------------------
+
+    @staticmethod
+    def compare_maps(space_a: 'SemanticSpace', space_b: 'SemanticSpace',
+                     top_k: int = 20) -> dict:
+        """Compare two users' semantic maps (T6, whitepaper XI).
+
+        For each shared concept: Tr(ρ_A^norm · ρ_B^norm) measures alignment.
+        1.0 = identical meaning, 0.0 = orthogonal meanings.
+
+        Returns dict with:
+            shared_concepts: [(term, similarity)] sorted by similarity
+            divergent: top concepts where users disagree most
+            aligned: top concepts where users agree most
+            global_similarity: average across all shared concepts
+        """
+        terms_a = {t for t, c in space_a._queryable_concepts()}
+        terms_b = {t for t, c in space_b._queryable_concepts()}
+        shared = terms_a & terms_b
+
+        if not shared:
+            return {"shared_concepts": [], "divergent": [], "aligned": [],
+                    "global_similarity": 0.0}
+
+        results = []
+        for term in shared:
+            rho_a = space_a.concepts[term].rho_deep_norm
+            rho_b = space_b.concepts[term].rho_deep_norm
+            if rho_a is None or rho_b is None:
+                continue
+            sim = trace_inner_product(rho_a, rho_b)
+            results.append((term, float(sim)))
+
+        results.sort(key=lambda x: x[1])
+
+        global_sim = sum(s for _, s in results) / len(results) if results else 0.0
+
+        return {
+            "shared_concepts": results,
+            "divergent": results[:top_k],          # lowest similarity = most divergent
+            "aligned": results[-top_k:][::-1],     # highest similarity = most aligned
+            "global_similarity": global_sim,
+        }
 
     def report(self, term: str):
         """Print a human-readable report for a concept."""
