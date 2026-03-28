@@ -295,8 +295,9 @@ class FeedbackEngine:
         answer = question.options[answer_index] if answer_index < len(question.options) else "skip"
         now = time.time()
 
-        # Mark as asked
-        key = f"{question.question_type}:{'|'.join(question.related_concepts)}"
+        # Mark as asked (key format must match generate_questions dedup)
+        src_key = "|".join(sorted(j.source_text[:40] for j in question.related_judgments)) if question.related_judgments else ""
+        key = f"{question.question_type}:{'|'.join(sorted(question.related_concepts))}:{src_key}"
         self._asked_keys.add(key)
 
         # Skip

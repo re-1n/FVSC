@@ -135,8 +135,8 @@ def extract_judgments_from_text(user_text: str) -> list[dict]:
             extracted = json.loads(content)
             if isinstance(extracted, list):
                 return [e for e in extracted if "subject" in e and "verb" in e and "object" in e]
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [antourage] extraction error: {e}")
     return []
 
 

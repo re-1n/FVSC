@@ -613,14 +613,14 @@ function showNodePanel(n) {
     if (containsEdges.length > 0) {
         h += `<h3>содержит</h3>`;
         containsEdges.forEach(e => {
-            h += `<div class="contains-item" onclick="enterSphere('${esc(e.to)}')"><span>${esc(e.to)}</span><span class="contains-score">${e.weight.toFixed(3)}</span></div>`;
+            h += `<div class="contains-item" onclick="enterSphere('${escAttr(e.to)}')"><span>${esc(e.to)}</span><span class="contains-score">${e.weight.toFixed(3)}</span></div>`;
         });
     }
 
     if (containedInEdges.length > 0) {
         h += `<h3>содержится в</h3>`;
         containedInEdges.forEach(e => {
-            h += `<div class="contains-item" onclick="enterSphere('${esc(e.from)}')"><span>${esc(e.from)}</span><span class="contains-score">${e.weight.toFixed(3)}</span></div>`;
+            h += `<div class="contains-item" onclick="enterSphere('${escAttr(e.from)}')"><span>${esc(e.from)}</span><span class="contains-score">${e.weight.toFixed(3)}</span></div>`;
         });
     }
 
@@ -661,6 +661,7 @@ function showSelf() {
 }
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escAttr(s) { return esc(s).replace(/'/g, '&#39;').replace(/"/g, '&quot;'); }
 
 // ============================================================
 // Antourage Feedback System
@@ -793,7 +794,9 @@ def generate_html(map_data: dict, n_messages: int, n_judgments: int,
     threshold_display = f"{threshold:.2f}"
 
     html_content = HTML_TEMPLATE
-    html_content = html_content.replace("GRAPH_DATA_JSON", json.dumps(map_data, ensure_ascii=False))
+    # Escape </ sequences to prevent </script> injection in JSON inside <script> block
+    graph_json = json.dumps(map_data, ensure_ascii=False).replace("</", "<\\/")
+    html_content = html_content.replace("GRAPH_DATA_JSON", graph_json)
     html_content = html_content.replace("STATS_TEXT", stats_text)
     html_content = html_content.replace("THRESHOLD_INIT", str(threshold_init))
     html_content = html_content.replace("THRESHOLD_DISPLAY", threshold_display)

@@ -754,6 +754,9 @@ class SemanticSpace:
             return
         sc._recompute_rho()
         rho = sc.rho
+        if rho is None:
+            print("\n  === [self] === (all components archived)")
+            return
         rho_n = sc.rho_norm
         print(f"\n  === [self] (who the person thinks they are) ===")
         print(f"  Self-characterizations: {len(sc.components)}")

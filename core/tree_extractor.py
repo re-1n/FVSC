@@ -576,8 +576,9 @@ def _handle_copula(node, ctx: ExtractionContext, results: list[Judgment],
         if subj_ref == RefStatus.REFERENTIAL:
             continue
 
+        subj_modality = effective_modality
         if subj_ref == RefStatus.GENERIC:
-            effective_modality *= 0.7
+            subj_modality *= 0.7
 
         verb = "cop:это"
         # Check if there's an explicit copula
@@ -591,7 +592,7 @@ def _handle_copula(node, ctx: ExtractionContext, results: list[Judgment],
             verb=verb,
             object=predicate_lemma,
             quality=effective_quality,
-            modality=effective_modality,
+            modality=subj_modality,
             intensity=0.7,
             source_text=sent_text,
             condition_id=ctx.condition_id,

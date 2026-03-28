@@ -68,16 +68,22 @@ SLP_VERBS = {
 }
 
 # Habituality markers (adverbs/particles that signal habitual/generic)
+# Note: only single-token lemmas — spaCy tokenizes multi-word expressions
 HABITUALITY_MARKERS = {
     "обычно", "часто", "всегда", "иногда", "редко", "бывает",
-    "случается", "порой", "как правило", "нередко",
+    "случается", "порой", "нередко",
 }
+# Multi-word habituality markers checked separately via bigram scan
+HABITUALITY_MARKERS_MW = {"как правило"}
 
 # Temporal specificity markers (signal episodic/specific)
+# Note: only single-token lemmas — spaCy tokenizes multi-word expressions
 TEMPORAL_SPECIFIC = {
     "вчера", "сегодня", "завтра", "потом", "тогда", "сейчас",
-    "только что", "недавно", "утром", "вечером",
+    "недавно", "утром", "вечером",
 }
+# Multi-word temporal markers checked separately via bigram scan
+TEMPORAL_SPECIFIC_MW = {"только что"}
 
 # Generic "ты" signals — conditional/temporal subordinators
 GENERIC_TY_MARKS = {"если", "когда", "пока", "раз", "как только"}
@@ -139,7 +145,7 @@ def classify_clause(verb_token) -> ClauseType:
     tense = _morph_get(verb_token, "Tense")     # Past / Pres / Fut
     mood = _morph_get(verb_token, "Mood")        # Ind / Imp / Cnd
 
-    # Check for habituality markers in clause
+    # Check for habituality markers in clause (single-token)
     has_habitual_marker = any(
         child.lemma_.lower() in HABITUALITY_MARKERS
         for child in verb_token.children
@@ -151,6 +157,15 @@ def classify_clause(verb_token) -> ClauseType:
         for child in verb_token.children
         if child.dep_ in ("advmod", "obl")
     )
+
+    # Multi-word marker check via bigram scan (lazy — only if needed)
+    if not has_habitual_marker or not has_temporal_specific:
+        sent_tokens = [t.text.lower() for t in verb_token.sent]
+        sent_bigrams = {f"{sent_tokens[i]} {sent_tokens[i+1]}" for i in range(len(sent_tokens) - 1)}
+        if not has_habitual_marker and (sent_bigrams & HABITUALITY_MARKERS_MW):
+            has_habitual_marker = True
+        if not has_temporal_specific and (sent_bigrams & TEMPORAL_SPECIFIC_MW):
+            has_temporal_specific = True
 
     # Conditional mood → generic
     if mood == "Cnd":

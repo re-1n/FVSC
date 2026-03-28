@@ -157,8 +157,8 @@ SLANG_DICT = {
 
 def _reduce_repeats(text: str) -> str:
     """Reduce 3+ repeated characters to 1: крутаааа → крута, ооочень → очень.
-    Preserves valid doubles (ванна, масса, группа) by reducing 3+ to 2, then
-    letting spellchecker handle the rest.
+    Aggressive: valid doubles (ванна, масса) are unaffected since they have
+    exactly 2 repeats. Only 3+ triggers the reduction.
     """
     # 3+ same char → 1 char (aggressive but effective for chat)
     return re.sub(r'(.)\1{2,}', r'\1', text)
