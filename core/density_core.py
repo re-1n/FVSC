@@ -58,6 +58,7 @@ class Concept:
     """A concept = density matrix + provenance components."""
     term: str
     components: list[Component] = field(default_factory=list)
+    is_verb: bool = False
     _rho: Optional[np.ndarray] = field(default=None, repr=False)
     _rho_recursive: Optional[np.ndarray] = field(default=None, repr=False)
 
@@ -90,16 +91,17 @@ class Concept:
         self.invalidate()
 
     @property
-    def rho(self) -> np.ndarray:
+    def rho(self) -> Optional[np.ndarray]:
         """Direct density matrix (from judgments only, no recursion).
         NOT normalized — trace reflects total mass of the concept.
+        Returns None when no active components exist.
         """
         if self._rho is None:
             self._recompute_rho()
         return self._rho
 
     @property
-    def rho_norm(self) -> np.ndarray:
+    def rho_norm(self) -> Optional[np.ndarray]:
         """Normalized rho (trace=1) for entropy/purity calculations."""
         r = self.rho
         if r is None:
@@ -110,7 +112,7 @@ class Concept:
         return r / tr
 
     @property
-    def rho_deep(self) -> np.ndarray:
+    def rho_deep(self) -> Optional[np.ndarray]:
         """Recursive density matrix (after recursive deepening).
         NOT normalized — trace reflects mass.
         """
@@ -119,7 +121,7 @@ class Concept:
         return self.rho
 
     @property
-    def rho_deep_norm(self) -> np.ndarray:
+    def rho_deep_norm(self) -> Optional[np.ndarray]:
         """Normalized recursive rho for entropy/purity."""
         r = self.rho_deep
         if r is None:
@@ -242,7 +244,11 @@ def graded_hyponymy(rho_a: np.ndarray, rho_b: np.ndarray) -> float:
 def von_neumann_entropy(rho: np.ndarray) -> float:
     """S(rho) = -Tr(rho log rho). Measures polysemy.
     S=0: unambiguous (single facet). S>0: polysemous.
+    Expects normalized rho (trace ≈ 1); unnormalized input gives meaningless results.
     """
+    tr = np.trace(rho)
+    assert abs(tr - 1.0) < 0.05 or tr < 1e-12, \
+        f"von_neumann_entropy expects normalized rho (trace=1), got trace={tr:.4f}"
     eigenvalues = np.linalg.eigvalsh(rho)
     eigenvalues = eigenvalues[eigenvalues > 1e-12]
     return float(-np.sum(eigenvalues * np.log(eigenvalues)))
@@ -441,13 +447,21 @@ class SemanticSpace:
         subj_is_pronoun = j.subject.lower() in PRONOUNS
         obj_is_pronoun = j.object.lower() in PRONOUNS
 
-        # Compute anomaly BEFORE modifying density matrices
-        anomaly_scores = []
+        # Pre-compute vectors once (deterministic — reuse for anomaly + components)
+        v_subj = None
+        v_obj = None
         if not subj_is_pronoun and j.subject.lower() not in ("я", "себя"):
             v_subj = self.encode_judgment_for_subject(j)
-            anomaly_scores.append(self._compute_anomaly(j.subject, v_subj))
+        elif j.subject.lower() in ("я", "себя"):
+            v_subj = self.encode_judgment_for_subject(j)
         if not obj_is_pronoun:
             v_obj = self.encode_judgment_for_object(j)
+
+        # Compute anomaly BEFORE modifying density matrices
+        anomaly_scores = []
+        if v_subj is not None and j.subject.lower() not in ("я", "себя"):
+            anomaly_scores.append(self._compute_anomaly(j.subject, v_subj))
+        if v_obj is not None:
             anomaly_scores.append(self._compute_anomaly(j.object, v_obj))
         if anomaly_scores:
             j.anomaly_score = max(anomaly_scores)
@@ -463,35 +477,30 @@ class SemanticSpace:
             self_type = self._self_type(j)
             if self_type == "identity":
                 # "я являюсь свободным" → full weight into [self]
-                v = self.encode_judgment_for_subject(j)
-                self.self_concept.add_component(v, w, j)
+                self.self_concept.add_component(v_subj, w, j)
             elif self_type == "relation":
                 # "я хочу свободу" → lighter weight into [self]
-                v = self.encode_judgment_for_subject(j)
-                self.self_concept.add_component(v, w * 0.5, j)
+                self.self_concept.add_component(v_subj, w * 0.5, j)
             # Always activate the object
-            v_for_obj = self.encode_judgment_for_object(j)
             obj_concept = self.get_or_create(j.object)
-            obj_concept.add_component(v_for_obj, w * 0.5, j)
+            obj_concept.add_component(v_obj, w * 0.5, j)
             return
 
         # --- Regular judgment (non-pronoun subject) ---
         if not subj_is_pronoun:
-            v_for_subj = self.encode_judgment_for_subject(j)
             subj = self.get_or_create(j.subject)
-            subj.add_component(v_for_subj, w, j)
+            subj.add_component(v_subj, w, j)
 
         if not obj_is_pronoun:
-            v_for_obj = self.encode_judgment_for_object(j)
             obj_concept = self.get_or_create(j.object)
-            obj_concept.add_component(v_for_obj, w * 0.5, j)
+            obj_concept.add_component(v_obj, w * 0.5, j)
 
         # Verb as concept (dual nature: connector AND container)
         # Verb accumulates contexts — what does "требовать" mean for this person?
         v_verb = self.get_term_vector(j.verb)
         verb_concept = self.get_or_create(j.verb)
         verb_concept.add_component(v_verb, w * 0.2, j)
-        verb_concept._is_verb = True  # tag for separate display
+        verb_concept.is_verb = True
 
     def _relation_transform(self, rho: np.ndarray, relation: str) -> np.ndarray:
         """T5 (whitepaper XV.12): Role-dependent similarity transform.
@@ -589,7 +598,7 @@ class SemanticSpace:
             (t, c) for t, c in self.concepts.items()
             if len(c.components) >= self.min_components
             and c.rho_deep is not None
-            and (include_verbs or not getattr(c, '_is_verb', False))
+            and (include_verbs or not c.is_verb)
         ]
 
     def query_contains(self, term: str, top_k: int = 10) -> list[tuple[str, float]]:
@@ -723,8 +732,8 @@ class SemanticSpace:
             print(f"    facet {i}: weight={w:.3f}")
 
         contains = self.query_contains(term, top_k=10)
-        nouns = [(t, s) for t, s in contains if not getattr(self.concepts.get(t), '_is_verb', False)]
-        verbs = [(t, s) for t, s in contains if getattr(self.concepts.get(t), '_is_verb', False)]
+        nouns = [(t, s) for t, s in contains if not (self.concepts.get(t) and self.concepts[t].is_verb)]
+        verbs = [(t, s) for t, s in contains if self.concepts.get(t) and self.concepts[t].is_verb]
 
         print(f"  Contains (concepts):")
         for other, score in nouns[:5]:
@@ -735,8 +744,8 @@ class SemanticSpace:
                 print(f"    [{other}]: {score:.3f}")
 
         contained = self.query_contained_in(term, top_k=10)
-        nouns_in = [(t, s) for t, s in contained if not getattr(self.concepts.get(t), '_is_verb', False)]
-        verbs_in = [(t, s) for t, s in contained if getattr(self.concepts.get(t), '_is_verb', False)]
+        nouns_in = [(t, s) for t, s in contained if not (self.concepts.get(t) and self.concepts[t].is_verb)]
+        verbs_in = [(t, s) for t, s in contained if self.concepts.get(t) and self.concepts[t].is_verb]
 
         print(f"  Contained in (concepts):")
         for other, score in nouns_in[:5]:

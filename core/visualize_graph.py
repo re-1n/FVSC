@@ -59,7 +59,7 @@ def build_graph(space: SemanticSpace, min_components: int = 3,
         rho_n = concept.rho_deep_norm
         entropy = von_neumann_entropy(rho_n) if rho_n is not None else 0.0
         n_components = len(concept.components)
-        is_verb = getattr(concept, '_is_verb', False)
+        is_verb = concept.is_verb
 
         G.add_node(term, mass=mass, entropy=entropy,
                     n_components=n_components, is_verb=is_verb)

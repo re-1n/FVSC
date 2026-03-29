@@ -50,7 +50,7 @@ def build_map_data(space: SemanticSpace, min_components: int = 3,
         mass = float(np.trace(rho))
         entropy = von_neumann_entropy(rho_n) if rho_n is not None else 0.0
         pur = purity(rho_n) if rho_n is not None else 1.0
-        is_verb = getattr(concept, '_is_verb', False)
+        is_verb = concept.is_verb
 
         # Facets
         f = facets(rho_n, threshold=0.03) if rho_n is not None else []
