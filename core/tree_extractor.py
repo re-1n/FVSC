@@ -129,13 +129,17 @@ def _next_condition_id() -> int:
 # ---------------------------------------------------------------------------
 
 def extract_judgments_recursive(nlp, texts: list[str],
-                                normalize: bool = True) -> list[Judgment]:
+                                normalize: bool = True,
+                                timestamps: list[float] | None = None) -> list[Judgment]:
     """Extract S→V→O judgments from texts using recursive dependency tree walk.
 
     Args:
         nlp: spaCy language model
         texts: list of raw texts
         normalize: if True, normalize chat/social media text before parsing
+        timestamps: optional list of epoch timestamps (one per text).
+                    If provided, each extracted judgment gets the timestamp
+                    of its source text. If None, Judgment default (time.time()) is used.
     """
     if normalize:
         from text_normalizer import normalize_texts
@@ -143,9 +147,15 @@ def extract_judgments_recursive(nlp, texts: list[str],
 
     results: list[Judgment] = []
 
-    for doc in nlp.pipe(texts, batch_size=50):
+    for i, doc in enumerate(nlp.pipe(texts, batch_size=50)):
+        ts = timestamps[i] if timestamps and i < len(timestamps) else None
         for sent in doc.sents:
+            before = len(results)
             _walk(sent.root, DEFAULT_CTX, results, sent.text.strip()[:200])
+            # Stamp newly added judgments with source timestamp
+            if ts is not None:
+                for j in results[before:]:
+                    j.timestamp = ts
 
     return results
 

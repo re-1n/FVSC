@@ -51,12 +51,15 @@ def _parse_date(date_str: str) -> float:
 
 
 def read_telegram_messages(path: str, max_msgs: int = 500,
-                           merge_window_sec: float = 45.0) -> list[str]:
+                           merge_window_sec: float = 45.0) -> tuple[list[str], list[float]]:
     """Read text messages from Telegram JSON export.
 
     Merges consecutive messages from the same sender within merge_window_sec
     into single text blocks. This captures the Telegram pattern of splitting
     one thought across multiple rapid messages.
+
+    Returns:
+        (texts, timestamps) — parallel lists of message texts and their epoch timestamps.
     """
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
@@ -74,10 +77,11 @@ def read_telegram_messages(path: str, max_msgs: int = 500,
         raw_messages.append((sender, ts, text))
 
     if not raw_messages:
-        return []
+        return [], []
 
     # Second pass: merge by time window + same sender
     merged = []
+    merged_ts = []
     current_sender = raw_messages[0][0]
     current_ts = raw_messages[0][1]
     current_parts = [raw_messages[0][2]]
@@ -95,6 +99,7 @@ def read_telegram_messages(path: str, max_msgs: int = 500,
             block = "\n".join(current_parts)
             if len(block) >= 10:
                 merged.append(block)
+                merged_ts.append(current_ts)
             current_sender = sender
             current_ts = ts
             current_parts = [text]
@@ -106,8 +111,9 @@ def read_telegram_messages(path: str, max_msgs: int = 500,
     block = "\n".join(current_parts)
     if len(block) >= 10 and len(merged) < max_msgs:
         merged.append(block)
+        merged_ts.append(current_ts)
 
-    return merged
+    return merged, merged_ts
 
 
 def read_telegram_messages_by_sender(path: str, max_msgs: int = 0,
@@ -204,7 +210,7 @@ def main():
 
     # Load messages
     print(f"\nLoading messages from {path}...")
-    texts = read_telegram_messages(path, max_msgs)
+    texts, timestamps = read_telegram_messages(path, max_msgs)
     print(f"  Loaded {len(texts)} text messages")
 
     # Load spaCy
@@ -216,7 +222,7 @@ def main():
     # Extract judgments
     print("\nExtracting judgments...")
     t0 = time.time()
-    judgments = extract_judgments_recursive(nlp, texts)
+    judgments = extract_judgments_recursive(nlp, texts, timestamps=timestamps)
     print(f"  Extracted {len(judgments)} judgments in {time.time()-t0:.1f}s")
 
     if not judgments:

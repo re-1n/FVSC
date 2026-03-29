@@ -252,8 +252,8 @@ def init_state(use_demo: bool = True, json_path: str = None):
         from tree_extractor import extract_judgments_recursive
         print("Loading spaCy...")
         nlp = spacy.load("ru_core_news_md")
-        texts = read_telegram_messages(json_path, max_msgs=500)
-        judgments = extract_judgments_recursive(nlp, texts)
+        texts, timestamps = read_telegram_messages(json_path, max_msgs=500)
+        judgments = extract_judgments_recursive(nlp, texts, timestamps=timestamps)
         terms = set()
         for j in judgments:
             terms.update([j.subject, j.verb, j.object])

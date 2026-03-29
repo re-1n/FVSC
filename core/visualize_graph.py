@@ -219,7 +219,7 @@ def main():
 
     # Load messages
     print(f"\nLoading messages from {path}...")
-    texts = read_telegram_messages(path, max_msgs)
+    texts, timestamps = read_telegram_messages(path, max_msgs)
     print(f"  Loaded {len(texts)} messages")
 
     # Load spaCy
@@ -231,7 +231,7 @@ def main():
     # Extract judgments
     print("\nExtracting judgments (recursive tree walk)...")
     t0 = time.time()
-    judgments = extract_judgments_recursive(nlp, texts)
+    judgments = extract_judgments_recursive(nlp, texts, timestamps=timestamps)
     print(f"  Extracted {len(judgments)} judgments in {time.time()-t0:.1f}s")
 
     if not judgments:

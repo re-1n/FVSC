@@ -27,7 +27,7 @@ class Judgment:
     quality: str = "AFFIRMATIVE"      # AFFIRMATIVE | NEGATIVE
     modality: float = 1.0             # FACTUAL=1.0, EPISTEMIC=0.5, etc.
     intensity: float = 0.5
-    timestamp: float = 0.0
+    timestamp: float = field(default_factory=time.time)
     source_text: str = ""
     condition_id: Optional[int] = None       # links conditional pairs (if→then)
     condition_role: Optional[str] = None     # "ANTECEDENT" | "CONSEQUENT"
@@ -307,8 +307,13 @@ class SemanticSpace:
         self.seed_vectors = seed_vectors or {}
         self.min_components = min_components_for_query
         self._rng = np.random.default_rng(42)
-        # Special Self container
-        self.self_concept = Concept(term="[self]")
+        # Self container lives inside concepts dict (queryable like any other)
+        self.concepts["[self]"] = Concept(term="[self]")
+
+    @property
+    def self_concept(self) -> Concept:
+        """Backward-compatible access to [self] container."""
+        return self.concepts["[self]"]
 
     def get_or_create(self, term: str) -> Concept:
         if term not in self.concepts:
@@ -593,10 +598,10 @@ class SemanticSpace:
     # -----------------------------------------------------------------------
 
     def _queryable_concepts(self, include_verbs: bool = True) -> list[tuple[str, 'Concept']]:
-        """Return concepts with enough components to be meaningful."""
+        """Return concepts with enough active (non-archived) components to be meaningful."""
         return [
             (t, c) for t, c in self.concepts.items()
-            if len(c.components) >= self.min_components
+            if sum(1 for comp in c.components if not comp.archived) >= self.min_components
             and c.rho_deep is not None
             and (include_verbs or not c.is_verb)
         ]
