@@ -545,37 +545,70 @@ class SemanticSpace:
             return "_default"
         return max(verb_counts, key=verb_counts.get)
 
-    def recursive_deepen(self, iterations: int = 3, alpha: float = 0.7):
+    @staticmethod
+    def _has_personal_components(concept: 'Concept') -> bool:
+        """Check if concept has at least one non-thesaurus component."""
+        return any(
+            not c.archived and not c.judgment.source_text.startswith("[thesaurus:")
+            for c in concept.components
+        )
+
+    def recursive_deepen(self, iterations: int = 3, alpha: float = 0.7,
+                         top_k: int = 30, min_source_mass: float = 0.01):
         """Recursive deepening: ρ(A) = α·ρ_direct(A) + (1−α)·Σ wᵢ·Φ_rᵢ(ρ(Bᵢ)).
 
         T5: Each contained concept's ρ is transformed through the dominant relation
         connecting A→B, via _relation_transform(). This ensures "свобода contains
         ответственность via требовать" contributes differently than "via включать".
+
+        Optimizations (v0.7.1):
+        - Only concepts with personal (non-thesaurus) components are deepened as targets.
+          Thesaurus-only concepts can still be sources (contribute to other concepts' ρ).
+        - For each target, only top_k source concepts by containment score are used.
+        - Source concepts with trace(ρ) < min_source_mass are skipped.
         """
-        terms = list(self.concepts.keys())
+        # Split: targets = personal concepts, sources = all with ρ
+        targets = [
+            (t, c) for t, c in self.concepts.items()
+            if c.rho is not None and self._has_personal_components(c)
+        ]
+        all_sources = [
+            (t, c) for t, c in self.concepts.items()
+            if c.rho is not None
+        ]
+
+        # Pre-filter sources by mass
+        sources_with_mass = []
+        for t, c in all_sources:
+            tr = float(np.trace(c.rho))
+            if tr >= min_source_mass:
+                sources_with_mass.append((t, c, tr))
 
         for k in range(iterations):
-            for term in terms:
-                concept = self.concepts[term]
+            for term, concept in targets:
                 rho_direct = concept.rho
                 if rho_direct is None:
                     continue
 
-                # Find what this concept contains
-                contained = []
-                for other_term, other_concept in self.concepts.items():
+                # Find top-K contained concepts (by containment score)
+                scored = []
+                for other_term, other_concept, _ in sources_with_mass:
                     if other_term == term:
                         continue
                     other_rho = other_concept.rho_deep if k > 0 else other_concept.rho
                     if other_rho is None:
                         continue
                     c = containment(rho_direct, other_rho)
-                    if c > 0.1:  # threshold
-                        contained.append((c, other_term, other_rho))
+                    if c > 0.1:
+                        scored.append((c, other_term, other_rho))
 
-                if not contained:
+                if not scored:
                     concept._rho_recursive = rho_direct.copy()
                     continue
+
+                # Keep only top-K
+                scored.sort(key=lambda x: x[0], reverse=True)
+                contained = scored[:top_k]
 
                 # Build recursive component with relation-dependent transform (T5)
                 rho_recursive = np.zeros_like(rho_direct)
