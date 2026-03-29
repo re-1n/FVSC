@@ -554,35 +554,47 @@ class SemanticSpace:
         )
 
     def recursive_deepen(self, iterations: int = 3, alpha: float = 0.7,
-                         top_k: int = 30, min_source_mass: float = 0.01):
+                         top_k: int = 30, min_source_mass: float = 0.01,
+                         max_candidates: int = 200):
         """Recursive deepening: ρ(A) = α·ρ_direct(A) + (1−α)·Σ wᵢ·Φ_rᵢ(ρ(Bᵢ)).
 
         T5: Each contained concept's ρ is transformed through the dominant relation
         connecting A→B, via _relation_transform(). This ensures "свобода contains
         ответственность via требовать" contributes differently than "via включать".
 
-        Optimizations (v0.7.1):
+        Optimizations:
         - Only concepts with personal (non-thesaurus) components are deepened as targets.
-          Thesaurus-only concepts can still be sources (contribute to other concepts' ρ).
-        - For each target, only top_k source concepts by containment score are used.
+        - Source candidates per target: judgment-linked concepts + top by mass (capped at max_candidates).
+        - Top-K containment from candidates (not full N).
         - Source concepts with trace(ρ) < min_source_mass are skipped.
         """
-        # Split: targets = personal concepts, sources = all with ρ
+        # Targets = personal concepts only
         targets = [
             (t, c) for t, c in self.concepts.items()
             if c.rho is not None and self._has_personal_components(c)
         ]
-        all_sources = [
-            (t, c) for t, c in self.concepts.items()
-            if c.rho is not None
-        ]
 
-        # Pre-filter sources by mass
-        sources_with_mass = []
-        for t, c in all_sources:
-            tr = float(np.trace(c.rho))
-            if tr >= min_source_mass:
-                sources_with_mass.append((t, c, tr))
+        # Build judgment-link index: for each term, which other terms appear in its judgments
+        linked: dict[str, set[str]] = {}
+        for t, c in targets:
+            neighbors = set()
+            for comp in c.components:
+                if comp.archived:
+                    continue
+                j = comp.judgment
+                neighbors.update([j.subject, j.verb, j.object])
+            neighbors.discard(t)
+            linked[t] = neighbors
+
+        # Pre-compute mass for all concepts (for fallback ranking)
+        mass_index: list[tuple[str, float]] = []
+        for t, c in self.concepts.items():
+            if c.rho is not None:
+                tr = float(np.trace(c.rho))
+                if tr >= min_source_mass:
+                    mass_index.append((t, tr))
+        mass_index.sort(key=lambda x: x[1], reverse=True)
+        top_by_mass = set(t for t, _ in mass_index[:max_candidates])
 
         for k in range(iterations):
             for term, concept in targets:
@@ -590,10 +602,15 @@ class SemanticSpace:
                 if rho_direct is None:
                     continue
 
-                # Find top-K contained concepts (by containment score)
+                # Candidate sources: judgment-linked + top by mass (capped)
+                candidate_terms = linked.get(term, set()) | top_by_mass
+                candidate_terms.discard(term)
+
+                # Find top-K contained concepts from candidates
                 scored = []
-                for other_term, other_concept, _ in sources_with_mass:
-                    if other_term == term:
+                for other_term in candidate_terms:
+                    other_concept = self.concepts.get(other_term)
+                    if other_concept is None:
                         continue
                     other_rho = other_concept.rho_deep if k > 0 else other_concept.rho
                     if other_rho is None:
