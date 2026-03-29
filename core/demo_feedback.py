@@ -15,11 +15,13 @@ import json
 import webbrowser
 import numpy as np
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(__file__))
-
-from density_core import Judgment, SemanticSpace
-from feedback import FeedbackEngine
+try:
+    from .density_core import Judgment, SemanticSpace
+    from .feedback import FeedbackEngine
+except ImportError:
+    sys.path.insert(0, os.path.dirname(__file__))
+    from density_core import Judgment, SemanticSpace
+    from feedback import FeedbackEngine
 
 
 def create_demo_space() -> tuple[SemanticSpace, list[Judgment]]:

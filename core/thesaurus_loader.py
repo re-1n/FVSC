@@ -24,7 +24,10 @@ import os
 import xml.etree.ElementTree as ET
 from typing import Optional
 
-from density_core import Judgment
+try:
+    from .density_core import Judgment
+except ImportError:
+    from density_core import Judgment
 
 
 # ---------------------------------------------------------------------------

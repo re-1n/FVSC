@@ -19,10 +19,12 @@ import re
 from dataclasses import dataclass, replace
 from typing import Optional
 
-from density_core import Judgment
-from context_classifier import (
-    classify_clause, classify_np, RefStatus, ClauseType,
-)
+try:
+    from .density_core import Judgment
+    from .context_classifier import classify_clause, classify_np, RefStatus, ClauseType
+except ImportError:
+    from density_core import Judgment
+    from context_classifier import classify_clause, classify_np, RefStatus, ClauseType
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +144,10 @@ def extract_judgments_recursive(nlp, texts: list[str],
                     of its source text. If None, Judgment default (time.time()) is used.
     """
     if normalize:
-        from text_normalizer import normalize_texts
+        try:
+            from .text_normalizer import normalize_texts
+        except ImportError:
+            from text_normalizer import normalize_texts
         texts = normalize_texts(texts)
 
     results: list[Judgment] = []
@@ -275,6 +280,166 @@ def _apply_context_modifiers(node, parent_ctx: ExtractionContext) -> ExtractionC
 
 
 # ---------------------------------------------------------------------------
+# T2: extraction_confidence — estimate parse quality
+# ---------------------------------------------------------------------------
+
+def _estimate_confidence(verb_node, subj, obj) -> float:
+    """Estimate extraction confidence from parse quality signals.
+
+    Heuristic based on:
+    - OOV tokens in the triple (spaCy didn't see them in training)
+    - Unresolved dependency (dep_ == "dep" means parser gave up)
+    - Very short sentence (< 3 tokens = unreliable parse)
+    - Deep nesting (many levels from root = fragile attachment)
+
+    Returns: 0.0–1.0 (1.0 = high confidence).
+    """
+    confidence = 1.0
+
+    # OOV penalty: each OOV token reduces confidence
+    for token in (verb_node, subj, obj):
+        if not token.has_vector:
+            confidence -= 0.15
+
+    # Unresolved dep penalty
+    for token in (verb_node, subj, obj):
+        if token.dep_ == "dep":
+            confidence -= 0.25
+
+    # Short sentence penalty
+    sent_len = len(list(verb_node.sent))
+    if sent_len < 3:
+        confidence -= 0.2
+    elif sent_len < 5:
+        confidence -= 0.1
+
+    # Deep nesting penalty (>4 levels from root)
+    depth = 0
+    t = verb_node
+    while t.head != t:
+        depth += 1
+        t = t.head
+        if depth > 10:
+            break
+    if depth > 4:
+        confidence -= 0.1
+
+    return max(0.1, min(1.0, confidence))
+
+
+# ---------------------------------------------------------------------------
+# Shared extraction logic (C5: used by both _handle_clause and _extract_clause_arguments)
+# ---------------------------------------------------------------------------
+
+def _collect_and_emit(verb_node, ctx: ExtractionContext, results: list[Judgment],
+                      sent_text: str, condition_role: Optional[str] = None):
+    """Collect subjects/objects from verb node and emit judgments.
+
+    Handles: passive voice inversion, discourse pointer filtering,
+    GENERIC/INTERLOCUTOR modality reduction, referential filtering.
+
+    Args:
+        condition_role: if set, override condition_role on emitted judgments
+                        (used for conditional consequent clauses).
+    """
+    verb_lemma = verb_node.lemma_.lower()
+
+    # --- Collect subjects and objects ---
+    subjects_raw = []
+    objects_raw = []
+    has_passive = False
+
+    for child in verb_node.children:
+        if child.dep_ in ("nsubj", "nsubj:pass") and child.pos_ in ("NOUN", "PROPN", "PRON"):
+            subjects_raw.extend(_expand_coordination(child))
+            if child.dep_ == "nsubj:pass":
+                has_passive = True
+
+        if child.dep_ in ("obj", "dobj", "obl", "iobj") and child.pos_ in ("NOUN", "PROPN"):
+            objects_raw.extend(_expand_coordination(child))
+
+    # Fallback: adjectival/clausal complements as objects
+    if not objects_raw:
+        for child in verb_node.children:
+            if child.dep_ in ("xcomp", "ccomp", "acomp") and child.pos_ in ("NOUN", "ADJ", "PROPN"):
+                objects_raw.extend(_expand_coordination(child))
+
+    # --- Passive voice inversion ---
+    if has_passive:
+        agents = []
+        for child in verb_node.children:
+            if child.dep_ == "obl" and child.pos_ in ("NOUN", "PROPN"):
+                agents.append(child)
+        if agents:
+            subjects_raw, objects_raw = agents, subjects_raw
+        else:
+            subjects_raw, objects_raw = objects_raw, subjects_raw
+
+    # --- Classify clause ---
+    clause_type = classify_clause(verb_node)
+
+    # --- Generate judgments ---
+    intensity = RELATION_MAP.get(verb_lemma, 0.5)
+    effective_quality = "NEGATIVE" if ctx.negated else "AFFIRMATIVE"
+    effective_modality = max(MODALITY_FLOOR, ctx.modality * ctx.quant_weight)
+
+    # Determine condition_role
+    if condition_role is None:
+        cond_role = "CONSEQUENT" if ctx.conditional and ctx.condition_id else None
+    else:
+        cond_role = condition_role
+
+    for subj in subjects_raw:
+        subj_lemma = subj.lemma_.lower()
+        if len(subj_lemma) < 2 and subj_lemma not in ("я",):
+            continue
+
+        subj_ref = classify_np(subj, clause_type)
+        if subj_ref == RefStatus.REFERENTIAL:
+            continue
+
+        # Discourse pointer check
+        if subj_lemma in DISCOURSE_POINTERS and _is_discourse_pointer_usage(subj):
+            continue
+
+        # GENERIC → reduce weight
+        subj_modality = effective_modality
+        if subj_ref == RefStatus.GENERIC:
+            subj_modality *= 0.7
+
+        # INTERLOCUTOR → remap
+        effective_subj = subj_lemma
+        if subj_ref == RefStatus.INTERLOCUTOR:
+            effective_subj = "ты"
+
+        for obj in objects_raw:
+            obj_lemma = obj.lemma_.lower()
+            if len(obj_lemma) < 2 or obj_lemma == subj_lemma:
+                continue
+
+            obj_ref = classify_np(obj, clause_type)
+            if obj_ref == RefStatus.REFERENTIAL:
+                continue
+
+            obj_modality = subj_modality
+            if obj_ref == RefStatus.GENERIC:
+                obj_modality *= 0.7
+
+            results.append(Judgment(
+                subject=effective_subj,
+                verb=verb_lemma,
+                object=obj_lemma,
+                quality=effective_quality,
+                modality=obj_modality,
+                intensity=min(1.0, intensity),
+                source_text=sent_text,
+                condition_id=ctx.condition_id,
+                condition_role=cond_role,
+                extraction_confidence=_estimate_confidence(verb_node, subj, obj),
+            ))
+
+
+# ---------------------------------------------------------------------------
 # Clause handler — the main extraction point
 # ---------------------------------------------------------------------------
 
@@ -302,97 +467,8 @@ def _handle_clause(verb_node, ctx: ExtractionContext, results: list[Judgment],
         _handle_conditional(verb_node, condition_clauses, ctx, results, sent_text)
         return
 
-    # --- Collect subjects and objects ---
-    subjects_raw = []
-    objects_raw = []
-    has_passive = False
-
-    for child in verb_node.children:
-        if child.dep_ in ("nsubj", "nsubj:pass") and child.pos_ in ("NOUN", "PROPN", "PRON"):
-            subjects_raw.extend(_expand_coordination(child))
-            if child.dep_ == "nsubj:pass":
-                has_passive = True
-
-        if child.dep_ in ("obj", "dobj", "obl", "iobj") and child.pos_ in ("NOUN", "PROPN"):
-            objects_raw.extend(_expand_coordination(child))
-
-    # Fallback: adjectival/clausal complements as objects
-    if not objects_raw:
-        for child in verb_node.children:
-            if child.dep_ in ("xcomp", "ccomp", "acomp") and child.pos_ in ("NOUN", "ADJ", "PROPN"):
-                objects_raw.extend(_expand_coordination(child))
-
-    # --- Passive voice inversion ---
-    if has_passive:
-        # Look for agent in obl
-        agents = []
-        for child in verb_node.children:
-            if child.dep_ == "obl" and child.pos_ in ("NOUN", "PROPN"):
-                agents.append(child)
-        if agents:
-            subjects_raw, objects_raw = agents, subjects_raw
-        else:
-            subjects_raw, objects_raw = objects_raw, subjects_raw
-
-    # --- Classify clause ---
-    clause_type = classify_clause(verb_node)
-
-    # --- Generate judgments ---
-    intensity = RELATION_MAP.get(verb_lemma, 0.5)
-    effective_quality = "NEGATIVE" if ctx.negated else "AFFIRMATIVE"
-    effective_modality = max(MODALITY_FLOOR, ctx.modality * ctx.quant_weight)
-
-    for subj in subjects_raw:
-        subj_lemma = subj.lemma_.lower()
-        if len(subj_lemma) < 2 and subj_lemma not in ("я",):
-            continue
-
-        # Context classifier: determine referential status
-        subj_ref = classify_np(subj, clause_type)
-
-        # REFERENTIAL → skip (specific instance, not a concept)
-        if subj_ref == RefStatus.REFERENTIAL:
-            continue
-
-        # Discourse pointer check (supplements classifier)
-        if subj_lemma in DISCOURSE_POINTERS and _is_discourse_pointer_usage(subj):
-            continue
-
-        # GENERIC "ты" / "человек" → extract but reduce weight
-        subj_modality = effective_modality
-        if subj_ref == RefStatus.GENERIC:
-            subj_modality *= 0.7
-
-        # INTERLOCUTOR → remap subject to interlocutor marker
-        effective_subj = subj_lemma
-        if subj_ref == RefStatus.INTERLOCUTOR:
-            effective_subj = "ты"  # keep as "ты", materialize_judgment will handle
-
-        for obj in objects_raw:
-            obj_lemma = obj.lemma_.lower()
-            if len(obj_lemma) < 2 or obj_lemma == subj_lemma:
-                continue
-
-            # Classify object too
-            obj_ref = classify_np(obj, clause_type)
-            if obj_ref == RefStatus.REFERENTIAL:
-                continue
-
-            obj_modality = subj_modality
-            if obj_ref == RefStatus.GENERIC:
-                obj_modality *= 0.7
-
-            results.append(Judgment(
-                subject=effective_subj,
-                verb=verb_lemma,
-                object=obj_lemma,
-                quality=effective_quality,
-                modality=obj_modality,
-                intensity=min(1.0, intensity),
-                source_text=sent_text,
-                condition_id=ctx.condition_id,
-                condition_role="CONSEQUENT" if ctx.conditional and ctx.condition_id else None,
-            ))
+    # Extract judgments using shared logic
+    _collect_and_emit(verb_node, ctx, results, sent_text)
 
     # --- Recurse into subordinate clauses (but not condition_clauses) ---
     for child in verb_node.children:
@@ -493,57 +569,11 @@ def _handle_conditional(main_verb, condition_clauses: list,
 
 def _extract_clause_arguments(verb_node, ctx: ExtractionContext,
                               results: list[Judgment], sent_text: str):
-    """Extract judgments from a verb node without checking for envelope/conditional."""
-    verb_lemma = verb_node.lemma_.lower()
-
-    subjects_raw = []
-    objects_raw = []
-
-    for child in verb_node.children:
-        if child.dep_ in ("nsubj", "nsubj:pass") and child.pos_ in ("NOUN", "PROPN", "PRON"):
-            subjects_raw.extend(_expand_coordination(child))
-        if child.dep_ in ("obj", "dobj", "obl", "iobj") and child.pos_ in ("NOUN", "PROPN"):
-            objects_raw.extend(_expand_coordination(child))
-
-    if not objects_raw:
-        for child in verb_node.children:
-            if child.dep_ in ("xcomp", "ccomp", "acomp") and child.pos_ in ("NOUN", "ADJ", "PROPN"):
-                objects_raw.extend(_expand_coordination(child))
-
-    clause_type = classify_clause(verb_node)
-    intensity = RELATION_MAP.get(verb_lemma, 0.5)
-    effective_quality = "NEGATIVE" if ctx.negated else "AFFIRMATIVE"
-    effective_modality = max(MODALITY_FLOOR, ctx.modality * ctx.quant_weight)
-
-    for subj in subjects_raw:
-        subj_lemma = subj.lemma_.lower()
-        if len(subj_lemma) < 2 and subj_lemma not in ("я",):
-            continue
-
-        subj_ref = classify_np(subj, clause_type)
-        if subj_ref == RefStatus.REFERENTIAL:
-            continue
-
-        for obj in objects_raw:
-            obj_lemma = obj.lemma_.lower()
-            if len(obj_lemma) < 2 or obj_lemma == subj_lemma:
-                continue
-
-            obj_ref = classify_np(obj, clause_type)
-            if obj_ref == RefStatus.REFERENTIAL:
-                continue
-
-            results.append(Judgment(
-                subject=subj_lemma,
-                verb=verb_lemma,
-                object=obj_lemma,
-                quality=effective_quality,
-                modality=effective_modality,
-                intensity=min(1.0, intensity),
-                source_text=sent_text,
-                condition_id=ctx.condition_id,
-                condition_role="CONSEQUENT",
-            ))
+    """Extract judgments from a verb node without checking for envelope/conditional.
+    Uses shared _collect_and_emit logic with _handle_clause (C5 fix).
+    """
+    _collect_and_emit(verb_node, ctx, results, sent_text,
+                      condition_role="CONSEQUENT")
 
 
 # ---------------------------------------------------------------------------
@@ -607,6 +637,7 @@ def _handle_copula(node, ctx: ExtractionContext, results: list[Judgment],
             source_text=sent_text,
             condition_id=ctx.condition_id,
             condition_role=ctx.condition_id and "CONSEQUENT" or None,
+            extraction_confidence=_estimate_confidence(node, subj, node),
         ))
 
     # Recurse into children for subordinate clauses

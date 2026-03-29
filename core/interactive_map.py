@@ -15,10 +15,16 @@ import time
 import numpy as np
 import spacy
 
-from density_core import SemanticSpace, graded_hyponymy, von_neumann_entropy, purity, facets
-from tree_extractor import extract_judgments_recursive
-from live_test import read_telegram_messages, build_seed_vectors
-from thesaurus_loader import ThesaurusLoader
+try:
+    from .density_core import SemanticSpace, graded_hyponymy, von_neumann_entropy, purity, facets
+    from .tree_extractor import extract_judgments_recursive
+    from .live_test import read_telegram_messages, build_seed_vectors
+    from .thesaurus_loader import ThesaurusLoader
+except ImportError:
+    from density_core import SemanticSpace, graded_hyponymy, von_neumann_entropy, purity, facets
+    from tree_extractor import extract_judgments_recursive
+    from live_test import read_telegram_messages, build_seed_vectors
+    from thesaurus_loader import ThesaurusLoader
 
 
 def build_map_data(space: SemanticSpace, min_components: int = 3,

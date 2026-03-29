@@ -15,9 +15,14 @@ import time
 import numpy as np
 import spacy
 
-from density_core import SemanticSpace, Judgment, graded_hyponymy, von_neumann_entropy, purity
-from tree_extractor import extract_judgments_recursive
-from thesaurus_loader import ThesaurusLoader
+try:
+    from .density_core import SemanticSpace, Judgment, graded_hyponymy, von_neumann_entropy, purity
+    from .tree_extractor import extract_judgments_recursive
+    from .thesaurus_loader import ThesaurusLoader
+except ImportError:
+    from density_core import SemanticSpace, Judgment, graded_hyponymy, von_neumann_entropy, purity
+    from tree_extractor import extract_judgments_recursive
+    from thesaurus_loader import ThesaurusLoader
 
 
 # ---------------------------------------------------------------------------

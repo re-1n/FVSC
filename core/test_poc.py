@@ -8,7 +8,10 @@ Run: python test_poc.py
 """
 
 import numpy as np
-from density_core import SemanticSpace, Judgment, containment, graded_hyponymy, von_neumann_entropy, purity
+try:
+    from .density_core import SemanticSpace, Judgment, containment, graded_hyponymy, von_neumann_entropy, purity
+except ImportError:
+    from density_core import SemanticSpace, Judgment, containment, graded_hyponymy, von_neumann_entropy, purity
 
 def main():
     print("=" * 60)

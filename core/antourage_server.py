@@ -21,10 +21,13 @@ import threading
 import webbrowser
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(__file__))
-
-from density_core import Judgment, SemanticSpace
-from feedback import FeedbackEngine, FeedbackQuestion
+try:
+    from .density_core import Judgment, SemanticSpace
+    from .feedback import FeedbackEngine, FeedbackQuestion
+except ImportError:
+    sys.path.insert(0, os.path.dirname(__file__))
+    from density_core import Judgment, SemanticSpace
+    from feedback import FeedbackEngine, FeedbackQuestion
 
 # ---------------------------------------------------------------------------
 # Session persistence
@@ -248,8 +251,12 @@ def init_state(use_demo: bool = True, json_path: str = None):
     else:
         # Load from Telegram JSON (reuse interactive_map pipeline)
         import spacy
-        from live_test import read_telegram_messages, build_seed_vectors
-        from tree_extractor import extract_judgments_recursive
+        try:
+            from .live_test import read_telegram_messages, build_seed_vectors
+            from .tree_extractor import extract_judgments_recursive
+        except ImportError:
+            from live_test import read_telegram_messages, build_seed_vectors
+            from tree_extractor import extract_judgments_recursive
         print("Loading spaCy...")
         nlp = spacy.load("ru_core_news_md")
         texts, timestamps = read_telegram_messages(json_path, max_msgs=500)
