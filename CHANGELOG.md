@@ -132,6 +132,48 @@
 
 ---
 
+## v0.5.2 — Code fixes + Interpretation Spectrum (2026-03-29)
+
+- **Whitepaper XVII.1**: 3 слоя → 6 уровней формализуемой интерпретации (L0–L3). 21 новый академический источник.
+- C1: Type annotations `rho` → `Optional[np.ndarray]`
+- C2: `_is_verb` monkey-patch → поле `is_verb: bool` в Concept
+- C8: Guard в `von_neumann_entropy`
+- C10: Удалены дубликаты в text_normalizer
+- C11: Переиспользование векторов в materialize_judgment
+
+---
+
+## v0.5.3 — Critical timestamp fix (2026-03-29)
+
+- **C3**: `Judgment.timestamp` = `time.time()` вместо 0.0. Timestamps из Telegram передаются в extractor. Decay теперь работает корректно.
+- C4: `_queryable_concepts` считает только active компоненты
+- C9: `[self]` в concepts dict, участвует в query/comparison/recursive_deepen
+
+---
+
+## v0.6.0 — Package + Clause refactor + extraction_confidence (2026-03-29)
+
+- **C7**: `core/` = Python-пакет (`__init__.py`). Все imports с try/except (relative + bare fallback).
+- **C5**: `_extract_clause_arguments` → shared `_collect_and_emit()`. Conditional clauses теперь получают passive inversion, discourse pointer filtering, GENERIC modality reduction.
+- **T2**: `extraction_confidence` заполняется из сигналов парсинга: OOV, dep=dep, длина предложения, глубина вложенности.
+
+---
+
+## v0.7.0 — Testing: convergence, evaluation, scale (2026-03-29)
+
+- **T4**: Convergence sweep α=[0.5..0.9], k=1..10. Все alpha сходятся. α=0.7→k=6, α=0.8→k=5. Рост массы <1%.
+- **T9**: Gold standard: 51 предложение, 49 суждений. P=79.5%, R=71.4%, F1=75.3%.
+- **T7**: Scale test: 1002 текста, 363 суждения, 489 терминов, 7117 concepts (с тезаурусом).
+
+---
+
+## v0.7.1 — recursive_deepen optimization (2026-03-29/30)
+
+- **Bottleneck fix**: recursive_deepen зависал на 2600+ concepts. Candidate-index: judgment-linked + top-200 by mass. 7117 concepts: ∞ → 175s.
+- Personal-only targets: тезаурусные понятия не deepened, только sources.
+
+---
+
 ## Архитектура пайплайна (текущая)
 
 ```
