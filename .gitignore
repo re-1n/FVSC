@@ -19,6 +19,7 @@ data/sessions/
 
 # Generated demo/feedback maps
 demo_feedback.html
+NEXT_SESSION.md
 
 # Misc
 *.jpg
