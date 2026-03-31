@@ -37,6 +37,8 @@ class Judgment:
     defeasible: bool = False                 # L1/L2 inferences are retractable
     inference_chain: list[str] = field(default_factory=list)  # reasoning trail for L1+
     extraction_confidence: float = 1.0       # 0.0–1.0, confidence in extraction quality
+    # --- Clause type (episodic vs semantic continuum, XVIII.5) ---
+    clause_type: str = "UNKNOWN"             # "GENERIC" | "HABITUAL" | "EPISODIC" | "UNKNOWN"
     # --- Feedback loop (interactive channel) ---
     confirmation_status: str = "unreviewed"  # "unreviewed" | "confirmed" | "rejected" | "contextualized"
     context_tags: list[str] = field(default_factory=list)  # ["work", "family", etc.]
@@ -68,6 +70,24 @@ class Concept:
         """
         active = [c for c in self.components
                   if not c.archived and c.judgment.interpretation_layer <= max_layer]
+        if not active:
+            return None
+        if now is None:
+            now = time.time()
+        d = active[0].vector.shape[0]
+        rho = np.zeros((d, d))
+        for c in active:
+            w = self._decayed_weight(c, now)
+            v = c.vector.reshape(-1, 1)
+            rho += w * (v @ v.T)
+        return rho
+
+    def rho_semantic(self, now: Optional[float] = None) -> Optional[np.ndarray]:
+        """Density matrix from GENERIC/HABITUAL judgments only (XVIII.5).
+        Excludes episodic components — pure semantic/characterizing knowledge.
+        """
+        active = [c for c in self.components
+                  if not c.archived and c.judgment.clause_type in ("GENERIC", "HABITUAL", "UNKNOWN")]
         if not active:
             return None
         if now is None:
@@ -449,6 +469,9 @@ class SemanticSpace:
         - Computes anomaly_score BEFORE adding component (compares with existing ρ)
         """
         w = j.modality * j.intensity
+        # Episodic judgments start weaker; consolidation can strengthen (XVIII.5)
+        if j.clause_type == "EPISODIC":
+            w *= 0.7
         subj_is_pronoun = j.subject.lower() in PRONOUNS
         obj_is_pronoun = j.object.lower() in PRONOUNS
 

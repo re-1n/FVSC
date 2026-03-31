@@ -436,6 +436,7 @@ def _collect_and_emit(verb_node, ctx: ExtractionContext, results: list[Judgment]
                 condition_id=ctx.condition_id,
                 condition_role=cond_role,
                 extraction_confidence=_estimate_confidence(verb_node, subj, obj),
+                clause_type=clause_type.value,
             ))
 
 
@@ -636,8 +637,9 @@ def _handle_copula(node, ctx: ExtractionContext, results: list[Judgment],
             intensity=0.7,
             source_text=sent_text,
             condition_id=ctx.condition_id,
-            condition_role=ctx.condition_id and "CONSEQUENT" or None,
+            condition_role="CONSEQUENT" if ctx.condition_id else None,
             extraction_confidence=_estimate_confidence(node, subj, node),
+            clause_type=clause_type.value,
         ))
 
     # Recurse into children for subordinate clauses
@@ -676,6 +678,7 @@ def _handle_amod(node, ctx: ExtractionContext, results: list[Judgment],
                 modality=effective_modality,
                 intensity=min(1.0, intensity),
                 source_text=sent_text,
+                clause_type="GENERIC",  # amod is characterizing by nature
             ))
 
 
