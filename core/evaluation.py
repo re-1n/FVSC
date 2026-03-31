@@ -243,8 +243,10 @@ def match_judgment(extracted: tuple, gold: tuple) -> bool:
     return False
 
 
-def evaluate(nlp) -> dict:
+def evaluate(nlp, gold_set=None) -> dict:
     """Run evaluation on gold standard. Returns metrics dict."""
+    if gold_set is None:
+        gold_set = GOLD_STANDARD
     total_gold = 0
     total_extracted = 0
     true_positives = 0
@@ -253,7 +255,7 @@ def evaluate(nlp) -> dict:
 
     details = []
 
-    for sentence, expected in GOLD_STANDARD:
+    for sentence, expected in gold_set:
         # Extract
         extracted = extract_judgments_recursive(nlp, [sentence], normalize=False)
         extracted_tuples = [judgment_to_tuple(j) for j in extracted]
@@ -311,20 +313,33 @@ def evaluate(nlp) -> dict:
 
 
 def main():
+    import spacy
+
+    # Check for --extended flag
+    extended = "--extended" in sys.argv or "-e" in sys.argv
+
     print("=" * 70)
     print("T9: Evaluation — Judgment Extraction Precision/Recall")
     print("=" * 70)
 
-    print(f"\nGold standard: {len(GOLD_STANDARD)} sentences")
+    if extended:
+        try:
+            from gold_extended import GOLD_EXTENDED
+        except ImportError:
+            from .gold_extended import GOLD_EXTENDED
+        gold_set = GOLD_STANDARD + GOLD_EXTENDED
+        print(f"\nExtended gold standard: {len(GOLD_STANDARD)} base + {len(GOLD_EXTENDED)} extended = {len(gold_set)} sentences")
+    else:
+        gold_set = GOLD_STANDARD
+        print(f"\nGold standard: {len(gold_set)} sentences")
 
     print("Loading spaCy ru_core_news_md...")
-    import spacy
     t0 = time.time()
     nlp = spacy.load("ru_core_news_md")
     print(f"  Loaded in {time.time()-t0:.1f}s")
 
     print("\nEvaluating...\n")
-    result = evaluate(nlp)
+    result = evaluate(nlp, gold_set)
 
     # Print details
     for d in result["details"]:
