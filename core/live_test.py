@@ -19,10 +19,12 @@ try:
     from .density_core import SemanticSpace, Judgment, graded_hyponymy, von_neumann_entropy, purity
     from .tree_extractor import extract_judgments_recursive
     from .thesaurus_loader import ThesaurusLoader
+    from .sentence_segmenter import segment_and_flatten
 except ImportError:
     from density_core import SemanticSpace, Judgment, graded_hyponymy, von_neumann_entropy, purity
     from tree_extractor import extract_judgments_recursive
     from thesaurus_loader import ThesaurusLoader
+    from sentence_segmenter import segment_and_flatten
 
 
 # ---------------------------------------------------------------------------
@@ -216,7 +218,12 @@ def main():
     # Load messages
     print(f"\nLoading messages from {path}...")
     texts, timestamps = read_telegram_messages(path, max_msgs)
-    print(f"  Loaded {len(texts)} text messages")
+    print(f"  Loaded {len(texts)} text blocks")
+
+    # Segment merged blocks into sentences (SaT L1 preprocessor)
+    block_count = len(texts)
+    texts, timestamps = segment_and_flatten(texts, timestamps)
+    print(f"  SaT segmentation: {block_count} blocks -> {len(texts)} sentences")
 
     # Load spaCy
     print("\nLoading spaCy ru_core_news_md...")

@@ -28,6 +28,7 @@ try:
     from .tree_extractor import extract_judgments_recursive
     from .live_test import read_telegram_messages, read_telegram_messages_by_sender, build_seed_vectors
     from .thesaurus_loader import ThesaurusLoader
+    from .sentence_segmenter import segment_and_flatten
 except ImportError:
     sys.path.insert(0, os.path.dirname(__file__))
     from density_core import (SemanticSpace, Judgment, von_neumann_entropy,
@@ -35,6 +36,7 @@ except ImportError:
     from tree_extractor import extract_judgments_recursive
     from live_test import read_telegram_messages, read_telegram_messages_by_sender, build_seed_vectors
     from thesaurus_loader import ThesaurusLoader
+    from sentence_segmenter import segment_and_flatten
 
 
 def main():
@@ -71,6 +73,11 @@ def main():
     if not texts:
         print("No texts found.")
         return
+
+    # --- Segment merged blocks into sentences (SaT L1 preprocessor) ---
+    block_count = len(texts)
+    texts, timestamps = segment_and_flatten(texts, timestamps)
+    print(f"  SaT segmentation: {block_count} blocks -> {len(texts)} sentences")
 
     # --- Load spaCy ---
     print("\nLoading spaCy ru_core_news_md...")

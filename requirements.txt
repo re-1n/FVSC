@@ -2,3 +2,4 @@ spacy>=3.0
 numpy>=1.19
 matplotlib>=3.0
 networkx>=2.5
+wtpsplit>=2.0
