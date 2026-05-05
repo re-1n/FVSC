@@ -1,4 +1,4 @@
-# FVSC — Formal Vector-Semantic Core
+# FVSC — Fractal-Vector Semantic Core
 
 Deterministic personal semantic mapping through density matrices.
 
