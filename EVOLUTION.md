@@ -203,3 +203,84 @@
 ```
 raw blocks (merged 45s) → segment_sentences(SaT) → per-sentence: normalize_text() → spaCy → _walk() → Judgment[]
 ```
+
+---
+
+## 2026-05-27/28 — Полный переход на агностичное ядро
+
+**Триггер:** spaCy не установлен, весь старый пайплайн (`tree_extractor`,
+`context_classifier`, `live_test`, `interactive_map`, etc.) не запускается.
+Параллельный агностичный стек (`text_parser_agnostic`, `semantic_input`,
+`basis_vectors`) — рабочий. Решение: убить spaCy-ветку, сделать агностику
+основной.
+
+### Что произошло
+
+**1. Удаление spaCy-зависимых модулей** — 10 файлов, ~4000 строк удалены
+из main. Полностью сохранено в git history до коммита `530bc3d`.
+
+**2. Бридж парсер ↔ density_core**
+`SemanticSpace.load_from_semantic_input(si_dict)` — раньше агностичный стек
+жил параллельно с density_core. Теперь они связаны: co-occurrence веса
+конвертируются в синтетические Judgments (`interpretation_layer=1`) и
+проходят через полный пайплайн density_core (decay, consolidation, anomaly).
+
+**3. RichJudgment — все 6 слоёв** (из файла `переход на язык-агностик систему.txt`)
+Аддитивное расширение `Judgment` с дефолтами:
+- L1 уже был — добавлены `modality_type`, `negation_scope`
+- L2 фреймовый — `frame_name`, `semantic_roles`, `role_intensity`
+- L3 полисемический — `facet_id`, `polysemy_degree`, `sense_vector`
+- L4 телесный — `perceptual_modalities`, `perceptual_features`, `emotion_tags`
+- L5 социальный — `context_metadata`, `historical_variant`
+- L6 рефлексивный — `user_marked_facet`, `user_confidence`
+
+Слоты есть, каналы заполнения L2-L6 будут построены постепенно.
+
+**4. Математические инварианты — 125/125**
+`test_invariants.py`: 15 групп проверок, всё проходит. Свойства ρ (симметрия,
+PSD), нормировка, асимметрия containment, границы энтропии (S≥0, S=0 для pure
+state, S≤log d), purity, симметрия trace inner product, консолидация, слои
+интерпретации, decay монотонность, бридж semantic_input, RichJudgment
+round-trip, backward compat.
+
+Это первый раз когда у математического ядра есть тесты — раньше regressions
+ловились только через eval на чистом тексте.
+
+**5. Eval framework — переписан**
+Старый `evaluation.py` требовал spaCy и измерял S→V→O extraction (которого
+больше нет). Новый: agnostic pipeline, gold set с полным графом концептов
+(глагол как контейнер тоже). Метрика — наличие containment-пары в
+semantic_input.
+
+**Baseline зафиксирован: Recall=100%, Precision=66%, F1=79%** на 16
+предложениях, 46 пар. 24 FP — sibling-пары (силы↔терпения через общий
+глагол), приемлемый шум для накопительной системы.
+
+**6. Тезаурус-приор — bonus-only**
+Архитектурный урок: penalty за "оба термина известны но пара не в тезаурусе"
+убивает абстрактные пары (свобода→ответственность нет в ConceptNet). Поэтому
+только bonus за подтверждённые пары. ConceptNet RU — 95K пар, загрузка 0.2s.
+
+### Архитектурные принципы (зафиксировано)
+
+**Каскад семантики, не backprop.** Скелет (тезаурус) → адаптация
+(co-occurrence из персонального потребления) → шлифовка (FeedbackEngine).
+Физика памяти (ACT-R): decay, consolidation, archive. НЕ градиентный спуск.
+
+**Ось L4/L5 — биология vs культура.** L4 (perceptual, emotion) универсален
+— баseline grounding общий для всех людей. L5 (social, ideology) культурно
+вариативен — источник реальных конфликтов смыслов. Это операционально важно
+для `compare_maps`: расхождение по L5 при сходстве L4 = "одинаково чувствуем,
+по-разному осмысляем".
+
+### Что важно для будущего
+
+Recall 100% на baseline означает что чисто co-occurrence из text находит
+**все** правильные связи. Precision 66% — что много ложных. Это правильное
+распределение для накопительной системы: лучше принять шум и дать
+consolidation+decay+feedback его выгрызть со временем, чем фильтровать на
+входе и потерять реальные связи.
+
+**Следующая фаза:** тестирование на больших объёмах (eval_sentences_200,
+а затем целые книги). Главная гипотеза — на масштабе шум усредняется,
+правильные связи усиливаются через повторяемость.
