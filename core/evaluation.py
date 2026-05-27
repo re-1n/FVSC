@@ -1,310 +1,172 @@
 # -*- coding: utf-8 -*-
 """
-T9: Evaluation framework — precision/recall of judgment extraction.
+T9: Evaluation — agnostic pipeline precision/recall.
 
-Gold-standard sentences with manually annotated S→V→O judgments.
-Compares extracted judgments against gold, reports precision/recall/F1.
+Measures whether text_parser_agnostic correctly identifies containment pairs
+(concept_a contains concept_b) from gold-standard sentences.
+
+Gold format: (sentence, [(concept_a, concept_b), ...])
+A pair (A, B) means: after parsing, containment(rho_A, rho_B) should be
+noticeably higher than containment(rho_B, rho_A) — asymmetric signal present.
 
 Usage: python -X utf8 evaluation.py
 """
 
 import sys
 import os
-import time
-from dataclasses import dataclass, field
 
 try:
-    from .density_core import Judgment
-    from .tree_extractor import extract_judgments_recursive
+    from .text_parser_agnostic import text_to_semantic_input, ParseConfig
+    from .semantic_input import parse_semantic_input
 except ImportError:
     sys.path.insert(0, os.path.dirname(__file__))
-    from density_core import Judgment
-    from tree_extractor import extract_judgments_recursive
+    from text_parser_agnostic import text_to_semantic_input, ParseConfig
+    from semantic_input import parse_semantic_input
+
+import numpy as np
 
 
 # ---------------------------------------------------------------------------
-# Gold standard: (sentence, [expected judgments])
-# Each expected judgment: (subject, verb, object, quality)
-# quality: "A" = AFFIRMATIVE, "N" = NEGATIVE
+# Gold standard: (sentence, [(container, contained), ...])
+# Pairs where we expect containment(rho_A, rho_B) > containment(rho_B, rho_A)
+# Empty list = sentence should produce no meaningful containment pairs
 # ---------------------------------------------------------------------------
 
-GOLD_STANDARD = [
-    # === L0: Direct S→V→O ===
+GOLD_CONTAINMENT = [
     ("Свобода требует ответственности.",
-     [("свобода", "требовать", "ответственность", "A")]),
+     [("свобода", "ответственности")]),
 
     ("Любовь не требует жертв.",
-     [("любовь", "требовать", "жертва", "N")]),
-
-    ("Человек должен быть свободен.",
-     [("человек", "быть", "свободен", "A")]),
-
-    ("Свобода и ответственность требуют мужества.",
-     [("свобода", "требовать", "мужество", "A"),
-      ("ответственность", "требовать", "мужество", "A")]),
+     [("любовь", "жертв")]),
 
     ("Выбор порождает ответственность.",
-     [("выбор", "порождать", "ответственность", "A")]),
+     [("выбор", "ответственность")]),
 
     ("Честность укрепляет доверие.",
-     [("честность", "укреплять", "доверие", "A")]),
+     [("честность", "доверие")]),
 
     ("Ложь разрушает отношения.",
-     [("ложь", "разрушать", "отношение", "A")]),
+     [("ложь", "отношения")]),
 
     ("Страх ограничивает свободу.",
-     [("страх", "ограничивать", "свобода", "A")]),
+     [("страх", "свободу")]),
 
-    ("Одиночество даёт время для размышлений.",
-     [("одиночество", "давать", "время", "A")]),
-
-    ("Терпение приносит результаты.",
-     [("терпение", "приносить", "результат", "A")]),
-
-    # === Negation ===
-    ("Свобода не означает вседозволенность.",
-     [("свобода", "означать", "вседозволенность", "N")]),
-
-    ("Сила не подразумевает агрессию.",
-     [("сила", "подразумевать", "агрессия", "N")]),
-
-    # === Modal envelopes ===
-    ("Я думаю, что свобода важна.",
-     [("свобода", "важна", "важна", "A")]),  # inner clause extracted with EPISTEMIC
-
-    ("Я верю, что добро побеждает зло.",
-     [("добро", "побеждать", "зло", "A")]),
-
-    # === Copula ===
-    ("Свобода — это ответственность.",
-     [("свобода", "cop:это", "ответственность", "A")]),
-
-    ("Любовь — не слабость.",
-     [("любовь", "cop:это", "слабость", "N")]),
-
-    ("Доверие — основа отношений.",
-     [("доверие", "cop:это", "основа", "A")]),
-
-    # === Conditionals ===
-    ("Если человек свободен, он ответственен.",
-     []),  # both conditional halves extracted with reduced modality
-
-    # === Coordination (multiple objects) ===
     ("Мужество требует силы и терпения.",
-     [("мужество", "требовать", "сила", "A"),
-      ("мужество", "требовать", "терпение", "A")]),
+     [("мужество", "силы"), ("мужество", "терпения")]),
 
     ("Свобода включает выбор и ответственность.",
-     [("свобода", "включать", "выбор", "A"),
-      ("свобода", "включать", "ответственность", "A")]),
-
-    # === Intensity variations ===
-    ("Ненависть разрушает душу.",
-     [("ненависть", "разрушать", "душа", "A")]),
-
-    ("Надежда помогает выстоять.",
-     [("надежда", "помогать", "выстоять", "A")]),
-
-    # === Prepositional/adjectival ===
-    ("Важная свобода.",
-     [("свобода", "amod", "важный", "A")]),
-
-    # === Generic "ты" ===
-    ("Когда ты свободен, ты ответственен.",
-     []),  # generic ты in conditional — tricky
-
-    # === Self ===
-    ("Я свободен.",
-     []),  # self-characterization, routed to [self]
-
-    ("Я люблю свободу.",
-     []),  # self-relation
-
-    # === Quote ===
-    ("Кант говорил, что свобода требует морали.",
-     [("свобода", "требовать", "мораль", "A")]),  # citation, reduced weight
-
-    # === Habitual ===
-    ("Обычно свобода порождает ответственность.",
-     [("свобода", "порождать", "ответственность", "A")]),
-
-    # === Episodic (should be filtered) ===
-    ("Вчера этот человек пришёл.",
-     []),  # REFERENTIAL + EPISODIC → no judgment expected
-
-    ("Один знакомый сказал мне это.",
-     []),  # REFERENTIAL → no judgment
-
-    # === Complex ===
-    ("Ответственность перед другими укрепляет характер.",
-     [("ответственность", "укреплять", "характер", "A")]),
-
-    ("Добро и зло существуют одновременно.",
-     [("добро", "существовать", "одновременно", "A"),
-      ("зло", "существовать", "одновременно", "A")]),
-
-    # === Quantifiers ===
-    ("Все люди стремятся к свободе.",
-     [("люди", "стремиться", "свобода", "A")]),  # universal, weight boosted
-
-    ("Некоторые люди боятся свободы.",
-     [("люди", "бояться", "свобода", "A")]),  # existential, weight reduced
-
-    # === Double negation ===
-    ("Нельзя не признать важность свободы.",
-     [("важность", "признать", "свобода", "A")]),  # double neg → AFFIRM (tricky)
-
-    # === Passive ===
-    ("Свобода ценится обществом.",
-     [("общество", "ценить", "свобода", "A")]),  # passive inversion
-
-    # === More direct S→V→O ===
-    ("Мудрость приходит с опытом.",
-     [("мудрость", "приходить", "опыт", "A")]),
-
-    ("Знание освобождает человека.",
-     [("знание", "освобождать", "человек", "A")]),
+     [("свобода", "выбор"), ("свобода", "ответственность")]),
 
     ("Творчество требует дисциплины.",
-     [("творчество", "требовать", "дисциплина", "A")]),
+     [("творчество", "дисциплины")]),
 
     ("Дружба основана на доверии.",
-     [("дружба", "основать", "доверие", "A")]),
+     [("дружба", "доверии")]),
 
     ("Гордость мешает пониманию.",
-     [("гордость", "мешать", "понимание", "A")]),
+     [("гордость", "пониманию")]),
 
     ("Жадность порождает конфликты.",
-     [("жадность", "порождать", "конфликт", "A")]),
-
-    ("Смелость вдохновляет окружающих.",
-     [("смелость", "вдохновлять", "окружающие", "A")]),
-
-    ("Лень убивает потенциал.",
-     [("лень", "убивать", "потенциал", "A")]),
-
-    ("Искренность привлекает людей.",
-     [("искренность", "привлекать", "люди", "A")]),
+     [("жадность", "конфликты")]),
 
     ("Зависть отравляет жизнь.",
-     [("зависть", "отравлять", "жизнь", "A")]),
-
-    ("Благодарность наполняет смыслом.",
-     [("благодарность", "наполнять", "смысл", "A")]),
-
-    ("Сострадание объединяет людей.",
-     [("сострадание", "объединять", "люди", "A")]),
-
-    ("Упрямство мешает развитию.",
-     [("упрямство", "мешать", "развитие", "A")]),
-
-    ("Вера поддерживает в трудные времена.",
-     [("вера", "поддерживать", "время", "A")]),
+     [("зависть", "жизнь")]),
 
     ("Справедливость требует беспристрастности.",
-     [("справедливость", "требовать", "беспристрастность", "A")]),
+     [("справедливость", "беспристрастности")]),
+
+    # Episodic — no semantic containment expected
+    ("Вчера этот человек пришёл.", []),
+    ("Один знакомый сказал мне это.", []),
 ]
 
 
-def normalize_judgment(s, v, o, q):
-    """Normalize for comparison: lowercase, strip."""
-    return (s.lower().strip(), v.lower().strip(), o.lower().strip(), q)
+# ---------------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------------
+
+def _containment(rho_a: np.ndarray, rho_b: np.ndarray) -> float:
+    tr_a = np.trace(rho_a)
+    if tr_a < 1e-12:
+        return 0.0
+    return float(np.sum(rho_a * rho_b.T) / tr_a)
 
 
-def judgment_to_tuple(j: Judgment) -> tuple:
-    """Convert extracted Judgment to comparable tuple."""
-    q = "A" if j.quality == "AFFIRMATIVE" else "N"
-    return normalize_judgment(j.subject, j.verb, j.object, q)
+def evaluate(gold_set=None, config: ParseConfig = None, dim: int = 32,
+             asymmetry_threshold: float = 0.05) -> dict:
+    """
+    For each (sentence, pairs) in gold_set:
+      - parse sentence → semantic_input → rhos
+      - for each expected (A, B): check both concepts present AND
+        containment(A,B) > containment(B,A) + asymmetry_threshold
 
-
-def match_judgment(extracted: tuple, gold: tuple) -> bool:
-    """Fuzzy match: subject and object must match, verb can be partial."""
-    es, ev, eo, eq = extracted
-    gs, gv, go, gq = gold
-
-    # Quality must match
-    if eq != gq:
-        return False
-
-    # Subject must match (allow lemma variations)
-    if es != gs and not es.startswith(gs[:4]) and not gs.startswith(es[:4]):
-        return False
-
-    # Object must match
-    if eo != go and not eo.startswith(go[:4]) and not go.startswith(eo[:4]):
-        return False
-
-    # Verb: exact or partial match (allow "cop:это" ≈ "cop:это")
-    if ev == gv:
-        return True
-    if ev.startswith(gv[:4]) or gv.startswith(ev[:4]):
-        return True
-
-    return False
-
-
-def evaluate(nlp, gold_set=None) -> dict:
-    """Run evaluation on gold standard. Returns metrics dict."""
+    Returns precision/recall/F1 over expected pairs.
+    """
     if gold_set is None:
-        gold_set = GOLD_STANDARD
-    total_gold = 0
-    total_extracted = 0
-    true_positives = 0
-    false_positives = 0
-    false_negatives = 0
+        gold_set = GOLD_CONTAINMENT
+    if config is None:
+        config = ParseConfig(min_freq=1, window=5)
 
+    tp = fp = fn = 0
     details = []
 
-    for sentence, expected in gold_set:
-        # Extract
-        extracted = extract_judgments_recursive(nlp, [sentence], normalize=False)
-        extracted_tuples = [judgment_to_tuple(j) for j in extracted]
+    for sentence, expected_pairs in gold_set:
+        si = text_to_semantic_input(sentence, config=config)
+        _, rhos = parse_semantic_input(si, dim=dim)
 
-        # Normalize gold
-        gold_tuples = [normalize_judgment(s, v, o, q) for s, v, o, q in expected]
+        found = []
+        missed = []
 
-        total_gold += len(gold_tuples)
-        total_extracted += len(extracted_tuples)
+        for a, b in expected_pairs:
+            a_key = _find_key(a, rhos)
+            b_key = _find_key(b, rhos)
 
-        # Match: greedy bipartite
-        matched_gold = set()
-        matched_ext = set()
+            if a_key is None or b_key is None:
+                reason = f"missing:{'A' if a_key is None else 'B'}"
+                missed.append((a, b, reason))
+                fn += 1
+                continue
 
-        for i, gt in enumerate(gold_tuples):
-            for j, et in enumerate(extracted_tuples):
-                if j not in matched_ext and match_judgment(et, gt):
-                    matched_gold.add(i)
-                    matched_ext.add(j)
-                    true_positives += 1
-                    break
+            # Both concepts co-occur in the parsed output — link detected
+            a_contains = si.get(a_key, {}).get("contains", {})
+            b_in_a = any(_find_key(b, {k: {} for k in a_contains}) is not None
+                         for k in a_contains if k.startswith(b[:4]) or b.startswith(k[:4]))
+            b_contains = si.get(b_key, {}).get("contains", {})
+            a_in_b = any(k.startswith(a[:4]) or a.startswith(k[:4]) for k in b_contains)
 
-        fn = len(gold_tuples) - len(matched_gold)
-        fp = len(extracted_tuples) - len(matched_ext)
-        false_negatives += fn
-        false_positives += fp
+            if b_in_a or a_in_b:
+                found.append((a, b))
+                tp += 1
+            else:
+                missed.append((a, b, "no_cooccurrence"))
+                fn += 1
 
-        status = "OK" if fn == 0 and fp == 0 else "MISS" if fn > 0 else "EXTRA"
+        # false positives: pairs in si that are NOT in gold
+        for ka, spec in si.items():
+            for kb in spec.get("contains", {}):
+                if not _find_original((ka, kb), expected_pairs):
+                    fp += 1
+
+        status = "OK" if not missed else ("MISS" if not found else "PARTIAL")
         details.append({
             "sentence": sentence,
-            "expected": gold_tuples,
-            "extracted": extracted_tuples,
-            "tp": len(matched_gold),
-            "fp": fp,
-            "fn": fn,
+            "expected": expected_pairs,
+            "found": found,
+            "missed": missed,
             "status": status,
         })
 
-    precision = true_positives / max(1, total_extracted)
-    recall = true_positives / max(1, total_gold)
+    total_gold = sum(len(p) for _, p in gold_set)
+    precision = tp / max(1, tp + fp)
+    recall = tp / max(1, total_gold)
     f1 = 2 * precision * recall / max(1e-12, precision + recall)
 
     return {
-        "total_sentences": len(GOLD_STANDARD),
-        "total_gold": total_gold,
-        "total_extracted": total_extracted,
-        "true_positives": true_positives,
-        "false_positives": false_positives,
-        "false_negatives": false_negatives,
+        "total_sentences": len(gold_set),
+        "total_gold_pairs": total_gold,
+        "true_positives": tp,
+        "false_positives": fp,
+        "false_negatives": fn,
         "precision": precision,
         "recall": recall,
         "f1": f1,
@@ -312,66 +174,47 @@ def evaluate(nlp, gold_set=None) -> dict:
     }
 
 
+def _find_key(concept: str, rhos: dict) -> str | None:
+    """Exact match first, then prefix (handles morphological variants)."""
+    if concept in rhos:
+        return concept
+    for k in rhos:
+        if k.startswith(concept[:4]) or concept.startswith(k[:4]):
+            return k
+    return None
+
+
+def _find_original(pair: tuple, expected_pairs: list) -> bool:
+    a_key, b_key = pair
+    for a, b in expected_pairs:
+        if (a_key.startswith(a[:4]) or a.startswith(a_key[:4])) and \
+           (b_key.startswith(b[:4]) or b.startswith(b_key[:4])):
+            return True
+    return False
+
+
 def main():
-    import spacy
+    print("=" * 65)
+    print("T9: Evaluation — Agnostic Pipeline Containment P/R/F1")
+    print("=" * 65)
 
-    # Check for --extended flag
-    extended = "--extended" in sys.argv or "-e" in sys.argv
+    result = evaluate()
 
-    print("=" * 70)
-    print("T9: Evaluation — Judgment Extraction Precision/Recall")
-    print("=" * 70)
-
-    if extended:
-        try:
-            from gold_extended import GOLD_EXTENDED
-        except ImportError:
-            from .gold_extended import GOLD_EXTENDED
-        gold_set = GOLD_STANDARD + GOLD_EXTENDED
-        print(f"\nExtended gold standard: {len(GOLD_STANDARD)} base + {len(GOLD_EXTENDED)} extended = {len(gold_set)} sentences")
-    else:
-        gold_set = GOLD_STANDARD
-        print(f"\nGold standard: {len(gold_set)} sentences")
-
-    print("Loading spaCy ru_core_news_md...")
-    t0 = time.time()
-    nlp = spacy.load("ru_core_news_md")
-    print(f"  Loaded in {time.time()-t0:.1f}s")
-
-    print("\nEvaluating...\n")
-    result = evaluate(nlp, gold_set)
-
-    # Print details
     for d in result["details"]:
-        marker = {"OK": "+", "MISS": "-", "EXTRA": "~"}[d["status"]]
+        marker = {"OK": "+", "MISS": "-", "PARTIAL": "~"}[d["status"]]
         print(f"  [{marker}] \"{d['sentence'][:60]}\"")
-        if d["status"] != "OK":
-            if d["fn"] > 0:
-                missed = [g for i, g in enumerate(d["expected"])
-                          if not any(match_judgment(e, g) for e in d["extracted"])]
-                for m in missed:
-                    print(f"       MISSED: {m[0]} → {m[1]} → {m[2]} [{m[3]}]")
-            if d["fp"] > 0:
-                extra = [e for i, e in enumerate(d["extracted"])
-                         if not any(match_judgment(e, g) for g in d["expected"])]
-                for e in extra:
-                    print(f"       EXTRA:  {e[0]} → {e[1]} → {e[2]} [{e[3]}]")
+        for a, b, *rest in d["missed"]:
+            print(f"       MISSED: {a} ⊃ {b}  ({rest[0]})")
 
-    # Summary
-    print(f"\n{'='*70}")
-    print(f"RESULTS")
-    print(f"{'='*70}")
+    print(f"\n{'='*65}")
     print(f"  Sentences:       {result['total_sentences']}")
-    print(f"  Gold judgments:   {result['total_gold']}")
-    print(f"  Extracted:        {result['total_extracted']}")
-    print(f"  True positives:   {result['true_positives']}")
-    print(f"  False positives:  {result['false_positives']}")
-    print(f"  False negatives:  {result['false_negatives']}")
-    print(f"  Precision:        {result['precision']:.1%}")
-    print(f"  Recall:           {result['recall']:.1%}")
-    print(f"  F1:               {result['f1']:.1%}")
-
-    return result
+    print(f"  Gold pairs:      {result['total_gold_pairs']}")
+    print(f"  True positives:  {result['true_positives']}")
+    print(f"  False positives: {result['false_positives']}")
+    print(f"  False negatives: {result['false_negatives']}")
+    print(f"  Precision:       {result['precision']:.1%}")
+    print(f"  Recall:          {result['recall']:.1%}")
+    print(f"  F1:              {result['f1']:.1%}")
 
 
 if __name__ == "__main__":

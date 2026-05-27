@@ -83,8 +83,9 @@ def extract_concepts_and_cooccurrence(
 ) -> Tuple[Counter, Dict[Tuple[str, str], int], List[List[str]]]:
     """Return (token_freq, pair_cooccur, sentence_tokens).
 
-    pair_cooccur[(a, b)] counts co-occurrences within `config.window` tokens
-    in the same sentence. Symmetric: stored only with a < b.
+    pair_cooccur[(a, b)] counts directed co-occurrences: a appears before b
+    within `config.window` tokens in the same sentence.
+    Asymmetric by construction: pair_cooccur[(a,b)] != pair_cooccur[(b,a)].
     """
     stop = set(config.stopwords) if config.stopwords else set()
     token_freq: Counter = Counter()
@@ -101,7 +102,7 @@ def extract_concepts_and_cooccurrence(
         sentence_tokens.append(toks)
         token_freq.update(toks)
 
-        # Sliding window co-occurrence within this sentence
+        # Directed sliding window: (left, right) — left precedes right
         n = len(toks)
         for i, ti in enumerate(toks):
             j_max = min(n, i + 1 + config.window)
@@ -109,8 +110,7 @@ def extract_concepts_and_cooccurrence(
                 tj = toks[j]
                 if ti == tj:
                     continue
-                a, b = (ti, tj) if ti < tj else (tj, ti)
-                pair_cooccur[(a, b)] += 1
+                pair_cooccur[(ti, tj)] += 1  # directed: ti → tj
 
     return token_freq, dict(pair_cooccur), sentence_tokens
 
@@ -131,17 +131,17 @@ def _cooccur_contains_weights(
     token_freq: Counter,
     pair_cooccur: Dict[Tuple[str, str], int],
 ) -> Dict[str, float]:
-    """P(B in window | A) = cooccur(A,B) / freq(A) — asymmetric by construction."""
+    """Directed: P(B follows A | A) = cooccur(A→B) / freq(A).
+    Asymmetric by construction: concept precedes other in text.
+    """
     f_a = token_freq.get(concept, 0)
     if f_a == 0:
         return {}
     out: Dict[str, float] = {}
-    concept_set = set(concepts)
-    for other in concept_set:
+    for other in concepts:
         if other == concept:
             continue
-        a, b = (concept, other) if concept < other else (other, concept)
-        c = pair_cooccur.get((a, b), 0)
+        c = pair_cooccur.get((concept, other), 0)
         if c == 0:
             continue
         out[other] = c / f_a
