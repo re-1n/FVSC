@@ -785,6 +785,36 @@ class SemanticSpace:
             "global_similarity": global_sim,
         }
 
+    def load_from_semantic_input(self, si: dict, source_text: str = "[agnostic]",
+                                 clause_type: str = "GENERIC"):
+        """Load concepts from a semantic_input dict (output of text_to_semantic_input).
+
+        Converts co-occurrence weights into synthetic Judgments and materializes them,
+        so the full density_core pipeline (decay, consolidation, feedback, anomaly) applies.
+
+        Each entry  { concept: { weight, contains: { child: w } } }  becomes:
+          - A self-referential Judgment(concept, "является", concept) with modality=weight
+          - One Judgment(concept, "содержит", child) per child, with modality=child_weight
+        """
+        for concept, spec in si.items():
+            self_weight = float(spec.get("weight", 1.0))
+            j_self = Judgment(
+                subject=concept, verb="является", object=concept,
+                modality=self_weight, intensity=self_weight,
+                source_text=source_text, clause_type=clause_type,
+                interpretation_layer=1,
+            )
+            self.materialize_judgment(j_self)
+
+            for child, child_weight in spec.get("contains", {}).items():
+                j = Judgment(
+                    subject=concept, verb="содержит", object=child,
+                    modality=float(child_weight), intensity=float(child_weight),
+                    source_text=source_text, clause_type=clause_type,
+                    interpretation_layer=1,
+                )
+                self.materialize_judgment(j)
+
     def report(self, term: str):
         """Print a human-readable report for a concept."""
         concept = self.concepts.get(term)
