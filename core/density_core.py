@@ -20,25 +20,76 @@ from typing import Optional
 
 @dataclass
 class Judgment:
-    """A single extracted judgment: Subject → Verb → Object + properties."""
+    """A single extracted judgment: Subject → Verb → Object + multilayer context.
+
+    Six layers of meaning, from hard syntactic core to reflective metaknowledge.
+    Layers 4-6 are optional — populated when the channel that produces them
+    (perceptual extractor, social context tagger, Antourage feedback) is active.
+    """
+    # ═══════════════════════════════════════════════════════════
+    # LAYER 1: Syntactic-logical (hard core, ~100% formalizable)
+    # ═══════════════════════════════════════════════════════════
     subject: str
     verb: str
     object: str
     quality: str = "AFFIRMATIVE"      # AFFIRMATIVE | NEGATIVE
-    modality: float = 1.0             # FACTUAL=1.0, EPISTEMIC=0.5, etc.
+    negation_scope: bool = False       # explicit: is the judgment under negation?
+    modality: float = 1.0              # 0.0–1.0 epistemic weight (FACTUAL=1.0, EPISTEMIC=0.5...)
+    modality_type: str = "FACTUAL"     # FACTUAL | EPISTEMIC | DEONTIC | CONDITIONAL | DESIDERATIVE
     intensity: float = 0.5
     timestamp: float = field(default_factory=time.time)
     source_text: str = ""
     condition_id: Optional[int] = None       # links conditional pairs (if→then)
     condition_role: Optional[str] = None     # "ANTECEDENT" | "CONSEQUENT"
     anomaly_score: Optional[float] = None    # 0.0=normal, 1.0=max anomaly vs existing map
-    # --- F1: Layered interpretation (XVII.1) ---
+
+    # --- F1: Layered interpretation (XVII.1) — orthogonal to the 6 semantic layers ---
     interpretation_layer: int = 0            # 0=L0 (syntax), 1=L1 (linguistic inference), 2=L2 (LLM)
     defeasible: bool = False                 # L1/L2 inferences are retractable
     inference_chain: list[str] = field(default_factory=list)  # reasoning trail for L1+
     extraction_confidence: float = 1.0       # 0.0–1.0, confidence in extraction quality
+
     # --- Clause type (episodic vs semantic continuum, XVIII.5) ---
     clause_type: str = "UNKNOWN"             # "GENERIC" | "HABITUAL" | "EPISODIC" | "UNKNOWN"
+
+    # ═══════════════════════════════════════════════════════════
+    # LAYER 2: Frame (~60% formalizable) — FrameNet/VerbNet roles
+    # ═══════════════════════════════════════════════════════════
+    frame_name: Optional[str] = None         # e.g. "Required_event" from FrameNet
+    semantic_roles: dict = field(default_factory=dict)  # {"AGENT": subj, "PATIENT": obj, ...}
+    role_intensity: float = 0.0              # 0.0–1.0 how strongly the frame is activated
+
+    # ═══════════════════════════════════════════════════════════
+    # LAYER 3: Polysemic (~70% formalizable) — which facet is active
+    # ═══════════════════════════════════════════════════════════
+    facet_id: Optional[int] = None           # which facet of the polysemous concept?
+    polysemy_degree: float = 0.0             # 0.0–1.0 (cached entropy at extraction time)
+    sense_vector: Optional[np.ndarray] = None  # explicit sense vector if known
+
+    # ═══════════════════════════════════════════════════════════
+    # LAYER 4: Bodily anchor (~40% formalizable) — perceptual grounding
+    # ═══════════════════════════════════════════════════════════
+    perceptual_modalities: set = field(default_factory=set)  # {visual, auditory, kinesthetic, ...}
+    perceptual_features: dict = field(default_factory=dict)
+    # e.g. {"color_temperature": 0.9, "motion_speed": 0.5, "size": 0.7, "texture": "rough"}
+    emotion_tags: dict = field(default_factory=dict)  # {"joy": 0.2, "anger": 0.8, ...} from NRC
+
+    # ═══════════════════════════════════════════════════════════
+    # LAYER 5: Socio-historical (~30% formalizable) — pragmatic context
+    # ═══════════════════════════════════════════════════════════
+    context_metadata: dict = field(default_factory=dict)
+    # e.g. {"source": "self"|"other"|"citation"|"observation",
+    #       "social_group": "family"|"work"|"politics",
+    #       "register": "formal"|"colloquial"|"slang"|"technical",
+    #       "ideology": str|None, "medium": "speech"|"writing"|"thought"}
+    historical_variant: Optional[str] = None  # archaic/dated form of the term?
+
+    # ═══════════════════════════════════════════════════════════
+    # LAYER 6: Reflective metaknowledge (~20% formalizable) — Antourage channel
+    # ═══════════════════════════════════════════════════════════
+    user_marked_facet: bool = False          # user explicitly marked which facet?
+    user_confidence: float = 0.0             # 0.0–1.0 how sure the person is
+
     # --- Feedback loop (interactive channel) ---
     confirmation_status: str = "unreviewed"  # "unreviewed" | "confirmed" | "rejected" | "contextualized"
     context_tags: list[str] = field(default_factory=list)  # ["work", "family", etc.]

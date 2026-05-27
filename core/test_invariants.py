@@ -301,6 +301,70 @@ def test_load_from_semantic_input_roundtrip():
             check(f"  '{term}' has ρ", space.concepts[term].rho is not None)
 
 
+def test_rich_judgment_layers():
+    """RichJudgment: all 6 layers preserved through materialize_judgment."""
+    print("\n[14] RichJudgment — 6-layer fields preserved in components")
+    space = SemanticSpace(dim=32)
+    j = Judgment(
+        subject="свобода", verb="требует", object="ответственность",
+        # Layer 1 extras
+        negation_scope=False, modality_type="DEONTIC",
+        # Layer 2: Frame
+        frame_name="Required_event",
+        semantic_roles={"AGENT": "свобода", "PATIENT": "ответственность"},
+        role_intensity=0.8,
+        # Layer 3: Polysemy
+        facet_id=2, polysemy_degree=0.4,
+        # Layer 4: Bodily
+        perceptual_modalities={"kinesthetic"},
+        perceptual_features={"texture": "rough", "size": 0.7},
+        emotion_tags={"determination": 0.6},
+        # Layer 5: Social
+        context_metadata={"source": "self", "social_group": "philosophy",
+                          "register": "formal", "medium": "writing"},
+        # Layer 6: Reflective
+        user_marked_facet=True, user_confidence=0.9,
+    )
+    space.materialize_judgment(j)
+    # Pull the stored judgment back out of the component
+    comp = space.concepts["свобода"].components[0]
+    sj = comp.judgment
+    check("  Layer 1: modality_type preserved", sj.modality_type == "DEONTIC")
+    check("  Layer 2: frame_name preserved", sj.frame_name == "Required_event")
+    check("  Layer 2: semantic_roles preserved",
+          sj.semantic_roles.get("AGENT") == "свобода")
+    check("  Layer 2: role_intensity preserved", sj.role_intensity == 0.8)
+    check("  Layer 3: facet_id preserved", sj.facet_id == 2)
+    check("  Layer 3: polysemy_degree preserved", sj.polysemy_degree == 0.4)
+    check("  Layer 4: perceptual_modalities preserved",
+          "kinesthetic" in sj.perceptual_modalities)
+    check("  Layer 4: perceptual_features preserved",
+          sj.perceptual_features.get("texture") == "rough")
+    check("  Layer 4: emotion_tags preserved",
+          sj.emotion_tags.get("determination") == 0.6)
+    check("  Layer 5: context_metadata preserved",
+          sj.context_metadata.get("social_group") == "philosophy")
+    check("  Layer 6: user_marked_facet preserved", sj.user_marked_facet is True)
+    check("  Layer 6: user_confidence preserved", sj.user_confidence == 0.9)
+
+
+def test_judgment_defaults_backward_compat():
+    """Minimal Judgment (only required fields) still works — backward compat."""
+    print("\n[15] Judgment defaults — backward compatibility")
+    space = SemanticSpace(dim=32)
+    # Old-style call with only S, V, O
+    j = Judgment(subject="a", verb="b", object="c")
+    space.materialize_judgment(j)
+    check("  minimal Judgment materializes", "a" in space.concepts)
+    sj = space.concepts["a"].components[0].judgment
+    check("  default modality_type=FACTUAL", sj.modality_type == "FACTUAL")
+    check("  default frame_name=None", sj.frame_name is None)
+    check("  default semantic_roles={}", sj.semantic_roles == {})
+    check("  default perceptual_modalities=set()", sj.perceptual_modalities == set())
+    check("  default emotion_tags={}", sj.emotion_tags == {})
+    check("  default user_confidence=0.0", sj.user_confidence == 0.0)
+
+
 # ─────────────────────────── runner ───────────────────────────
 
 def main():
@@ -321,6 +385,8 @@ def main():
     test_layered_rho_filtering()
     test_decay_monotonic()
     test_load_from_semantic_input_roundtrip()
+    test_rich_judgment_layers()
+    test_judgment_defaults_backward_compat()
 
     print("\n" + "=" * 65)
     print(f"PASSED: {_PASSES}")
