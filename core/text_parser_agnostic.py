@@ -57,6 +57,9 @@ class ParseConfig:
     stopwords: Optional[Iterable[str]] = None  # iterable of words to ignore
     keep_top_contains: int = 8            # max children per container
     weight_threshold: float = 0.05        # drop child weights below this
+    # --- Optional thesaurus prior (bonus-only — see text_to_semantic_input) ---
+    thesaurus_prior: object = None        # ThesaurusPrior instance (or None to disable)
+    prior_known_bonus: float = 1.2        # weight multiplier for pairs confirmed by thesaurus
 
 
 # ─────────────────────────── Segmentation ───────────────────────────
@@ -187,6 +190,22 @@ def text_to_semantic_input(
         raw_contains = _cooccur_contains_weights(
             c, concepts, token_freq, pair_cooccur
         )
+
+        # Apply thesaurus prior if configured.
+        # Strategy: BONUS-ONLY. Confirm what co-occurrence already found by
+        # boosting pairs that the thesaurus also knows. Don't penalize unknown
+        # pairs — most abstract/philosophical pairs are missing from
+        # ConceptNet/WordNet by design (knowledge bases cover concrete nouns
+        # much better than abstract relations).
+        prior = cfg.thesaurus_prior
+        if prior is not None:
+            adjusted: Dict[str, float] = {}
+            for other, w in raw_contains.items():
+                if prior.score(c, other) > 0:
+                    adjusted[other] = w * cfg.prior_known_bonus
+                else:
+                    adjusted[other] = w
+            raw_contains = adjusted
 
         filtered = [(k, w) for k, w in raw_contains.items() if w >= cfg.weight_threshold]
         filtered.sort(key=lambda x: -x[1])

@@ -204,15 +204,35 @@ def main():
     print("T9: Evaluation — Agnostic Pipeline Containment P/R/F1")
     print("=" * 65)
 
-    result = evaluate()
+    # Baseline: no thesaurus prior
+    print("\n--- BASELINE (no thesaurus) ---")
+    result_base = evaluate()
+    _print_summary(result_base)
 
-    for d in result["details"]:
-        marker = {"OK": "+", "MISS": "-", "PARTIAL": "~"}[d["status"]]
-        print(f"  [{marker}] \"{d['sentence'][:60]}\"")
-        for a, b, *rest in d["missed"]:
-            print(f"       MISSED: {a} ⊃ {b}  ({rest[0]})")
+    # With thesaurus prior
+    print("\n--- WITH THESAURUS PRIOR (ConceptNet RU, bonus-only) ---")
+    try:
+        try:
+            from .thesaurus_prior import ThesaurusPrior
+        except ImportError:
+            from thesaurus_prior import ThesaurusPrior
+        prior = ThesaurusPrior.from_conceptnet("data/conceptnet_ru.json")
+        if len(prior) == 0:
+            print("  [skip] thesaurus cache not found at data/conceptnet_ru.json")
+        else:
+            print(f"  loaded {len(prior)} pairs")
+            cfg = ParseConfig(min_freq=1, window=5, thesaurus_prior=prior)
+            result_prior = evaluate(config=cfg)
+            _print_summary(result_prior)
+            print(f"\n  Delta vs baseline: "
+                  f"P {result_prior['precision']-result_base['precision']:+.1%}, "
+                  f"R {result_prior['recall']-result_base['recall']:+.1%}, "
+                  f"F1 {result_prior['f1']-result_base['f1']:+.1%}")
+    except Exception as e:
+        print(f"  [skip] thesaurus prior failed: {e}")
 
-    print(f"\n{'='*65}")
+
+def _print_summary(result: dict):
     print(f"  Sentences:       {result['total_sentences']}")
     print(f"  Gold pairs:      {result['total_gold_pairs']}")
     print(f"  True positives:  {result['true_positives']}")
