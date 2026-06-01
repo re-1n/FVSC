@@ -105,23 +105,31 @@ def _is_url_only(text: str) -> bool:
     return len(stripped) < 5
 
 # ─────────────────────────── Channel → L5 metadata ───────────────────────────
+#
+# CHANNEL_META maps source channel names to L5 context_metadata used in MD
+# frontmatter and (eventually) RichJudgment.context_metadata.
+#
+# Channel names are USER-SPECIFIC and may contain sensitive references
+# (mental health, crisis topics, personal identifiers). They live in a local,
+# .gitignored config file: core/_channel_meta_local.py
+#
+# Example structure (write your own _channel_meta_local.py):
+#     CHANNEL_META = {
+#         "my-diary-export":  {"register": "diary",  "source": "self"},
+#         "dreams":           {"register": "dream",  "source": "self", "medium": "thought"},
+#         ...
+#     }
+#
+# If the local file is missing, an empty mapping is used and channels get the
+# default register fallback.
 
-CHANNEL_META: Dict[str, Dict] = {
-    "личный дневник тг":                      {"register": "diary",        "source": "self", "social_group": "личное"},
-    "сны тг":                                 {"register": "dream",        "source": "self", "medium": "thought"},
-    "идеи тг":                                {"register": "ideas",        "source": "self", "medium": "thought"},
-    "платформа тг":                           {"register": "project",      "source": "self", "social_group": "работа"},
-    "llmнум тг":                              {"register": "dialogue",     "source": "self", "social_group": "AI"},
-    "попытка самодиагностики тг":             {"register": "introspection","source": "self", "social_group": "психология"},
-    "устал быть человеком тг":               {"register": "diary",        "source": "self", "social_group": "эмоции"},
-    "когда я хотел умереть тг":              {"register": "crisis",       "source": "self"},
-    "лечусь тг":                              {"register": "health",       "source": "self"},
-    "словарик тг":                            {"register": "reference",    "source": "self"},
-    "черновики стихов и тд тг":              {"register": "creative",     "source": "self"},
-    "к L тг":                                 {"register": "letter",       "source": "self"},
-    "Rein тг":                                {"register": "diary",        "source": "self"},
-    "канал rags попытки заработать на крипте":{"register": "project",      "source": "self", "social_group": "крипта"},
-}
+try:
+    from ._channel_meta_local import CHANNEL_META  # type: ignore
+except ImportError:
+    try:
+        from _channel_meta_local import CHANNEL_META  # type: ignore  # noqa
+    except ImportError:
+        CHANNEL_META: Dict[str, Dict] = {}
 
 # MD frontmatter labels for each register
 REGISTER_LABEL = {

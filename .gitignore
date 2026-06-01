@@ -1,12 +1,29 @@
 # Personal data — chat exports and generated maps with personal content
 экспорты чатов/
 диалог о llm и fvsc с key7.txt
+PerpResearches from key7/
+другое/
+
+# Personal session notes (drafts, mid-session thoughts, third-party chats)
+дополнения к сессии.txt
+манифест.txt
+переход на язык-агностик систему.txt
+Актуальные вопросы, пути решения.md
+
+# NEXT_SESSION (per-session state, kept local)
 NEXT_SESSION.md
 
-# Generated maps (contain personal semantic data)
+# Generated semantic maps (contain personal concept data inline as JSON)
 core/semantic_map*.html
 core/test_sphere_map.html
 core/semantic_graph.png
+core/diary_map.html
+core/vault_map.html
+core/*_map.html
+
+# Pickle dumps of SemanticSpace / si dicts (contain personal vocabulary)
+core/_*.pkl
+core/*.pkl
 
 # Large data files (download separately)
 data/conceptnet-assertions-5.7.0.csv.gz
@@ -17,14 +34,27 @@ data/ruwordnet.tar.gz
 # Session data (personal dialogue logs)
 data/sessions/
 
+# Third-party books / copyrighted material
+*.fb2
+*.epub
+*.djvu
+Leontev_*
+
 # Generated demo/feedback maps
 demo_feedback.html
-NEXT_SESSION.md
 
-# Misc
-*.jpg
-*.png
-*.pdf
+# Local channel meta override (personal channel name → register mapping)
+core/_channel_meta_local.py
+
+# Virtualenvs and caches
+venv/
+.venv/
+env/
 __pycache__/
 *.pyc
 .claude/
+
+# Misc binaries
+*.jpg
+*.png
+*.pdf
