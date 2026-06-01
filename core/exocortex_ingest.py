@@ -31,10 +31,21 @@ from typing import Dict, List, Optional, Tuple
 
 _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 _MENTION_RE = re.compile(r"@\w+")
-_TG_HASH_RE = re.compile(r"\b[A-Za-z0-9]{16,}\b")  # long alphanumeric tokens (bot IDs, hashes)
+# Long alphanumeric runs (bot IDs, hashes)
+_TG_HASH_RE = re.compile(r"\b[A-Za-z0-9]{12,}\b")
+# Markdown code blocks and inline code
+_CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
+_INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
+# Lone Latin tokens — for a Russian-primary diary, drop pure-Latin words
+# (the/one/bot/private/nee etc. are noise from quotes, code, bot names).
+# Keeps mixed-script words like "qualia" if author uses them inside Russian sentences? No —
+# this is a coarse filter; mixed-script tokens won't match \b[A-Za-z]+\b cleanly anyway.
+_LATIN_ONLY_RE = re.compile(r"\b[A-Za-z]{2,}\b")
 _DIGITS_ONLY_RE = re.compile(r"^\d+$")
 
-# Russian + common function words to exclude from FVSC analysis
+# Russian + common function words to exclude from FVSC analysis.
+# Expanded based on diary diagnostic 2026-05-31: caught псевдо-функциональные
+# слова that survived the first cleanup (мою, немного, того, через, etc.)
 _RU_STOPWORDS = frozenset("""
     и в на не с по из что как за это так при это а но же то всё
     все уже уж был была были быть есть он она они оно его её их ему ей им
@@ -52,14 +63,34 @@ _RU_STOPWORDS = frozenset("""
     было будто может кажется кто
     того тебя через других
     пока ещё еще
+    мою мой моя моё мои моих моим моей моими
+    твою твой твоя твоё твои твоих твоим
+    немного
+    например то-то
+    более менее наиболее наименее тогда
+    однако таким такого такое
+    наверное вероятно возможно
+    бля
 """.split())
+# Note: мат (блять, пиздец, сука, etc.), эпистемические маркеры (типо, вроде, будто,
+# словно), и self-reference verbs (думаю, знаю, хочу) НЕ в стоп-листе — это
+# content слова в персональной семантике, особенно для дневника.
+# `блять` имеет 5 фасетов в diary diagnostic — фильтр уничтожил бы реальный сигнал.
 
 
 def _clean_for_fvsc(text: str) -> str:
-    """Strip URLs, mentions, hash-like tokens from TG text before FVSC parsing."""
+    """Strip URLs, mentions, code, hash-like tokens, and Latin-only words
+    from TG text before FVSC parsing.
+
+    Removing Latin words assumes the diary is Russian-primary; this is safe
+    for Rein's corpus (English appears only in quotes, code, bot names).
+    """
+    text = _CODE_BLOCK_RE.sub(" ", text)
+    text = _INLINE_CODE_RE.sub(" ", text)
     text = _URL_RE.sub(" ", text)
     text = _MENTION_RE.sub(" ", text)
     text = _TG_HASH_RE.sub(" ", text)
+    text = _LATIN_ONLY_RE.sub(" ", text)
     return text.strip()
 
 
