@@ -78,12 +78,16 @@ _RU_STOPWORDS = frozenset("""
 # `блять` имеет 5 фасетов в diary diagnostic — фильтр уничтожил бы реальный сигнал.
 
 
-def _clean_for_fvsc(text: str) -> str:
-    """Strip URLs, mentions, code, hash-like tokens, and Latin-only words
-    from TG text before FVSC parsing.
+_STANDALONE_DIGITS_RE = re.compile(r"\b\d+\b")
 
-    Removing Latin words assumes the diary is Russian-primary; this is safe
-    for Rein's corpus (English appears only in quotes, code, bot names).
+
+def _clean_for_fvsc(text: str) -> str:
+    """Strip URLs, mentions, code, hash-like tokens, Latin-only words,
+    and standalone digit runs (years, dates) from text before FVSC parsing.
+
+    Removing Latin words assumes the corpus is Russian-primary; this is safe
+    for Rein's vault (English appears only in quotes, code, bot names).
+    Digit removal kills year/date tokens that leak from TG export headings.
     """
     text = _CODE_BLOCK_RE.sub(" ", text)
     text = _INLINE_CODE_RE.sub(" ", text)
@@ -91,6 +95,7 @@ def _clean_for_fvsc(text: str) -> str:
     text = _MENTION_RE.sub(" ", text)
     text = _TG_HASH_RE.sub(" ", text)
     text = _LATIN_ONLY_RE.sub(" ", text)
+    text = _STANDALONE_DIGITS_RE.sub(" ", text)
     return text.strip()
 
 
