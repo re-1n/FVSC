@@ -25,6 +25,10 @@ core/*_map.html
 core/_*.pkl
 core/*.pkl
 
+# Persistent spaces (contain personal concept maps)
+data/spaces/
+*.pkl.tmp
+
 # Large data files (download separately)
 data/conceptnet-assertions-5.7.0.csv.gz
 # RuWordNet XML (non-commercial license, request from louk_nat@mail.ru)
