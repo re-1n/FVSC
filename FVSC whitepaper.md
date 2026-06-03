@@ -1986,8 +1986,10 @@ W_new = W_old − η · ∇L(W_old)
 | Compositional Distributional Semantics | Coecke, Sadrzadeh, Clark, 2010, "Mathematical Foundations for a Compositional Distributional Model of Meaning" | DisCoCat: тензорная композиция значений слов; глагол как тензор |
 | Graded Hyponymy через density matrices | Bankova, Coecke, Lewis, Marsden, 2019, J. Language Modelling | Containment через мера Лёвнера на операторах плотности |
 | Density matrices для полисемии | Piedeleu et al., 2015, CALCO; Meyer & Lewis, 2020, CoNLL | Понятие как оператор плотности; полисемия = mixed state |
+| Density matrix word embeddings | Garg & Ramakrishnan, 2019, "Quantum-inspired Complex Word Embedding" (EMNLP) | Матрицы плотности как embeddings слов из корпусной статистики; отличие FVSC: ρ строится из персональной иерархии смыслов, не дистрибутивного приора |
 | Text-level композиция | Coecke, 2020, "The Mathematics of Text Structure" (DisCoCirc) | Каждое предложение обновляет состояние мира через completely positive maps |
 | Геометрия информационного поиска | Van Rijsbergen, 2004, "The Geometry of Information Retrieval" | Гильбертово пространство и квантовая логика для представления информации |
+| Квантовые модели когниции | Busemeyer & Bruza, 2012, "Quantum Models of Cognition and Decision" (Cambridge UP) | Фундаментальная книга квантовой когниции: density matrices, проекторы, non-commutativity для моделирования человеческих суждений; основа для Broekaert & Busemeyer (2017) |
 | Разрешение омонимии через словарь | Lesk, 1986, "Automatic Sense Disambiguation" | Тезаурус как стартовый разделитель омонимов |
 | Личные конструкты | Kelly, 1955, "The Psychology of Personal Constructs" | Персональная система смыслов, не универсальная |
 | Измерение личного значения | Osgood, 1957, "The Measurement of Meaning" | Delta = отклонение личного значения от нормы |
