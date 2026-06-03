@@ -1,6 +1,69 @@
 # Следующая сессия — состояние проекта
 
-## Обновлено: 2026-05-31 — SESSION SUMMARY (экзокортекс + эмпирическая валидация тезауруса)
+## Обновлено: 2026-06-04 — SESSION SUMMARY (FVSC Core Service + квантовый retrieval)
+
+---
+
+## 🔥 Что сделано за сессию 2026-06-04
+
+### 1. FVSC Core Service — FastAPI обёртка
+Ядро FVSC теперь standalone HTTP-сервис. Multi-tenancy через именованные
+пространства, lazy-load persistence через pickle, авто-save после N ingest-ов.
+
+**Файлы:** `service/` — 10 файлов, ~850 строк
+- `app.py` — FastAPI, lifespan с загрузкой ThesaurusPrior, 11 endpoints
+- `store.py` — SpaceBundle (пространство + чанки + meta), SpaceStore (CRUD + persistence)
+- `ingest.py` — chunking → text_to_semantic_input → load_from_semantic_input
+- `retrieval.py` — квантовый retrieval через Tr(ρ_query · ρ_chunk)
+- `models.py` — Pydantic v2 схемы
+- `format_adapter.py` — mistune AST → структурированные чанки из Markdown
+
+**Endpoints:**
+`POST /spaces`, `GET /spaces`, `GET /spaces/{name}`, `DELETE /spaces/{name}`,
+`POST /spaces/{name}/save`, `POST /spaces/{name}/deepen`,
+`POST /spaces/{name}/ingest` body: {text, source_id, format},
+`GET /spaces/{name}/concepts/{term}/contains|contained-in|facets|polysemy|report`,
+`GET /spaces/{name}/similarity?a=X&b=Y`,
+`POST /spaces/{name}/retrieve` body: {query, top_k},
+`GET /compare?a=X&b=Y`
+
+**Запуск:** `uvicorn service.app:app --host 127.0.0.1 --port 8765`
+**Тесты:** 11/11 `python -m pytest service/tests/test_smoke.py -v`
+
+### 2. Квантовый retrieval — Tr(ρ_query · ρ_chunk)
+Настоящий quantum semantic similarity вместо weighted component matching.
+Запрос парсится в ρ_query из basis vectors. Каждый чанк получает свой ρ_chunk
+(восстановленный из компонентов с source_text == chunk_id). Score = Tr(ρ_q · ρ_c).
+
+Результат на whitepaper (740 чанков, 3902 концепта): 46-314мс/запрос,
+scores 0.01-0.15 (genuine quantum overlap). Находит содержание ПО ТЕМЕ,
+а не по вхождению слов.
+
+### 3. Markdown format adapter (mistune AST)
+Вместо regex-based strip_markdown — парсинг Markdown в AST через mistune:
+- Таблицы → "колонка: значение" (сохраняется column relationship)
+- Заголовки → prepend к последующим параграфам (контекст раздела)
+- Списки → "родитель: дочерний; дочерний" (сохраняется вложенность)
+- Code blocks/HTML → исключены
+
+Сравнение на whitepaper: +32% концептов vs plain text (3902 vs 2960),
+ноль табличного мусора в retrieval (plain давал 2/6 запросов с pipe-синтаксисом).
+
+### 4. Whitepaper — добавлены quantum cognition references
+- Garg & Ramakrishnan 2019 (EMNLP) — density matrix word embeddings
+- Busemeyer & Bruza 2012 (Cambridge UP) — фундаментальная книга quantum cognition
+
+### 5. BGE удалён из проекта
+Упоминание BGE-m3 удалено из `text_parser_agnostic.py` docstring.
+BGE никогда не использовался в коде — был только задокументирован
+как запрещённый паттерн. Основание: BGE-вектор коллапсирует ρ
+в rank-1 pure state, теряя asymmetric containment.
+
+### 6. Обсуждены архитектурные направления
+- Матрицы плотности как основа для ИИ — гибридный подход разумнее чистого quantum
+- FVSC изначально — инструмент когнитивного выравнивания, не AGI-компонент
+- Самоприменение: FVSC retrieval для поиска по собственной документации
+- Obsidian-плагин как следующий шаг (JS frontend → FastAPI backend)
 
 ---
 
@@ -185,28 +248,37 @@ Top концепты vault — социально-аффективная ось 
 
 ---
 
-## 📂 Коммиты сессии 2026-05-31
+## 📂 Коммиты сессии 2026-06-04
 
 ```
-eb22b98 feat: vault_ingest — full Obsidian vault → FVSC with thesaurus prior
-181cb37 feat: diary diagnostic + visualization, refined TG preprocessing
-3843b3b feat: exocortex_ingest — TG JSON → Obsidian MD + FVSC SemanticSpace
+f4e397f feat: quantum retrieval — Tr(ρ_query · ρ_chunk) instead of keyword matching
+c391f88 feat: Markdown format adapter — AST-level structural extraction
+1cf30d1 feat: FVSC Core Service — FastAPI wrapper for the semantic engine
+7187062 chore: remove BGE reference from text_parser_agnostic docstring
+c0495f6 docs: add missing quantum cognition refs to whitepaper XVI
+d23c6c9 (pushed 18 accumulated commits from 2026-05-27/31)
 ```
 
 ## 🚦 Быстрый старт следующей сессии
 
 ```bash
-# Проверить здоровье ядра (должно быть 125/125)
-python3 -X utf8 -m core.test_invariants
+# Запустить сервис (python 3.12+, venv с fastapi/uvicorn/mistune)
+uvicorn service.app:app --host 127.0.0.1 --port 8765
 
-# Проверить baseline (P=66% R=100% F1=79%)
-python3 -X utf8 -m core.evaluation
+# Проверить здоровье (должно быть 11/11)
+python -m pytest service/tests/test_smoke.py -v
+
+# Self-retrieval test — ингест whitepaper и поиск по нему
+python service/selftest.py
+
+# Сравнение форматов MD vs plain
+python service/compare_formats.py
+
+# Проверить здоровье ядра (должно быть 125/125)
+python -X utf8 -m core.test_invariants
 
 # Полный прогон vault → карта (~25 секунд) — пути локальные, не в репо
-python3 -X utf8 -m core.vault_ingest
-
-# Диагностика только дневник-регистра
-python3 -X utf8 -m core.diary_diagnostic
+python -X utf8 -m core.vault_ingest
 ```
 
 ---

@@ -351,3 +351,59 @@ bonus-only закреплена не как осторожность, а как 
 **Следующая фаза:** доработать визуализацию как первоклассный интерфейс,
 прикрутить Антураж к карте для интерактивного уточнения смыслов, и провести
 методологический эксперимент по чтению карты без доступа к исходникам.
+
+---
+
+## 2026-06-04 — FVSC как сервис: FastAPI + квантовый retrieval
+
+**Поворот:** От batch-скриптов к standalone HTTP-сервису. FVSC становится
+"ядром" — к нему можно подключить любой источник и любой интерфейс.
+
+### Что произошло
+
+**1. FastAPI-обёртка.** 11 эндпоинтов: CRUD пространств, ingest (plain/MD),
+per-concept query (contains, contained-in, facets, polysemy, report),
+similarity, cross-space compare, квантовый retrieval.
+Multi-tenancy через именованные пространства. Auto-save при N ingest-ах.
+ThesaurusPrior грузится один раз при старте и шарится между пространствами.
+
+**2. Квантовый retrieval через Tr(ρ_query · ρ_chunk).** Не weighted component
+matching, а настоящая операция из density matrix formalism. Запрос (свободный
+текст) → ρ_query из basis vectors. Каждый чанк → ρ_chunk из компонентов
+с source_text == chunk_id. Score = Tr(ρ_q · ρ_c). На whitepaper (740 чанков,
+3902 концепта): 46-314мс/запрос, scores 0.01-0.15. Находит контент ПО ТЕМЕ,
+а не по вхождению слов.
+
+**3. Markdown format adapter на mistune AST.** Вместо regex-стриппинга
+(уничтожавшего структуру) — полноценный парсинг Markdown в AST. Таблицы
+конвертируются в структурированные предложения, заголовки дают контекст
+последующим параграфам, списки сохраняют вложенность. +32% концептов
+на whitepaper, ноль табличного мусора в retrieval.
+
+**4. BGE удалён из кодовой базы и документации.** Никогда не использовался
+в коде — был только задокументирован как запрещённый паттерн (ранг-1
+коллапс ρ). Теперь удалён полностью.
+
+**5. Whitepaper дополнен.** Garg & Ramakrishnan (2019) — density matrix
+word embeddings, ближайшая existing работа. Busemeyer & Bruza (2012) —
+фундаментальная книга quantum cognition.
+
+### Архитектурный итог
+
+```
+Любой источник (Obsidian, TG, web, API)
+  → POST /spaces/{name}/ingest
+  → text_to_semantic_input → SemanticSpace.load_from_semantic_input
+  → recursive_deepen
+  → GET /spaces/{name}/retrieve (Tr(ρ·ρ))
+  → GET /compare (cross-space alignment)
+```
+
+Сервис работает. 11/11 тестов проходят. Код в `service/` — чистый слой
+поверх `core/`, без изменений в существующем API.
+
+### Обсуждённые направления
+- Гибридная архитектура (матрицы плотности + трансформеры) для AGI-подобных систем
+- FVSC как семантическая память в такой архитектуре
+- Obsidian-плагин как следующий practical шаг
+- Самоприменение: FVSC retrieval для поиска по документации FVSC
