@@ -21,12 +21,6 @@ encode naturally:
 These are generally different — exactly the non-commutative structure
 the FVSC formalism expects.
 
-NOTE on embedders: external embedding models (BGE-m3, SBERT, etc.) must NOT
-be used to construct basis vectors |v⟩ for ρ = Σwᵢ|vᵢ⟩⟨vᵢ|.
-A single BGE vector collapses ρ to a rank-1 pure state — losing asymmetric
-containment, mixture, and partial trace that motivate the FVSC framework.
-The correct role of embedders is concept-resolution (multilingual alias
-clustering at the ID layer), not weight computation.
 """
 
 from __future__ import annotations
