@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>FVSC — __TITLE__</title>
+<script src="https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: #0e0e10; color: #cfcfcf;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  display: flex;
+}
+
+/* ───── graph pane ───── */
+#graph {
+  flex: 1; position: relative; min-width: 0;
+}
+#network { width: 100%; height: 100%; }
+#header {
+  position: absolute; top: 0; left: 0; right: 0;
+  padding: 12px 18px;
+  background: linear-gradient(180deg, #0e0e10ee, transparent);
+  z-index: 10; pointer-events: none;
+}
+#header h1 { font-size: 14px; font-weight: 500; color: #888; }
+#header h1 b { color: #ddd; }
+#header .meta { font-size: 11px; color: #555; margin-top: 4px; }
+
+/* ───── chat pane ───── */
+#chat {
+  width: 440px; background: #131316;
+  border-left: 1px solid #25252a;
+  display: flex; flex-direction: column;
+}
+#chat-header {
+  padding: 14px 18px; border-bottom: 1px solid #1f1f24;
+  font-size: 11px; color: #777; text-transform: uppercase; letter-spacing: 1.5px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+#chat-header .model { font-family: 'Consolas', monospace; color: #4a8; text-transform: none; letter-spacing: 0; }
+
+#log { flex: 1; overflow-y: auto; padding: 16px; }
+.msg {
+  padding: 10px 14px; margin-bottom: 12px; border-radius: 4px;
+  font-size: 13px; line-height: 1.55; word-wrap: break-word;
+  white-space: pre-wrap;
+}
+.msg.user {
+  background: #1b1d24; border-left: 2px solid #4a6c8a;
+  color: #d8d8d8;
+}
+.msg.bot {
+  background: #18181c; border-left: 2px solid #4a8;
+  color: #cfcfcf;
+}
+.msg.error {
+  background: #2a1818; border-left: 2px solid #a55;
+  color: #d8a8a8;
+}
+.msg .mk {
+  background: #2a3a55; color: #bdd; padding: 1px 4px; border-radius: 2px;
+  font-family: 'Consolas', monospace; font-size: 12px;
+  cursor: pointer;
+}
+.msg .mk:hover { background: #3a5a85; color: #fff; }
+.msg .mk-edge { background: #553a2a; color: #dcb; }
+.msg .mk-edge:hover { background: #85583a; color: #fff; }
+.msg .mk-word { background: #2a4a2a; color: #beb; }
+.msg .mk-judgment { background: #4a2a4a; color: #ebd; }
+.msg .mk-note { background: #4a4a2a; color: #eeb; }
+
+#composer {
+  padding: 12px; border-top: 1px solid #1f1f24;
+  display: flex; gap: 8px;
+}
+#input {
+  flex: 1; padding: 10px 12px; background: #1c1c22; color: #e0e0e0;
+  border: 1px solid #2a2a32; border-radius: 4px;
+  font-family: inherit; font-size: 13px;
+  resize: none; min-height: 40px; max-height: 120px;
+}
+#input:focus { outline: none; border-color: #4a8; }
+#send {
+  padding: 0 18px; background: #2a4a3a; color: #cfe;
+  border: 1px solid #3a6a4a; border-radius: 4px;
+  font-size: 13px; cursor: pointer;
+}
+#send:hover:not(:disabled) { background: #3a6a4a; }
+#send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.placeholder {
+  color: #555; font-size: 12px; padding: 30px 10px; text-align: center;
+  line-height: 1.6;
+}
+.placeholder code {
+  background: #1c1c22; padding: 1px 5px; border-radius: 2px;
+  font-family: 'Consolas', monospace; color: #888;
+}
+</style>
+</head>
+<body>
+
+<div id="graph">
+  <div id="header">
+    <h1><b>__TITLE__</b></h1>
+    <div class="meta">__SUBTITLE__</div>
+  </div>
+  <div id="network"></div>
+</div>
+
+<div id="chat">
+  <div id="chat-header">
+    <span>Антураж</span>
+    <span class="model">__MODEL__</span>
+  </div>
+  <div id="log">
+    <div class="placeholder">
+      Спрашивай о карте — например «опиши главные кластеры», «какие концепты выглядят необычно».<br><br>
+      Когда я упоминаю элементы карты, я оборачиваю их в маркеры <code>[[concept:...]]</code> — они подсвечиваются в графе синхронно.
+    </div>
+  </div>
+  <div id="composer">
+    <textarea id="input" placeholder="Спросить о карте..."></textarea>
+    <button id="send">→</button>
+  </div>
+</div>
+
+<script>
+const DATA = __GRAPH_DATA__;
+
+// ───── nodes & graph ─────
+const nodesById = {};
+DATA.nodes.forEach(n => { nodesById[n.id] = n; });
+const edgeKey = (a, b) => `${a}|${b}`;
+const edgesByKey = {};
+DATA.edges.forEach(e => { edgesByKey[edgeKey(e.from, e.to)] = e; });
+
+const container = document.getElementById('network');
+const options = {
+  nodes: {
+    shape: 'dot',
+    font: { color: '#dddddd', size: 14, face: 'Segoe UI', strokeWidth: 0 },
+    borderWidth: 0,
+  },
+  edges: {
+    color: { color: '#3a3a44', highlight: '#888', hover: '#666', opacity: 0.6 },
+    smooth: { enabled: true, type: 'continuous', roundness: 0.2 },
+    arrows: { to: { enabled: true, scaleFactor: 0.4 } },
+    width: 1,
+  },
+  physics: {
+    forceAtlas2Based: {
+      gravitationalConstant: -55, centralGravity: 0.012,
+      springLength: 130, springConstant: 0.07,
+      damping: 0.5, avoidOverlap: 0.3,
+    },
+    solver: 'forceAtlas2Based',
+    stabilization: { iterations: 200 },
+  },
+  interaction: { hover: true, tooltipDelay: 200 },
+};
+const network = new vis.Network(container, DATA, options);
+
+// ───── highlight controller ─────
+let currentHighlights = { nodes: new Set(), edges: new Set() };
+let highlightTimeout = null;
+
+function resetHighlights() {
+  network.unselectAll();
+  currentHighlights = { nodes: new Set(), edges: new Set() };
+}
+
+function highlightConcept(term) {
+  if (!nodesById[term]) return false;
+  currentHighlights.nodes.add(term);
+  network.selectNodes(Array.from(currentHighlights.nodes), false);
+  network.focus(term, { scale: 1.2, animation: { duration: 600, easingFunction: 'easeInOutQuad' } });
+  return true;
+}
+
+function highlightEdge(a, b) {
+  let key = edgeKey(a, b);
+  let edge = edgesByKey[key];
+  if (!edge) {
+    key = edgeKey(b, a);
+    edge = edgesByKey[key];
+  }
+  if (!edge) return false;
+  // vis-network edges don't have stable IDs unless we set them — find by ends
+  const allEdges = network.body.data.edges.get();
+  const matches = allEdges.filter(e =>
+    (e.from === a && e.to === b) || (e.from === b && e.to === a)
+  ).map(e => e.id);
+  if (matches.length) {
+    matches.forEach(id => currentHighlights.edges.add(id));
+    network.selectEdges(Array.from(currentHighlights.edges));
+  }
+  // Also pull both nodes into focus
+  currentHighlights.nodes.add(a);
+  currentHighlights.nodes.add(b);
+  network.selectNodes(Array.from(currentHighlights.nodes), false);
+  network.fit({ nodes: [a, b], animation: { duration: 600, easingFunction: 'easeInOutQuad' } });
+  return true;
+}
+
+function applyHighlight(h) {
+  if (h.kind === 'concept') {
+    return highlightConcept(h.term);
+  } else if (h.kind === 'edge') {
+    return highlightEdge(h.a, h.b);
+  }
+  // note / judgment / word — visual marker in chat only for MVP-1
+  return false;
+}
+
+// ───── chat ─────
+const logEl = document.getElementById('log');
+const inputEl = document.getElementById('input');
+const sendBtn = document.getElementById('send');
+const history = [];   // [{role, content}]
+
+function clearPlaceholder() {
+  const p = logEl.querySelector('.placeholder');
+  if (p) p.remove();
+}
+
+function newMsg(role) {
+  clearPlaceholder();
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+  return div;
+}
+
+function renderTokenInto(el, text) {
+  // Text is appended as plain text; we'll scan for markers AFTER the message is done.
+  el.append(document.createTextNode(text));
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function decorateMarkersInPlace(el) {
+  // Replace [[kind:body]] in the rendered text with clickable spans
+  const re = /\[\[(concept|edge|note|judgment|word):([^\]]+)\]\]/g;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+  const textNodes = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode);
+  textNodes.forEach(node => {
+    const text = node.nodeValue;
+    if (!re.test(text)) return;
+    re.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+      const span = document.createElement('span');
+      span.className = `mk mk-${m[1]}`;
+      span.textContent = m[2];
+      span.dataset.kind = m[1];
+      span.dataset.body = m[2];
+      span.title = `${m[1]}: ${m[2]}`;
+      span.addEventListener('click', () => {
+        if (m[1] === 'concept') highlightConcept(m[2]);
+        else if (m[1] === 'edge') {
+          const [a, b] = m[2].split(/->|→|=>/).map(s => s.trim());
+          if (a && b) highlightEdge(a, b);
+        }
+      });
+      frag.appendChild(span);
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+  });
+}
+
+async function ask(question) {
+  if (!question.trim()) return;
+  sendBtn.disabled = true;
+  history.push({ role: 'user', content: question });
+  newMsg('user').textContent = question;
+
+  const botEl = newMsg('bot');
+  resetHighlights();
+
+  let resp;
+  try {
+    resp = await fetch('/viz/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: history }),
+    });
+  } catch (e) {
+    botEl.className = 'msg error';
+    botEl.textContent = `Сеть: ${e.message}`;
+    sendBtn.disabled = false;
+    return;
+  }
+  if (!resp.ok || !resp.body) {
+    botEl.className = 'msg error';
+    botEl.textContent = `HTTP ${resp.status}: ${await resp.text()}`;
+    sendBtn.disabled = false;
+    return;
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let assistantText = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+
+    // Parse SSE events: blocks separated by \n\n
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) !== -1) {
+      const block = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      let eventType = 'message';
+      let dataLine = '';
+      block.split('\n').forEach(line => {
+        if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+        else if (line.startsWith('data: ')) dataLine += line.slice(6);
+      });
+      if (!dataLine) continue;
+      let data;
+      try { data = JSON.parse(dataLine); } catch { continue; }
+
+      if (eventType === 'token') {
+        renderTokenInto(botEl, data.text);
+        assistantText += data.text;
+      } else if (eventType === 'highlight') {
+        applyHighlight(data);
+      } else if (eventType === 'error') {
+        const e = document.createElement('div');
+        e.className = 'msg error';
+        e.textContent = `[ошибка] ${data.message}`;
+        logEl.appendChild(e);
+      } else if (eventType === 'done') {
+        decorateMarkersInPlace(botEl);
+      }
+    }
+  }
+
+  history.push({ role: 'assistant', content: assistantText });
+  sendBtn.disabled = false;
+  inputEl.focus();
+}
+
+sendBtn.addEventListener('click', () => {
+  const q = inputEl.value;
+  inputEl.value = '';
+  ask(q);
+});
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendBtn.click();
+  }
+});
+
+// Click node in graph → echo to chat as a "show me about X" query? For MVP just select.
+network.on('click', params => {
+  if (params.nodes.length) {
+    network.focus(params.nodes[0], { scale: 1.2, animation: true });
+  }
+});
+
+inputEl.focus();
+</script>
+</body>
+</html>

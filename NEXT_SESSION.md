@@ -1,5 +1,162 @@
 # Следующая сессия — состояние проекта
 
+## Обновлено: 2026-06-06 — SESSION SUMMARY (Антураж MVP-1 + Obsidian-bridge)
+
+---
+
+## 🔥 Что сделано за сессию 2026-06-06
+
+### 1. Obsidian-bridge: vault → концепт-заметки + HTML-карта
+Полноценный двусторонний контур с vault'ом. Один command, и vault получает
+персональную семантическую карту как нативные заметки + интерактивную HTML.
+
+**Файлы:**
+- `core/export_to_vault.py` — рендер SemanticSpace в `.md` с frontmatter
+  (term, weight, polysemy, facets, components), wikilinks к содержащим/содержимым.
+- `core/vault_sync.py` — единая CLI: walk vault → space → top-N concept notes →
+  HTML map в корень vault'а. Perf-логирование на каждой стадии.
+
+**Запуск:** `python -m core.vault_sync --top 100`
+**Что в vault'е:** `_fvsc_concepts/` (100 .md), `_fvsc_concepts/_index.md`, `vault_map.html`.
+
+### 2. LLM-слой: Ollama-клиент, REPL чат поверх карты
+**Файлы:**
+- `core/llm/client.py` — абстракция (`LLMClient`, `ChatMessage`)
+- `core/llm/ollama_client.py` — REST-клиент на stdlib (`chat`, `chat_stream`, `ping`, `list_local_models`)
+- `core/llm/map_context.py` — system prompt + компактный текстовый дамп карты
+  (топ-N концептов с метриками + рёбра) для контекста модели
+- `core/semantic_chat.py` — REPL с дисковым кэшем space'а (`_fvsc_cache.pkl` в vault'е),
+  командами `/top N`, `/context`, `/reload`, `/quit`
+
+**Запуск:** `python -m core.semantic_chat [--model qwen2.5:14b-instruct-q4_K_M]`
+
+### 3. Антураж MVP-1 — LLM-driven визуализация (главное)
+LLM не просто отвечает текстом, а **подсвечивает узлы графа в реальном времени**
+синхронно со своим стрим-ответом. Реализован двухпанельный UI: vis-network слева,
+чат справа, SSE-канал для highlight-эвентов.
+
+**Файлы:**
+- `service/viz_session.py` — стрим-парсер `[[маркеров]]` (state machine,
+  устойчив к токенам, разорванным поперёк маркера; протестирован)
+- `service/viz_router.py` — `/viz` (HTML), `POST /viz/ask` (SSE),
+  `GET /viz/status` (диагностика). Lazy-load vault space из `_fvsc_cache.pkl`.
+- `service/viz_template.html` — двухпанельный UI: граф vis-network,
+  чат с подсветкой маркеров инлайн, кнопки `[[concept:...]]` кликабельны.
+- `service/app.py` — `/` → 307 redirect на `/viz`, подключён viz_router.
+
+**Адресный синтаксис LLM** (LLM учится использовать через system prompt):
+```
+[[concept:важно]]              — узел
+[[edge:A->B]]                  — связь
+[[note:path.md]]               — заметка
+[[judgment:важно#3]]           — N-е суждение
+[[word:тяжело]]                — литеральное слово
+```
+
+**Запуск:**
+```
+python -m uvicorn service.app:app --host 127.0.0.1 --port 8765
+# открыть http://127.0.0.1:8765/
+```
+
+**End-to-end протестировано:** Ollama `qwen2.5:14b-instruct-q4_K_M` отвечает,
+маркеры в проге вытаскиваются парсером, SSE highlight-эвенты долетают, графа
+выделяет упомянутые концепты и фокусирует камеру.
+
+### 4. Память: vision'ы антуража
+- `memory/antourage_vision.md` — полная архитектурная карта фичи (уровни
+  вложенности, синтаксис адресации, ограничения, roadmap MVP-1/2/3).
+- `memory/feedback_session_end_ritual.md` — конвенция «что делать в конце сессии».
+
+### 5. Анализ от Haiku был частично разобран
+Прогнал критику его scaling-анализа против реального кода. Из 8 предложений:
+2 верных мелочи (dim=50 в дефолте, log perf), 1 уже реализовано (linked +
+top_by_mass в recursive_deepen), 5 — over-engineering (sparse, Tucker, Redis,
+LSH, distributed) для проекта, чьё реальное узкое место — семантическое
+качество, а не CPU.
+
+---
+
+## 📊 Метрики 2026-06-06
+
+### Vault pipeline на реальном корпусе (707 файлов, 3.59MB)
+
+| Стадия | Время |
+|---|---|
+| collect_vault | 0.5с |
+| load thesaurus | 0.2с |
+| parse → semantic_input | 0.9с |
+| materialize | 2.9с |
+| recursive_deepen (3 iters) | 17.9с |
+| export 100 notes → vault | 31.8с |
+| render HTML | 15.0с |
+| **TOTAL** | **~69с** |
+
+Узкое место экспорта — `query_contains/contained_in` (O(N) перебор × 100 концептов).
+Лёгкая цель для оптимизации (eigendecomp cache в Concept) — отложено.
+
+---
+
+## 🎯 Открытые направления (приоритет сверху вниз)
+
+### 1. 🔥 АНТУРАЖ MVP-2 + MVP-3 (новый высший приоритет)
+Из `antourage_vision.md`:
+- **MVP-2 (~1.5ч):** dblclick на узле → drill-down в Components/суждения концепта,
+  side-view с заметками-источниками (через грубый сканер vault'а: substring match).
+- **MVP-3 (~1.5ч):** подсветка `[[note:...]]` и `[[word:...]]` маркеров на drill-down уровне,
+  клик по `[[note:...]]` → `obsidian://open?vault=Rein&file=...`.
+
+### 2. Интеграция в Obsidian как вкладка
+Три тира из обсуждения:
+- **Тир 1 (15 мин):** iframe через Custom Frames plugin, URL `http://localhost:8765/viz`.
+- **Тир 2 (+1ч):** автостарт uvicorn через Shell Commands plugin при загрузке Obsidian.
+- **Тир 3 (6-10ч):** настоящий нативный плагин на TypeScript с доступом к vault API
+  (LLM получает реальный текст заметок, не только метаданные).
+
+### 3. Точный provenance в Judgment (для MVP-3 правильно)
+Переписать `vault_ingest.py` так, чтобы парсить файлы по одному и класть имя
+файла в `Judgment.source_text`. Сейчас всё помечено `[vault]` — provenance потерян.
+Альтернатива (грубый сканер для MVP-2) уже описана.
+
+### 4. Уровень 0 — кластеры/темы (отложено)
+Нужен algorithm choice: k-means на rho_deep_norm vs Louvain/Leiden community
+detection на графе. Отдельная сессия.
+
+### 5. Прочие открытые направления (с прошлых сессий)
+
+- **Sibling-FP fix** — есть локальные изменения с 2026-06-05 (F1 79.3%→80.7%
+  по memory; коммитятся в этой же сессии).
+- **Eval-200 diagnostic** — есть локальные результаты (`eval_200_results*.json`,
+  `eval_200_diagnostic.py`); коммитятся в этой же сессии.
+- **Compare-режим карт** — `SemanticSpace.compare_maps` есть, но в UI не выведен.
+- **Анализ карты в отрыве от текста** — community detection, centrality.
+- **L4/L5 операционализация.**
+
+---
+
+## 🚦 Быстрый старт следующей сессии
+
+```bash
+# 1) Поднять сервис
+python -m uvicorn service.app:app --host 127.0.0.1 --port 8765
+
+# 2) Открыть Антураж в браузере
+# http://127.0.0.1:8765/
+
+# 3) Если кэш vault'а устарел — пересобрать
+python -m core.vault_sync --top 100
+# (создаст также _fvsc_cache.pkl для быстрого старта чата)
+
+# 4) Терминальный чат (без UI) — для отладки промпта
+python -m core.semantic_chat --model qwen2.5:14b-instruct-q4_K_M
+
+# 5) Проверки ядра
+python -X utf8 -m core.test_invariants                 # 125/125
+python -m pytest service/tests/test_smoke.py -v         # 11/11
+```
+
+---
+
 ## Обновлено: 2026-06-04 — SESSION SUMMARY (FVSC Core Service + квантовый retrieval)
 
 ---

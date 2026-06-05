@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from core.density_core import SemanticSpace, facets, purity, von_neumann_entropy
 from core.text_parser_agnostic import ParseConfig
@@ -32,6 +32,7 @@ from .models import (
 )
 from .retrieval import retrieve_by_query
 from .store import SpaceStore
+from .viz_router import router as viz_router
 
 # ── Globals ───────────────────────────────────────────────────────
 
@@ -74,6 +75,13 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.include_router(viz_router)
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/viz")
 
 # ── Error handler ─────────────────────────────────────────────────
 

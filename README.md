@@ -25,6 +25,12 @@ pip install -r requirements.txt
 # Start the service
 uvicorn service.app:app --host 127.0.0.1 --port 8765
 
+# Open the interactive map + chat ("Антураж")
+# http://127.0.0.1:8765/
+
+# Sync an Obsidian vault into FVSC notes + HTML map
+python -m core.vault_sync --vault "/path/to/vault" --top 100
+
 # Smoke test
 python -m pytest service/tests/test_smoke.py -v
 
@@ -36,11 +42,13 @@ python service/selftest.py
 
 | Endpoint | Description |
 |---|---|
+| `GET  /viz` | Interactive map + chat UI (Антураж). LLM drives highlights via `[[marker]]` syntax over SSE. |
+| `POST /viz/ask` | SSE stream: tokens + highlight events from a local LLM (Ollama). |
 | `POST /spaces/{name}/ingest` | Ingest text (plain or Markdown) |
 | `POST /spaces/{name}/retrieve` | Quantum retrieval: Tr(ρ_query · ρ_chunk) |
-| `GET /spaces/{name}/concepts/{term}/report` | Full concept report |
-| `GET /compare?a=X&b=Y` | Cross-space map comparison |
-| ... | 11 endpoints total |
+| `GET  /spaces/{name}/concepts/{term}/report` | Full concept report |
+| `GET  /compare?a=X&b=Y` | Cross-space map comparison |
+| ... | 13 endpoints total |
 
 ## Core modules
 
@@ -52,6 +60,12 @@ python service/selftest.py
 | `core/density_core.py` | SemanticSpace, Judgment, Component, Concept, ρ operations |
 | `core/thesaurus_prior.py` | ConceptNet/RuWordNet weak prior (bonus-only) |
 | `core/feedback.py` | Interactive FeedbackEngine |
+| `core/vault_sync.py` | Walk Obsidian vault → SemanticSpace → concept notes + HTML map |
+| `core/export_to_vault.py` | Render concepts as Obsidian `.md` notes with wikilinks |
+| `core/semantic_chat.py` | Terminal REPL chat about the map (uses local Ollama) |
+| `core/llm/` | LLM client abstraction (Ollama backend, no new deps) |
+| `service/viz_router.py` | `/viz` page + SSE chat endpoint |
+| `service/viz_session.py` | Streaming `[[marker]]` parser → highlight events |
 
 ## Key properties
 
