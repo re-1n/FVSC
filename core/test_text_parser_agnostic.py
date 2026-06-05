@@ -199,6 +199,96 @@ def test_density_matrix_properties():
         print(f"  {a[:10]:<10} " + "  ".join(row))
 
 
+def test_coordination_blocks_sibling():
+    """Verify sibling-FP fix (#6): tokens flanking a coordinator do not get
+    direct containment, while the verb-parent link survives.
+
+    Background: in "Мужество требует силы и терпения" the sliding window
+    would naively link силы↔терпения through direct co-occurrence. After the
+    coordination-aware pre-pass, that pair is suppressed; силы and терпения
+    each remain linked to требует.
+    """
+    banner("TEST 6: Coordination blocks sibling-FP (NEXT_SESSION #6)")
+    cfg = ParseConfig(
+        window=5, min_freq=1, max_concepts=50,
+        stopwords=DEFAULT_STOPWORDS_RU_EN, keep_top_contains=8,
+        coordination_aware=True,
+    )
+
+    def _has_contains(si, a_prefix, b_prefix):
+        for ka, spec in si.items():
+            if not ka.startswith(a_prefix):
+                continue
+            for kb in spec.get("contains", {}):
+                if kb.startswith(b_prefix):
+                    return True
+        return False
+
+    # Case 1: Russian "Мужество требует силы и терпения."
+    ru_sent = "Мужество требует силы и терпения."
+    si_ru = text_to_semantic_input(ru_sent, config=cfg)
+    print(f"\nRU: '{ru_sent}'")
+    print(f"  concepts: {sorted(si_ru.keys())}")
+
+    # Verb-parent links survive
+    assert _has_contains(si_ru, "мужест", "требу"), \
+        "verb-parent link мужество→требует missing"
+    assert _has_contains(si_ru, "требу", "сил"), \
+        "verb→object link требует→силы missing"
+    assert _has_contains(si_ru, "требу", "терп"), \
+        "verb→object link требует→терпения missing"
+    print("  [+] verb-parent links present (мужество→требует→{силы, терпения})")
+
+    # Sibling link suppressed in BOTH directions
+    assert not _has_contains(si_ru, "сил", "терп"), \
+        "sibling-FP present: силы→терпения should be blocked"
+    assert not _has_contains(si_ru, "терп", "сил"), \
+        "sibling-FP present: терпения→силы should be blocked"
+    print("  [+] sibling pair {силы, терпения} suppressed in both directions")
+
+    # Case 2: Same sentence with the fix OFF — should reproduce the bug
+    cfg_off = ParseConfig(
+        window=5, min_freq=1, max_concepts=50,
+        stopwords=DEFAULT_STOPWORDS_RU_EN, keep_top_contains=8,
+        coordination_aware=False,
+    )
+    si_off = text_to_semantic_input(ru_sent, config=cfg_off)
+    sibling_present = (
+        _has_contains(si_off, "сил", "терп") or _has_contains(si_off, "терп", "сил")
+    )
+    assert sibling_present, \
+        "with coordination_aware=False the sibling pair should still be present " \
+        "(otherwise the fix is a no-op and the test is meaningless)"
+    print("  [+] with fix OFF: sibling pair {силы, терпения} IS present (control)")
+
+    # Case 3: English "Courage requires strength and patience."
+    en_sent = "Courage requires strength and patience."
+    si_en = text_to_semantic_input(en_sent, config=cfg)
+    print(f"\nEN: '{en_sent}'")
+    print(f"  concepts: {sorted(si_en.keys())}")
+    assert _has_contains(si_en, "coura", "requ"), \
+        "verb-parent link courage→requires missing"
+    assert not _has_contains(si_en, "stren", "pati"), \
+        "sibling-FP: strength→patience should be blocked"
+    assert not _has_contains(si_en, "pati", "stren"), \
+        "sibling-FP: patience→strength should be blocked"
+    print("  [+] EN verb-parent intact, sibling {strength, patience} suppressed")
+
+    # Case 4: Robustness — chained coordinators ("и так далее и тому подобное")
+    # should not crash and should not over-block meaningful content. The phrase
+    # has no content concepts after stopword filtering (далее/подобное are
+    # content but the structure is idiomatic), so the assertion is just "no
+    # exception, parse returns something."
+    weird = "Жизнь и смерть и любовь и так далее."
+    si_w = text_to_semantic_input(weird, config=cfg)
+    assert isinstance(si_w, dict)
+    # жизнь, смерть, любовь are coordinator-flanking siblings → no direct links
+    assert not _has_contains(si_w, "жизн", "смер"), \
+        "chained coordination: жизнь↔смерть should be suppressed"
+    print(f"\n  [+] robustness: chained coordination parses without crash "
+          f"({len(si_w)} concepts)")
+
+
 def main():
     print("\n" + "╔" + "=" * 68 + "╗")
     print("║" + "  Raw-text → FVSC density matrices (language-agnostic)".center(68) + "║")
@@ -209,6 +299,7 @@ def main():
     test_invented_language()
     test_cooccurrence_asymmetry()
     test_density_matrix_properties()
+    test_coordination_blocks_sibling()
 
     print("\n" + "=" * 70)
     print("DONE — pipeline works end-to-end with no spaCy, no language model.")

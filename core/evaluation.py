@@ -199,6 +199,184 @@ def _find_original(pair: tuple, expected_pairs: list) -> bool:
     return False
 
 
+# ---------------------------------------------------------------------------
+# Weighted metrics (P@K, R@K, MAP)
+#
+# The binary evaluate() above treats a gold pair as found whenever co-occurrence
+# is detected, regardless of weight. This conflates "parser ranked the right
+# pair first" with "parser buried the right pair under 30 noisy ones." The
+# functions below rank si["contains"] entries by weight and score the ranking
+# directly.
+#
+# Episodic sentences (expected_pairs == []) are NOT averaged into P@K/R@K/MAP —
+# they are reported separately as episodic_false_alarm_rate, since otherwise
+# every predicted pair counts as a false positive and dominates the mean.
+# ---------------------------------------------------------------------------
+
+
+def _rank_predicted_pairs(si: dict) -> list:
+    """Flatten si into a descending-by-weight list of (container, contained, w).
+
+    Iterates every concept and its contains-dict; ties broken by lexicographic
+    order on (a, b) for determinism.
+    """
+    pairs = []
+    for ka, spec in si.items():
+        for kb, w in spec.get("contains", {}).items():
+            pairs.append((ka, kb, float(w)))
+    pairs.sort(key=lambda x: (-x[2], x[0], x[1]))
+    return pairs
+
+
+def _matches_expected(a_key: str, b_key: str, expected_pairs: list) -> bool:
+    """Same prefix-match heuristic as _find_original — one matching predicate
+    used by both binary eval and weighted eval keeps both on one axis."""
+    return _find_original((a_key, b_key), expected_pairs)
+
+
+def _hits_at_k(predicted_ranked: list, expected_pairs: list, k: int) -> int:
+    """Number of top-k predicted pairs that match some gold pair."""
+    if not expected_pairs:
+        return 0
+    hits = 0
+    for a, b, _w in predicted_ranked[:k]:
+        if _matches_expected(a, b, expected_pairs):
+            hits += 1
+    return hits
+
+
+def _average_precision(predicted_ranked: list, expected_pairs: list) -> float:
+    """Standard AP: mean of precision at each rank where a relevant pair is hit.
+
+    Edge cases:
+      - len(expected)==0 AND len(predicted)==0 → 1.0 (perfect predict-nothing)
+      - len(expected)==0 AND len(predicted)>0 → 0.0 (any prediction is noise)
+    Episodic sentences are partitioned out of the gold AP mean anyway; these
+    branches are safety nets for callers that don't partition.
+    """
+    n_relevant = len(expected_pairs)
+    if n_relevant == 0:
+        return 1.0 if not predicted_ranked else 0.0
+
+    hits = 0
+    sum_precisions = 0.0
+    seen_gold = set()  # don't double-count if parser duplicates a hit
+    for rank, (a, b, _w) in enumerate(predicted_ranked, start=1):
+        if not _matches_expected(a, b, expected_pairs):
+            continue
+        # Identify which gold pair was hit so we don't double-count it
+        for i, (ga, gb) in enumerate(expected_pairs):
+            if i in seen_gold:
+                continue
+            if (a.startswith(ga[:4]) or ga.startswith(a[:4])) and \
+               (b.startswith(gb[:4]) or gb.startswith(b[:4])):
+                seen_gold.add(i)
+                hits += 1
+                sum_precisions += hits / rank
+                break
+    return sum_precisions / n_relevant
+
+
+def evaluate_weighted(gold_set=None, config: ParseConfig = None,
+                      dim: int = 32, k: int = 10) -> dict:
+    """Rank-aware evaluation: precision@k, recall@k, mean average precision.
+
+    Gold sentences (expected_pairs != []) contribute to the P@K/R@K/MAP means.
+    Episodic sentences (expected_pairs == []) contribute only to
+    episodic_false_alarm_rate — the fraction of them where the parser predicted
+    anything at all.
+
+    Caveats:
+      * MAP is averaged over gold sentences only (the 14 non-episodic ones in
+        the default set).
+      * At k=10 with gold pair counts of 3–5 per sentence, R@10 is bounded by
+        parser recall, not k; P@10 will look low because the parser emits more
+        than 10 ranked pairs while gold has 3.
+      * Matching uses the same prefix _find_original heuristic as binary eval,
+        so morphological variants still match — keeps both metrics comparable.
+    """
+    if gold_set is None:
+        gold_set = GOLD_CONTAINMENT
+    if config is None:
+        config = ParseConfig(min_freq=1, window=5)
+
+    gold_sentences = []
+    episodic_sentences = []
+    per_sentence = []
+
+    for sentence, expected_pairs in gold_set:
+        si = text_to_semantic_input(sentence, config=config)
+        predicted = _rank_predicted_pairs(si)
+        is_episodic = (len(expected_pairs) == 0)
+
+        if is_episodic:
+            episodic_sentences.append({
+                "sentence": sentence,
+                "n_predicted": len(predicted),
+                "predicted_top_k": predicted[:k],
+            })
+            per_sentence.append({
+                "sentence": sentence,
+                "episodic": True,
+                "n_predicted": len(predicted),
+                "predicted_top_k": predicted[:k],
+                "expected": [],
+            })
+            continue
+
+        ap = _average_precision(predicted, expected_pairs)
+        hits = _hits_at_k(predicted, expected_pairs, k)
+        p_at_k = hits / max(1, min(k, len(predicted))) if predicted else 0.0
+        r_at_k = hits / max(1, len(expected_pairs))
+
+        gold_sentences.append({
+            "sentence": sentence,
+            "ap": ap,
+            "p_at_k": p_at_k,
+            "r_at_k": r_at_k,
+        })
+        per_sentence.append({
+            "sentence": sentence,
+            "episodic": False,
+            "ap": ap,
+            "p_at_k": p_at_k,
+            "r_at_k": r_at_k,
+            "predicted_top_k": predicted[:k],
+            "expected": expected_pairs,
+        })
+
+    n_gold = len(gold_sentences)
+    n_episodic = len(episodic_sentences)
+    mean_p = sum(s["p_at_k"] for s in gold_sentences) / max(1, n_gold)
+    mean_r = sum(s["r_at_k"] for s in gold_sentences) / max(1, n_gold)
+    mean_ap = sum(s["ap"] for s in gold_sentences) / max(1, n_gold)
+    episodic_fa = (
+        sum(1 for s in episodic_sentences if s["n_predicted"] > 0)
+        / max(1, n_episodic)
+    )
+
+    return {
+        "k": k,
+        "n_gold_sentences": n_gold,
+        "n_episodic_sentences": n_episodic,
+        "precision_at_k": mean_p,
+        "recall_at_k": mean_r,
+        "map": mean_ap,
+        "episodic_false_alarm_rate": episodic_fa,
+        "per_sentence": per_sentence,
+    }
+
+
+def _print_weighted_summary(result: dict):
+    print(f"  k:                       {result['k']}")
+    print(f"  Gold sentences:          {result['n_gold_sentences']}")
+    print(f"  Episodic sentences:      {result['n_episodic_sentences']}")
+    print(f"  Mean Precision@{result['k']}:       {result['precision_at_k']:.1%}")
+    print(f"  Mean Recall@{result['k']}:          {result['recall_at_k']:.1%}")
+    print(f"  MAP:                     {result['map']:.1%}")
+    print(f"  Episodic FA rate:        {result['episodic_false_alarm_rate']:.1%}")
+
+
 def main():
     print("=" * 65)
     print("T9: Evaluation — Agnostic Pipeline Containment P/R/F1")
@@ -211,6 +389,7 @@ def main():
 
     # With thesaurus prior
     print("\n--- WITH THESAURUS PRIOR (ConceptNet RU, bonus-only) ---")
+    prior = None
     try:
         try:
             from .thesaurus_prior import ThesaurusPrior
@@ -219,6 +398,7 @@ def main():
         prior = ThesaurusPrior.from_conceptnet("data/conceptnet_ru.json")
         if len(prior) == 0:
             print("  [skip] thesaurus cache not found at data/conceptnet_ru.json")
+            prior = None
         else:
             print(f"  loaded {len(prior)} pairs")
             cfg = ParseConfig(min_freq=1, window=5, thesaurus_prior=prior)
@@ -230,6 +410,25 @@ def main():
                   f"F1 {result_prior['f1']-result_base['f1']:+.1%}")
     except Exception as e:
         print(f"  [skip] thesaurus prior failed: {e}")
+        prior = None
+
+    # Weighted metrics: P@10, R@10, MAP, episodic false-alarm rate
+    print("\n" + "=" * 65)
+    print("WEIGHTED METRICS (k=10) — rank-aware evaluation")
+    print("=" * 65)
+    print("\n--- BASELINE (no thesaurus) ---")
+    weighted_base = evaluate_weighted(k=10)
+    _print_weighted_summary(weighted_base)
+
+    if prior is not None:
+        print("\n--- WITH THESAURUS PRIOR ---")
+        cfg = ParseConfig(min_freq=1, window=5, thesaurus_prior=prior)
+        weighted_prior = evaluate_weighted(config=cfg, k=10)
+        _print_weighted_summary(weighted_prior)
+        print(f"\n  Delta vs baseline: "
+              f"P@10 {weighted_prior['precision_at_k']-weighted_base['precision_at_k']:+.1%}, "
+              f"R@10 {weighted_prior['recall_at_k']-weighted_base['recall_at_k']:+.1%}, "
+              f"MAP {weighted_prior['map']-weighted_base['map']:+.1%}")
 
 
 def _print_summary(result: dict):

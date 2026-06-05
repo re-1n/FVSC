@@ -40,6 +40,28 @@ _PARA_SPLIT_RE = re.compile(r"\n\s*\n")
 _TOKEN_RE = re.compile(r"\b\w+\b", flags=re.UNICODE)
 
 
+# Coordinator tokens for the sibling-FP pre-pass. Pairs of content tokens that
+# flank a coordinator like "X и Y" / "X or Y" are marked sibling and their
+# *direct* sliding-window co-occurrence is dropped — they remain linked to
+# the shared verb-parent through normal co-occurrence, which captures genuine
+# textual structure. See ParseConfig.coordination_aware below.
+#
+# Limits (honest):
+#   - Single-token-coordinator languages only. Prefixal (Arabic wa-), enclitic
+#     (Latin -que), or zero-marked juxtaposition (Chinese) coordination won't
+#     fire this rule. Languages without a coordinator in this set fall back to
+#     unmodified sliding-window behaviour.
+#   - The "nearest content token left / right of the coordinator" heuristic
+#     captures only the *last* pair in a long list "A, B, C, и D" (here: C↔D).
+#     Full list-coordination handling is a separate (future) task.
+DEFAULT_COORDINATORS = frozenset({
+    # Russian
+    "и", "или", "да",   # "да" in the conjunctive sense ("хлеб да соль")
+    # English
+    "and", "or",
+})
+
+
 @dataclass
 class ParseConfig:
     """Configuration for the agnostic text parser."""
@@ -54,6 +76,15 @@ class ParseConfig:
     # --- Optional thesaurus prior (bonus-only — see text_to_semantic_input) ---
     thesaurus_prior: object = None        # ThesaurusPrior instance (or None to disable)
     prior_known_bonus: float = 1.2        # weight multiplier for pairs confirmed by thesaurus
+    # --- Coordination-aware sibling-FP suppression ---
+    # When True, content tokens flanking a coordinator (default: и/или/да/and/or)
+    # don't accumulate direct sibling-sibling co-occurrence. They remain
+    # linked to other tokens via the normal window pass — only the spurious
+    # direct sibling link is suppressed. Stenographic principle: we don't
+    # invent a hidden verb-parent edge, we just don't manufacture a containment
+    # edge the text doesn't license.
+    coordination_aware: bool = True
+    coordinators: Optional[Iterable[str]] = None  # None → DEFAULT_COORDINATORS
 
 
 # ─────────────────────────── Segmentation ───────────────────────────
@@ -83,15 +114,45 @@ def extract_concepts_and_cooccurrence(
     pair_cooccur[(a, b)] counts directed co-occurrences: a appears before b
     within `config.window` tokens in the same sentence.
     Asymmetric by construction: pair_cooccur[(a,b)] != pair_cooccur[(b,a)].
+
+    When `config.coordination_aware` is True, a per-sentence pre-pass over the
+    raw token stream identifies pairs of content tokens flanking each
+    coordinator (e.g. "силы и терпения" → sibling pair {силы, терпения}).
+    Direct sibling-sibling co-occurrence is then suppressed in both directions
+    inside the sliding window — they remain linked to other tokens (notably
+    the verb-parent on the left) through unmodified co-occurrence.
     """
     stop = set(config.stopwords) if config.stopwords else set()
+    coordinators = set(config.coordinators) if config.coordinators is not None \
+        else set(DEFAULT_COORDINATORS)
+    coord_active = bool(config.coordination_aware) and bool(coordinators)
+
     token_freq: Counter = Counter()
     pair_cooccur: Dict[Tuple[str, str], int] = defaultdict(int)
     sentence_tokens: List[List[str]] = []
 
     for sent in split_sentences(text):
+        raw = tokenize(sent, lowercase=config.lowercase)
+        if not raw:
+            continue
+
+        # --- Step B: coordinator-aware sibling detection on the raw stream.
+        # We need the raw tokens (coordinators still present) to locate
+        # coordinator positions; the content filter below restricts what
+        # counts as a "sibling" (no stopwords, length >= min_token_len).
+        sibling_pairs: set = set()
+        if coord_active:
+            for k, tok in enumerate(raw):
+                if tok not in coordinators:
+                    continue
+                left = _nearest_content(raw, k, -1, config, stop, coordinators)
+                right = _nearest_content(raw, k, +1, config, stop, coordinators)
+                if left and right and left != right:
+                    sibling_pairs.add(frozenset({left, right}))
+
+        # --- Step C: existing stopword + length filter for the window pass.
         toks = [
-            t for t in tokenize(sent, lowercase=config.lowercase)
+            t for t in raw
             if len(t) >= config.min_token_len and t not in stop
         ]
         if not toks:
@@ -99,7 +160,7 @@ def extract_concepts_and_cooccurrence(
         sentence_tokens.append(toks)
         token_freq.update(toks)
 
-        # Directed sliding window: (left, right) — left precedes right
+        # --- Step D: directed sliding window with sibling-pair skip-guard.
         n = len(toks)
         for i, ti in enumerate(toks):
             j_max = min(n, i + 1 + config.window)
@@ -107,9 +168,33 @@ def extract_concepts_and_cooccurrence(
                 tj = toks[j]
                 if ti == tj:
                     continue
+                if coord_active and frozenset({ti, tj}) in sibling_pairs:
+                    continue
                 pair_cooccur[(ti, tj)] += 1  # directed: ti → tj
 
     return token_freq, dict(pair_cooccur), sentence_tokens
+
+
+def _nearest_content(
+    raw: List[str],
+    start: int,
+    direction: int,
+    config: ParseConfig,
+    stop: set,
+    coordinators: set,
+) -> Optional[str]:
+    """Walk `direction` (+1 right, -1 left) from `start` and return the first
+    content token: not a coordinator, not a stopword, length >= min_token_len.
+    Returns None if none found.
+    """
+    n = len(raw)
+    j = start + direction
+    while 0 <= j < n:
+        t = raw[j]
+        if t not in coordinators and t not in stop and len(t) >= config.min_token_len:
+            return t
+        j += direction
+    return None
 
 
 def _pick_concepts(token_freq: Counter, config: ParseConfig) -> List[str]:
