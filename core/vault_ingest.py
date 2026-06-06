@@ -20,6 +20,7 @@ from .text_parser_agnostic import text_to_semantic_input, ParseConfig
 from .thesaurus_prior import ThesaurusPrior
 from .exocortex_ingest import _clean_for_fvsc, _RU_STOPWORDS
 from .visualize_space import render_html
+from .provenance import build_provenance
 
 
 # ───── Markdown stripping ─────
@@ -67,15 +68,17 @@ _TG_STRUCTURAL = frozenset({
 _DIGITS_TOKEN_RE = re.compile(r"^\d+$")
 
 
-def collect_vault(
+def collect_vault_per_file(
     vault_dir: Path,
     exclude_dirs: set = None,
-    include_subpath: list = None,
-) -> Tuple[str, int, dict]:
-    """Walk vault, concatenate all .md content (after Markdown stripping).
+) -> Tuple["OrderedDict[str, str]", dict]:
+    """Walk vault, return (files_by_relpath, per_folder_stats).
 
-    Returns (corpus_text, file_count, per_folder_stats).
+    Each value is the cleaned text of one .md (Markdown stripped, FVSC-cleaned).
+    Files shorter than 20 chars after cleaning are dropped.
     """
+    from collections import OrderedDict
+
     exclude = exclude_dirs if exclude_dirs is not None else DEFAULT_EXCLUDE
     files = []
     for p in vault_dir.rglob("*.md"):
@@ -84,8 +87,8 @@ def collect_vault(
         files.append(p)
 
     files.sort()
-    chunks = []
-    per_folder = {}
+    out: "OrderedDict[str, str]" = OrderedDict()
+    per_folder: dict = {}
     for path in files:
         try:
             raw = path.read_text(encoding="utf-8")
@@ -98,16 +101,27 @@ def collect_vault(
         cleaned = _clean_for_fvsc(stripped)
         if len(cleaned) < 20:
             continue
-        chunks.append(cleaned)
-        # Track top-level folder for stats
         rel = path.relative_to(vault_dir)
+        rel_str = rel.as_posix()
+        out[rel_str] = cleaned
+
         top = rel.parts[0] if len(rel.parts) > 1 else "_root"
         per_folder.setdefault(top, {"files": 0, "chars": 0})
         per_folder[top]["files"] += 1
         per_folder[top]["chars"] += len(cleaned)
 
-    corpus = "\n\n".join(chunks)
-    return corpus, len(chunks), per_folder
+    return out, per_folder
+
+
+def collect_vault(
+    vault_dir: Path,
+    exclude_dirs: set = None,
+    include_subpath: list = None,
+) -> Tuple[str, int, dict]:
+    """Backward-compatible wrapper: returns concatenated corpus, file count, stats."""
+    files_by_path, per_folder = collect_vault_per_file(vault_dir, exclude_dirs=exclude_dirs)
+    corpus = "\n\n".join(files_by_path.values())
+    return corpus, len(files_by_path), per_folder
 
 
 # ───── Main pipeline ─────

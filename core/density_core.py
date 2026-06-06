@@ -380,6 +380,12 @@ class SemanticSpace:
         self._rng = np.random.default_rng(42)
         # Self container lives inside concepts dict (queryable like any other)
         self.concepts["[self]"] = Concept(term="[self]")
+        # Silent pool: tokens that didn't reach min_freq for strong concepts
+        # but were uttered at least once. NOT materialized as density matrices
+        # (single mention has no co-occurrence signal). Used by Antourage for
+        # reflection: "you said X once, in note Y — others can't know it matters".
+        # Schema: {token: {"freq": int, "sources": {path: count}}}
+        self.silent_pool: dict[str, dict] = {}
 
     @property
     def self_concept(self) -> Concept:
@@ -836,8 +842,92 @@ class SemanticSpace:
             "global_similarity": global_sim,
         }
 
+    def purge_source(self, source_text: str) -> int:
+        """Archive every component whose Judgment was attributed to this source.
+
+        Used by live vault-watch when a note is modified or deleted — the old
+        Judgments stop contributing to ρ but are preserved for history. Returns
+        the number of components archived. Also clears silent_pool entries
+        whose only source was this path.
+        """
+        n_archived = 0
+        for concept in self.concepts.values():
+            for c in concept.components:
+                if not c.archived and c.judgment.source_text == source_text:
+                    c.archived = True
+                    n_archived += 1
+            # Force ρ rebuild on next query
+            concept.rho = None
+            concept.rho_norm = None
+            concept.rho_deep = None
+            concept.rho_deep_norm = None
+
+        # Prune silent_pool entries for this source
+        for tok in list(self.silent_pool.keys()):
+            entry = self.silent_pool[tok]
+            srcs = entry.get("sources", {})
+            if source_text in srcs:
+                removed = srcs.pop(source_text)
+                entry["freq"] = max(0, entry["freq"] - removed)
+                if not srcs or entry["freq"] <= 0:
+                    del self.silent_pool[tok]
+        return n_archived
+
+    def ingest_one_file(self, file_path: str, si_local: dict,
+                       silent_local: dict = None) -> int:
+        """Add Judgments for one file's contribution to global concepts.
+
+        Unlike `load_from_semantic_input(provenance=...)` which splits a global
+        si across files, this expects a per-file si (e.g. from
+        `text_to_semantic_input(file_text)`) and appends its mass directly with
+        `source_text=file_path`. New tokens not yet in the space are added.
+
+        Args:
+            file_path: relative path used as Judgment.source_text.
+            si_local: semantic_input for this file's text alone.
+            silent_local: optional dict {token: {freq, sources: {path: count}}}
+                — usually the per-file slice from silent_pool tracking.
+
+        Returns: count of Judgments added.
+        """
+        added = 0
+        for concept, spec in si_local.items():
+            self_weight = float(spec.get("weight", 1.0))
+            j_self = Judgment(
+                subject=concept, verb="является", object=concept,
+                modality=self_weight, intensity=self_weight,
+                source_text=file_path, clause_type="GENERIC",
+                interpretation_layer=1,
+            )
+            self.materialize_judgment(j_self)
+            added += 1
+            for child, child_weight in spec.get("contains", {}).items():
+                j = Judgment(
+                    subject=concept, verb="содержит", object=child,
+                    modality=float(child_weight), intensity=float(child_weight),
+                    source_text=file_path, clause_type="GENERIC",
+                    interpretation_layer=1,
+                )
+                self.materialize_judgment(j)
+                added += 1
+
+        if silent_local:
+            for tok, info in silent_local.items():
+                existing = self.silent_pool.get(tok)
+                if existing is None:
+                    self.silent_pool[tok] = {
+                        "freq": int(info["freq"]),
+                        "sources": dict(info.get("sources", {})),
+                    }
+                else:
+                    existing["freq"] += int(info["freq"])
+                    for p, c in info.get("sources", {}).items():
+                        existing["sources"][p] = existing["sources"].get(p, 0) + int(c)
+        return added
+
     def load_from_semantic_input(self, si: dict, source_text: str = "[agnostic]",
-                                 clause_type: str = "GENERIC"):
+                                 clause_type: str = "GENERIC",
+                                 provenance: dict = None):
         """Load concepts from a semantic_input dict (output of text_to_semantic_input).
 
         Converts co-occurrence weights into synthetic Judgments and materializes them,
@@ -846,25 +936,54 @@ class SemanticSpace:
         Each entry  { concept: { weight, contains: { child: w } } }  becomes:
           - A self-referential Judgment(concept, "является", concept) with modality=weight
           - One Judgment(concept, "содержит", child) per child, with modality=child_weight
+
+        Provenance (optional): per-concept attribution to source files,
+            provenance[concept] = {
+                "self":     {source_path: fraction, sums to 1.0},
+                "contains": {child_term: {source_path: fraction}}
+            }
+        When supplied, the single Judgment per concept/edge is split into N
+        Judgments — one per contributing file — with mass scaled by the
+        fraction. `source_text` then carries the actual file path. This
+        preserves total concept mass while making provenance recoverable.
+        Concepts not in `provenance` (or when provenance is None) fall back
+        to the single-source behavior using the `source_text` argument.
         """
         for concept, spec in si.items():
             self_weight = float(spec.get("weight", 1.0))
-            j_self = Judgment(
-                subject=concept, verb="является", object=concept,
-                modality=self_weight, intensity=self_weight,
-                source_text=source_text, clause_type=clause_type,
-                interpretation_layer=1,
-            )
-            self.materialize_judgment(j_self)
+            entry = provenance.get(concept) if provenance else None
+            self_sources = (entry or {}).get("self") or {source_text: 1.0}
+            contains_sources = (entry or {}).get("contains") or {}
 
-            for child, child_weight in spec.get("contains", {}).items():
-                j = Judgment(
-                    subject=concept, verb="содержит", object=child,
-                    modality=float(child_weight), intensity=float(child_weight),
-                    source_text=source_text, clause_type=clause_type,
+            for src, frac in self_sources.items():
+                # IMPORTANT: split only `modality` (the mass/weight of the
+                # judgment in ρ). `intensity` shapes the encoded vector
+                # direction (encode_judgment_for_subject uses it to scale
+                # v_verb before normalization). Splitting intensity rotates
+                # each per-file Judgment to a different vector and smears ρ
+                # across directions — that destroys contains-weights. The
+                # intensity must remain the same as it would be in the
+                # single-source case.
+                j_self = Judgment(
+                    subject=concept, verb="является", object=concept,
+                    modality=self_weight * float(frac),
+                    intensity=self_weight,
+                    source_text=src, clause_type=clause_type,
                     interpretation_layer=1,
                 )
-                self.materialize_judgment(j)
+                self.materialize_judgment(j_self)
+
+            for child, child_weight in spec.get("contains", {}).items():
+                child_srcs = contains_sources.get(child) or {source_text: 1.0}
+                for src, frac in child_srcs.items():
+                    j = Judgment(
+                        subject=concept, verb="содержит", object=child,
+                        modality=float(child_weight) * float(frac),
+                        intensity=float(child_weight),
+                        source_text=src, clause_type=clause_type,
+                        interpretation_layer=1,
+                    )
+                    self.materialize_judgment(j)
 
     def report(self, term: str):
         """Print a human-readable report for a concept."""

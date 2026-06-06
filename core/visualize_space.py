@@ -31,8 +31,18 @@ def build_graph_data(
     top_n: int = 80,
     edge_threshold: float = 0.50,
     max_edges_per_node: int = 5,
+    include_neighbours: int = 3,
+    neighbour_min_score: float = 0.45,
 ) -> Dict:
-    """Build vis.js-compatible nodes/edges from SemanticSpace + si."""
+    """Build vis.js-compatible nodes/edges from SemanticSpace + si.
+
+    With `include_neighbours > 0`, the strongest specific (non-top-N) contains-
+    neighbours of each top-N concept are added as smaller satellite nodes.
+    This recovers the real semantic structure that pure top-N restriction
+    hides — top-N concepts tend to be heterogeneous (adverbs/verbs/nouns)
+    with their strongest links going to specific neighbours rather than to
+    each other.
+    """
     skip = {"является", "содержит", "[self]"}
     ranked = sorted(
         [(c, v["weight"]) for c, v in si.items() if c not in skip],
@@ -61,15 +71,33 @@ def build_graph_data(
 
     edges = []
     edge_seen = set()
+    # Track satellite nodes: their strongest contains-target outside top-N.
+    # First pass: collect specific neighbours per top concept.
+    satellite_attractor: Dict[str, str] = {}   # neighbour_term → strongest_parent
+    satellite_score: Dict[str, float] = {}
+
     for term, _ in ranked:
-        contains = space.query_contains(term, top_k=20)
+        contains = space.query_contains(term, top_k=80)
         kept = []
         for other, score in contains:
-            if other in top_terms and other != term and score >= edge_threshold:
-                kept.append((other, score))
-                if len(kept) >= max_edges_per_node:
-                    break
-        for other, score in kept:
+            if other == term or score < edge_threshold:
+                continue
+            if other in top_terms:
+                kept.append((other, score, "core"))
+            elif include_neighbours > 0 and score >= neighbour_min_score:
+                kept.append((other, score, "sat"))
+            if len(kept) >= max_edges_per_node:
+                break
+
+        sat_added = 0
+        for other, score, kind in kept:
+            if kind == "sat":
+                if sat_added >= include_neighbours:
+                    continue
+                if satellite_score.get(other, -1) < score:
+                    satellite_attractor[other] = term
+                    satellite_score[other] = score
+                sat_added += 1
             key = (term, other)
             if key in edge_seen:
                 continue
@@ -81,6 +109,26 @@ def build_graph_data(
                 "title": f"{term} ⊃ {other} = {score:.2f}",
                 "arrows": "to",
             })
+
+    # Add satellite nodes (smaller, dimmer pastel) for any neighbour referenced
+    # by at least one core node.
+    for sat_term in satellite_attractor.keys():
+        if sat_term in top_terms:
+            continue
+        poly = space.query_polysemy(sat_term) or 0.0
+        n_facets = len(space.query_facets(sat_term))
+        nodes.append({
+            "id": sat_term,
+            "label": sat_term,
+            "value": 0.25,           # small
+            "title": f"{sat_term}\n(specific neighbour of {satellite_attractor[sat_term]})\npoly={poly:.2f}",
+            "size": 8,
+            "color": "#5a6070",       # dim pastel — distinct from top-N palette
+            "_poly": round(poly, 3),
+            "_facets": n_facets,
+            "_weight": 0.15,
+            "_satellite": True,
+        })
 
     return {"nodes": nodes, "edges": edges}
 

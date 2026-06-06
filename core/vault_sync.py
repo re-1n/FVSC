@@ -20,6 +20,7 @@ What it does:
 from __future__ import annotations
 
 import argparse
+import pickle
 import sys
 import time
 from pathlib import Path
@@ -35,13 +36,15 @@ from .density_core import SemanticSpace
 from .text_parser_agnostic import text_to_semantic_input, ParseConfig
 from .thesaurus_prior import ThesaurusPrior
 from .exocortex_ingest import _RU_STOPWORDS
-from .vault_ingest import collect_vault, _TG_STRUCTURAL
+from .vault_ingest import collect_vault, collect_vault_per_file, _TG_STRUCTURAL
 from .export_to_vault import export_space_to_vault
 from .visualize_space import render_html
+from .provenance import build_provenance_and_silent
 
 
 DEFAULT_VAULT = Path(r"C:\Users\daur1\Desktop\экзокортекс для fvsc map\Rein")
 DEFAULT_CONCEPTNET = Path(r"C:\Users\daur1\Desktop\FVSC\data\conceptnet_ru.json")
+CACHE_NAME = "_fvsc_cache.pkl"
 
 
 def run(
@@ -58,7 +61,9 @@ def run(
         raise SystemExit(f"Vault not found: {vault_dir}")
 
     t0 = time.perf_counter()
-    corpus, n_files, per_folder = collect_vault(vault_dir)
+    files_by_path, per_folder = collect_vault_per_file(vault_dir)
+    n_files = len(files_by_path)
+    corpus = "\n\n".join(files_by_path.values())
     perf["collect_vault"] = time.perf_counter() - t0
     print(f"  collected {n_files} files, {len(corpus):,} chars in {perf['collect_vault']:.1f}s")
 
@@ -87,8 +92,22 @@ def run(
     print(f"  semantic_input: {len(si)} concepts in {perf['parse']:.1f}s")
 
     t0 = time.perf_counter()
+    provenance, silent_pool = build_provenance_and_silent(si, files_by_path, cfg)
+    perf["provenance"] = time.perf_counter() - t0
+    n_files_attributed = sum(1 for v in provenance.values() if any(
+        src != "[vault]" for src in v.get("self", {})
+    ))
+    silent_hapax = sum(1 for v in silent_pool.values() if v["freq"] == 1)
+    print(
+        f"  provenance: {n_files_attributed}/{len(provenance)} concepts attributed | "
+        f"silent_pool: {len(silent_pool):,} tokens ({silent_hapax:,} said once) "
+        f"in {perf['provenance']:.1f}s"
+    )
+
+    t0 = time.perf_counter()
     space = SemanticSpace(dim=dim)
-    space.load_from_semantic_input(si, source_text="[vault]")
+    space.load_from_semantic_input(si, source_text="[vault]", provenance=provenance)
+    space.silent_pool = silent_pool
     perf["materialize"] = time.perf_counter() - t0
     print(f"  materialized {len(space.concepts)} concepts in {perf['materialize']:.1f}s")
 
@@ -128,6 +147,22 @@ def run(
         perf["render_html"] = time.perf_counter() - t0
         print(f"  nodes={len(data['nodes'])} edges={len(data['edges'])} in {perf['render_html']:.1f}s")
         print(f"  saved: {out_html}")
+
+    # ── persist the cache so /viz can lazy-load it on first request
+    print()
+    print("Saving cache…")
+    t0 = time.perf_counter()
+    cache_path = vault_dir / CACHE_NAME
+    try:
+        with open(cache_path, "wb") as f:
+            pickle.dump(
+                {"space": space, "si": si, "n_files": n_files, "corpus_chars": len(corpus)},
+                f, protocol=pickle.HIGHEST_PROTOCOL,
+            )
+        perf["save_cache"] = time.perf_counter() - t0
+        print(f"  saved {cache_path.name} ({cache_path.stat().st_size / 1024 / 1024:.1f} MB) in {perf['save_cache']:.1f}s")
+    except Exception as e:
+        print(f"  [error] cache save failed: {e}")
 
     print()
     print("─── perf summary ───")

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from core.density_core import SemanticSpace, facets, purity, von_neumann_entropy
@@ -32,7 +33,9 @@ from .models import (
 )
 from .retrieval import retrieve_by_query
 from .store import SpaceStore
+from . import viz_router as viz_router_module
 from .viz_router import router as viz_router
+from .viz_session import VizConfig
 
 # ── Globals ───────────────────────────────────────────────────────
 
@@ -65,6 +68,14 @@ async def lifespan(app: FastAPI):
         thesaurus_prior=prior,
         prior_known_bonus=1.2,
     )
+    # Plugin-injected overrides (kept backwards compatible — both vars optional).
+    env_vault = os.environ.get("FVSC_VAULT_PATH")
+    env_model = os.environ.get("FVSC_LLM_MODEL")
+    if env_vault or env_model:
+        viz_router_module.configure(
+            vault_path=Path(env_vault) if env_vault else None,
+            config=VizConfig(model=env_model) if env_model else None,
+        )
     yield
     # Shutdown
     store.save_all()
@@ -74,6 +85,16 @@ app = FastAPI(
     title="FVSC Core Service",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+# Local-only service: allow any origin so the Obsidian plugin (origin
+# `app://obsidian.md`) can fetch /viz/status and stream SSE. Service binds
+# 127.0.0.1, so there's no real risk surface here.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(viz_router)
@@ -241,6 +262,37 @@ async def concept_report(name: str, term: str):
     if not report.found:
         raise HTTPException(status_code=404, detail=f"Concept '{term}' not found")
     return report
+
+
+@app.get("/spaces/{name}/concepts/{term}/sources")
+async def concept_sources(name: str, term: str, top_k: int = 10):
+    """Reflection endpoint: which vault notes formed this concept's meaning.
+
+    Aggregates Judgment.source_text across the concept's components,
+    weighted by component mass. Skips placeholder sources ([vault], [agnostic],
+    [thesaurus:*]) and `[self]`. Returns top_k real notes, normalized to 1.0.
+    """
+    bundle = _require_space(name)
+    concept = bundle.space.concepts.get(term)
+    if concept is None:
+        raise HTTPException(status_code=404, detail=f"Concept '{term}' not found")
+
+    from collections import Counter
+    agg: "Counter[str]" = Counter()
+    for c in concept.components:
+        if c.archived:
+            continue
+        src = c.judgment.source_text or ""
+        if not src or src.startswith("[") and src.endswith("]"):
+            continue   # skip placeholder / synthetic sources
+        agg[src] += float(c.weight)
+
+    total = sum(agg.values())
+    sources = [
+        {"path": s, "weight": round(w / total, 4) if total else 0.0}
+        for s, w in agg.most_common(top_k)
+    ]
+    return {"term": term, "total_components": len(concept.components), "sources": sources}
 
 
 # ── Similarity & retrieval ────────────────────────────────────────
