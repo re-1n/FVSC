@@ -3,24 +3,32 @@ import { DEFAULT_SETTINGS, FvscSettings, FvscSettingTab } from "./settings";
 import { BackendController, BackendStatus } from "./backend";
 import { AntourageView, ANTOURAGE_VIEW_TYPE } from "./view";
 import { VaultWatcher } from "./vault_watcher";
+import { BootstrapModal } from "./bootstrap";
+import { autoFillSettings } from "./paths";
 
 export default class FvscPlugin extends Plugin {
   settings!: FvscSettings;
   backend!: BackendController;
+  // Exposed for BootstrapModal to pause/resume during initial map build.
+  watcher: VaultWatcher | null = null;
   private statusEl: HTMLElement | null = null;
-  private watcher: VaultWatcher | null = null;
-  private syncIndicator = "";   // "" | activity msg
+  private syncIndicator = "";
 
   async onload() {
     await this.loadSettings();
 
-    const vaultPath = (this.app.vault.adapter as any).getBasePath?.() ?? "";
+    // Try to find Python and FVSC repo automatically before anything else —
+    // mass-adoption guardrail: a fresh install should not require manual paths.
+    await autoFillSettings(this);
+
+    const vaultPath = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
 
     this.backend = new BackendController(
       () => this.settings,
       {
         vaultPath,
         onStatus: (s, d) => this.renderStatus(s, d),
+        onConfigError: () => this.openOwnSettings(),
       },
     );
 
@@ -29,7 +37,13 @@ export default class FvscPlugin extends Plugin {
 
     this.registerView(
       ANTOURAGE_VIEW_TYPE,
-      (leaf: WorkspaceLeaf) => new AntourageView(leaf, () => this.backend.baseUrl()),
+      (leaf: WorkspaceLeaf) =>
+        new AntourageView(
+          leaf,
+          () => this.backend.baseUrl(),
+          () => this,
+          () => this.backend,
+        ),
     );
 
     this.addCommand({
@@ -43,7 +57,7 @@ export default class FvscPlugin extends Plugin {
       name: "Restart backend",
       callback: async () => {
         await this.backend.restart();
-        new Notice("FVSC backend restarted.");
+        new Notice("FVSC: движок карты перезапущен.");
       },
     });
 
@@ -57,10 +71,23 @@ export default class FvscPlugin extends Plugin {
       onActivity: (msg) => { this.syncIndicator = msg; this.renderStatus(this.backend.getStatus()); },
       onIdle: () => { this.syncIndicator = ""; this.renderStatus(this.backend.getStatus()); },
     });
-    this.watcher.start((evt) => this.registerEvent(evt as any));
+    this.watcher.start((evt) => this.registerEvent(evt as Parameters<typeof this.registerEvent>[0]));
 
     if (this.settings.autoStart) {
-      void this.backend.start();
+      if (!this.settings.pythonPath || !this.settings.fvscRepoPath) {
+        new Notice("FVSC: не удалось найти Python или папку FVSC автоматически. Открой Настройки → FVSC Antourage.");
+        window.setTimeout(() => this.openOwnSettings(), 500);
+      } else {
+        void this.backend.start().then(() => {
+          if (this.backend.getStatus() === "up") {
+            // Give /viz/status a moment to be fully responsive, then check
+            // whether the user needs a first-time build.
+            window.setTimeout(() => {
+              void BootstrapModal.maybeShow(this, this.backend, () => this.reloadOpenAntourageViews());
+            }, 1000);
+          }
+        });
+      }
     }
   }
 
@@ -90,12 +117,33 @@ export default class FvscPlugin extends Plugin {
     this.app.workspace.revealLeaf(leaf);
   }
 
+  reloadOpenAntourageViews(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(ANTOURAGE_VIEW_TYPE)) {
+      const v = leaf.view;
+      if (v instanceof AntourageView) v.reload();
+    }
+  }
+
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
+  }
+
+  /** Open this plugin's own tab in the Settings dialog. Uses a semi-private
+   *  API that's been stable across Obsidian's lifetime; fallback is a Notice. */
+  openOwnSettings(): void {
+    const setting = (this.app as unknown as {
+      setting?: { open?: () => void; openTabById?: (id: string) => void };
+    }).setting;
+    if (setting?.open && setting?.openTabById) {
+      setting.open();
+      setting.openTabById(this.manifest.id);
+    } else {
+      new Notice("Открой Настройки → Community plugins → FVSC Antourage.");
+    }
   }
 
   private renderStatus(s: BackendStatus, detail?: string) {

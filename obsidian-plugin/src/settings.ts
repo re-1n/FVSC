@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import type FvscPlugin from "./main";
+import { detectPython, detectRepo, getPluginAbsDir } from "./paths";
 
 export interface FvscSettings {
   pythonPath: string;
@@ -31,26 +32,30 @@ export class FvscSettingTab extends PluginSettingTab {
 
     containerEl.createEl("h2", { text: "FVSC Antourage" });
     containerEl.createEl("p", {
-      text: "Plugin controls the local FastAPI backend that powers the semantic map and LLM chat. Backend is a Python process — paths below are required.",
+      text:
+        "Плагин запускает локальный движок карты и LLM-чат. Все поля плагин старается " +
+        "найти автоматически — заполняй вручную только если ниже написано «Не найдено».",
       cls: "setting-item-description",
     });
 
     new Setting(containerEl)
-      .setName("Python interpreter")
-      .setDesc("Absolute path to python.exe inside the FVSC venv. Example: C:\\Users\\you\\Desktop\\FVSC\\venv\\Scripts\\python.exe")
+      .setName("Путь к Python")
+      .setDesc("Полный путь к python.exe или python. Найдётся автоматически, если Python установлен правильно.")
       .addText((text) =>
         text
-          .setPlaceholder("…/venv/Scripts/python.exe")
+          .setPlaceholder("…/python.exe")
           .setValue(this.plugin.settings.pythonPath)
           .onChange(async (v) => {
             this.plugin.settings.pythonPath = v.trim();
             await this.plugin.saveSettings();
           }),
       );
+    const pyHintEl = containerEl.createDiv({ cls: "fvsc-autodetect-hint" });
+    void this.renderAutodetectHint(pyHintEl, "python");
 
     new Setting(containerEl)
-      .setName("FVSC repo path")
-      .setDesc("Absolute path to the FVSC project root (used as cwd for uvicorn).")
+      .setName("Папка FVSC")
+      .setDesc("Папка с распакованным FVSC. Найдётся автоматически, если FVSC лежит рядом с плагином или в стандартном месте.")
       .addText((text) =>
         text
           .setPlaceholder("…/FVSC")
@@ -60,10 +65,12 @@ export class FvscSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+    const repoHintEl = containerEl.createDiv({ cls: "fvsc-autodetect-hint" });
+    void this.renderAutodetectHint(repoHintEl, "repo");
 
     new Setting(containerEl)
-      .setName("Port")
-      .setDesc("Local port for uvicorn. Change only if 8765 is taken.")
+      .setName("Порт")
+      .setDesc("По умолчанию 8765. Менять только если 8765 занят.")
       .addText((text) =>
         text
           .setValue(String(this.plugin.settings.port))
@@ -77,8 +84,8 @@ export class FvscSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("LLM model")
-      .setDesc("Ollama model tag. Passed to the backend via FVSC_LLM_MODEL env var.")
+      .setName("Модель LLM")
+      .setDesc("Имя модели Ollama для чата с картой.")
       .addText((text) =>
         text
           .setValue(this.plugin.settings.modelName)
@@ -89,8 +96,8 @@ export class FvscSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Auto-start backend")
-      .setDesc("Spawn the FastAPI process when the plugin loads.")
+      .setName("Запускать движок при старте Obsidian")
+      .setDesc("Если выключено — запускать вручную через команду «Open Antourage».")
       .addToggle((t) =>
         t.setValue(this.plugin.settings.autoStart).onChange(async (v) => {
           this.plugin.settings.autoStart = v;
@@ -99,20 +106,61 @@ export class FvscSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Restart backend")
-      .setDesc("Apply settings without reloading Obsidian.")
+      .setName("Перезапустить движок")
+      .setDesc("Применить изменения без перезагрузки Obsidian.")
       .addButton((b) =>
         b
-          .setButtonText("Restart")
+          .setButtonText("Перезапустить")
           .setCta()
           .onClick(async () => {
             try {
               await this.plugin.backend.restart();
-              new Notice("FVSC backend restarted.");
+              new Notice("FVSC: движок карты перезапущен.");
             } catch (e) {
-              new Notice(`FVSC restart failed: ${String(e)}`);
+              new Notice(`FVSC: не удалось перезапустить — ${String(e)}`);
             }
           }),
       );
+  }
+
+  /**
+   * Show "Found automatically: PATH [Use]" under a path field when it's empty
+   * and detection succeeded; show "Not found — fill in manually" otherwise.
+   */
+  private async renderAutodetectHint(el: HTMLElement, kind: "python" | "repo"): Promise<void> {
+    el.empty();
+    const s = this.plugin.settings;
+    const current = kind === "python" ? s.pythonPath : s.fvscRepoPath;
+    if (current) return;
+
+    const pluginAbsDir = getPluginAbsDir(this.app, this.plugin.manifest.dir);
+    if (!pluginAbsDir) {
+      el.createSpan({ text: "Не удалось определить папку плагина — укажи путь вручную." });
+      return;
+    }
+
+    el.createSpan({ text: "Ищу автоматически…" });
+
+    let found: string | null = null;
+    if (kind === "repo") {
+      found = await detectRepo(pluginAbsDir);
+    } else {
+      const repoForPython = s.fvscRepoPath || (await detectRepo(pluginAbsDir));
+      found = await detectPython(pluginAbsDir, repoForPython);
+    }
+
+    el.empty();
+    if (found) {
+      el.createSpan({ text: `Найдено: ${found} ` });
+      const btn = el.createEl("button", { text: "Использовать" });
+      btn.onclick = async () => {
+        if (kind === "python") s.pythonPath = found!;
+        else s.fvscRepoPath = found!;
+        await this.plugin.saveSettings();
+        this.display();
+      };
+    } else {
+      el.createSpan({ text: "Не найдено автоматически — укажи путь вручную." });
+    }
   }
 }

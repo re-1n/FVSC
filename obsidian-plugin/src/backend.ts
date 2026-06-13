@@ -7,6 +7,9 @@ export type BackendStatus = "stopped" | "starting" | "up" | "failed";
 export interface BackendOptions {
   vaultPath: string;
   onStatus: (s: BackendStatus, detail?: string) => void;
+  /** Fired when start() fails due to missing/invalid config so the host can
+   *  open its own Settings tab without leaking Obsidian internals in here. */
+  onConfigError?: () => void;
 }
 
 const HEALTH_POLL_MS = 500;
@@ -36,8 +39,9 @@ export class BackendController {
     }
     const s = this.getSettings();
     if (!s.pythonPath || !s.fvscRepoPath) {
-      this.setStatus("failed", "Python path / repo path not configured");
-      new Notice("FVSC: configure Python path and repo path in plugin settings.");
+      this.setStatus("failed", "Не указан путь к Python или папка FVSC");
+      new Notice("FVSC: укажи путь к Python и папку FVSC в настройках плагина.");
+      this.opts.onConfigError?.();
       return;
     }
 
@@ -69,7 +73,8 @@ export class BackendController {
       });
     } catch (e) {
       this.setStatus("failed", String(e));
-      new Notice(`FVSC spawn failed: ${String(e)}`);
+      new Notice(`FVSC: не удалось запустить движок карты — ${String(e)}`);
+      this.opts.onConfigError?.();
       return;
     }
 
@@ -77,18 +82,22 @@ export class BackendController {
     proc.stderr?.on("data", (b) => console.log("[fvsc-backend]", b.toString().trimEnd()));
     proc.on("error", (err) => {
       const msg = (err as NodeJS.ErrnoException).code === "ENOENT"
-        ? `Python не найден по пути: ${s.pythonPath}. Проверь Settings → FVSC Antourage.`
-        : `Ошибка запуска бэкенда: ${err.message}`;
+        ? `Python не найден по пути: ${s.pythonPath}. Открой Настройки → FVSC Antourage.`
+        : `Не удалось запустить движок карты: ${err.message}`;
       console.error("[fvsc-backend] spawn error:", err);
       this.proc = null;
       this.setStatus("failed", msg);
       new Notice(`FVSC: ${msg}`);
+      this.opts.onConfigError?.();
     });
     proc.on("exit", (code, signal) => {
       console.log(`[fvsc-backend] exited code=${code} signal=${signal}`);
       this.proc = null;
       if (this.status !== "stopped" && this.status !== "failed") {
-        this.setStatus("failed", `Backend завершился (code=${code}). Открой DevTools для подробностей.`);
+        this.setStatus(
+          "failed",
+          `Движок карты неожиданно остановился (код ${code}). Открой Консоль (Ctrl+Shift+I) для подробностей.`,
+        );
       }
     });
 
@@ -98,8 +107,8 @@ export class BackendController {
     if (ok) {
       this.setStatus("up");
     } else if (this.status === "starting") {
-      this.setStatus("failed", "backend did not become healthy in time");
-      new Notice("FVSC backend did not respond within timeout — check console.");
+      this.setStatus("failed", "движок карты не ответил вовремя — проверь Консоль (Ctrl+Shift+I)");
+      new Notice("FVSC: движок карты не ответил вовремя. Открой Консоль (Ctrl+Shift+I).");
     }
   }
 

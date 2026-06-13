@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-06-13 — Тонкий онбординг как MVP-граница
+
+**Поворот:** Накопился перекос — research-прототип развивался вглубь (provenance, silent_pool, live watcher), но «работает только у автора». Любой новый пользователь упирался в `503 «Run vault_sync first»`, обязательные поля Settings с путём к python.exe в venv'е, `503 «Ollama daemon not running»` без объяснения. Эмоциональный сигнал Rein'а: «устал расширять систему когда mvp не собран». Зафиксировали MVP как «новый человек открыл плагин и через ~2 мин видит свою карту» — не PyInstaller bundle, не нативный TS-граф, не CM6-подсветка, а именно этот тонкий онбординг-слой.
+
+**Что сделано:** Четыре слоя поверх ядра:
+
+1. **Backend** — `POST /viz/build_from_vault` через `asyncio.to_thread + queue.Queue`. Стримит 9 пар start/end progress events из синхронной `vault_sync.run()` без блокировки event loop. `_get_space()` возвращает `(None,None)` при отсутствии cache. `/viz/ask` без Ollama отдаёт SSE error вместо 503. `/viz/status.bootstrap_running` для UI-state.
+2. **Plugin autodetect** — `src/paths.ts`: `detectPython` (bundle → venv → PATH) и `detectRepo` (7 кандидатов). `settings.ts` с RU-подсказками «Найдено: PATH [Использовать]». Учли Windows-venv-в-bin (git-bash layout).
+3. **Plugin UX** — `src/bootstrap.ts`: `BootstrapModal` с прогресс-баром, SSE-чтение через `fetch().body.getReader()`. `view.ts` с empty-state CTA «Построить карту» когда space_loaded=false. Оранжевая плашка `.fvsc-ollama-hint` когда Ollama down. RU-error messages в `backend.ts` + `onConfigError` callback.
+4. **Docs** — `INSTALL_RU.md` (7 шагов без техтерминов) + ссылка в README.
+
+**Почему именно так:** Любой шаг с техтермином (venv, uvicorn, FastAPI) = failed UX по жёсткому критерию `feedback_mass_adoption.md`. Любая ошибка должна вести к понятному действию пользователя, не к 503. Bootstrap должен запускаться автоматически при отсутствии данных. Эти три принципа определили дизайн каждого слоя.
+
+**Критичный технический подводный камень:** Долгая (95с) синхронная `vault_sync.run()` запускается в `asyncio.to_thread` (default thread pool), прогресс льётся через **thread-safe `queue.Queue`** (asyncio.Queue не подошла бы — её put_nowait не safe across threads), async generator опрашивает очередь каждые 100мс через `get_nowait`. Без этого паттерна FastAPI event loop блокировался бы на всю длину билда, плагин терял health-pings, status-bar мерцал. Backpressure через `put(timeout=1.0)` — потеря тика безопаснее зависания worker'а.
+
+**Что осталось вне MVP** (этапы старого roadmap'а, перенесено): silent_pool в Антураже, CM6 `[[locate:...]]`, нативный TS-граф, PyInstaller bundle. Они полезные, но не блокеры «новый человек видит свою карту» — поэтому вытеснены за границу MVP.
+
+---
+
 ## 2026-06-06 (вечер) — Provenance, silent_pool и живая карта
 
 **Поворот:** До сегодня FVSC говорил «у тебя есть концепт X» и не мог сказать

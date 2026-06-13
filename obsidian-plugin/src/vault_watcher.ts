@@ -34,6 +34,7 @@ export class VaultWatcher {
   private cb: WatcherCallbacks;
   private pending: Map<string, PendingChange> = new Map();
   private active = false;
+  private paused = false;
 
   constructor(app: App, backend: BackendController, cb: WatcherCallbacks) {
     this.app = app;
@@ -61,6 +62,25 @@ export class VaultWatcher {
   }
 
   /**
+   * Temporarily drop incoming change events without unregistering vault hooks.
+   * Use during bootstrap so the backend's own write-back into the vault
+   * (concept notes, html map, cache) doesn't bounce through file_ingest.
+   */
+  pause(): void {
+    this.paused = true;
+    for (const p of this.pending.values()) {
+      window.clearTimeout(p.timer);
+    }
+    this.pending.clear();
+    console.log("[fvsc-watch] paused");
+  }
+
+  resume(): void {
+    this.paused = false;
+    console.log("[fvsc-watch] resumed");
+  }
+
+  /**
    * Flush any pending changes immediately — used on plugin unload so the
    * backend gets a chance to persist final edits before shutdown.
    */
@@ -80,7 +100,7 @@ export class VaultWatcher {
     action: PendingChange["action"],
     oldPath?: string,
   ): void {
-    if (!this.active) return;
+    if (!this.active || this.paused) return;
     if (!(f instanceof TFile)) return;
     if (f.extension !== "md") return;
     if (EXCLUDE_PREFIXES.some((p) => f.path.startsWith(p))) return;

@@ -6,8 +6,11 @@ embeds the graph data (nodes/edges JSON) and connects to /viz/ask for chat.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import pickle
+import queue as _queue
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -25,6 +28,7 @@ from core.vault_ingest import strip_markdown, _TG_STRUCTURAL
 from core.exocortex_ingest import _clean_for_fvsc
 from .viz_session import (
     VizConfig,
+    sse,
     stream_response,
     stream_stub,
 )
@@ -46,19 +50,18 @@ _state = {
     "parse_config": None,    # lazy-built ParseConfig matching vault_sync
     "live_dirty_count": 0,   # number of ingests since last cache save
     "live_save_every": 5,    # auto-save threshold
+    "bootstrap_running": False,  # set true while POST /viz/build_from_vault is active
 }
 
 
 def _load_vault_cache(vault_dir: Path):
+    """Load cache from disk into _state. Returns blob, or None if cache missing.
+    Raises only on read/unpickle errors, not on absence — the caller decides
+    whether absence is a 503 or a graceful empty state.
+    """
     cache_path = vault_dir / CACHE_NAME
     if not cache_path.exists():
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                f"Vault cache not found at {cache_path}. "
-                f"Run `python -m core.vault_sync` first to build it."
-            ),
-        )
+        return None
     with open(cache_path, "rb") as f:
         blob = pickle.load(f)
     _state["space"] = blob["space"]
@@ -67,6 +70,9 @@ def _load_vault_cache(vault_dir: Path):
 
 
 def _get_space():
+    """Return (space, si) or (None, None) if no cache exists yet.
+    UI uses /viz/status to detect empty state and show a Build CTA instead of 503.
+    """
     if _state["space"] is None:
         _load_vault_cache(_state["vault_path"])
     return _state["space"], _state["si"]
@@ -91,13 +97,28 @@ def _viz_template_path() -> Path:
 @router.get("", response_class=HTMLResponse)
 async def viz_page(top_n: int = 100):
     space, si = _get_space()
+    template = _viz_template_path().read_text(encoding="utf-8")
+    if space is None:
+        # Empty state — UI plugin overrides this with its own CTA, but a direct
+        # browser visit still gets something readable instead of a 503.
+        empty_data = {"nodes": [], "edges": []}
+        subtitle = "карта ещё не построена — открой плагин и нажми «Построить карту»"
+        html = (
+            template
+            .replace("__TITLE__", "Антураж — карта смыслов")
+            .replace("__SUBTITLE__", subtitle)
+            .replace("__GRAPH_DATA__", json.dumps(empty_data, ensure_ascii=False))
+            .replace("__MODEL__", _state["config"].model)
+            .replace("__VAULT_NAME__", _state["vault_path"].name)
+        )
+        return HTMLResponse(html)
+
     data = build_graph_data(
         space, si,
         top_n=top_n,
         edge_threshold=0.35,
         max_edges_per_node=10,
     )
-    template = _viz_template_path().read_text(encoding="utf-8")
     n_concepts = len(space.concepts)
     subtitle = f"vault · {n_concepts} концептов · top-{top_n}"
     html = (
@@ -123,18 +144,36 @@ async def viz_ask(req: AskRequest):
     space, si = _get_space()
     cfg = _state["config"]
 
+    if space is None:
+        def empty_gen():
+            yield sse("error", {
+                "message": "Карта ещё не построена. Открой панель Антураж и нажми «Построить карту».",
+                "code": "no_space",
+            })
+            yield sse("done", {})
+        return StreamingResponse(empty_gen(), media_type="text/event-stream")
+
     if req.stub:
         gen = stream_stub(req.messages)
-    else:
-        llm = OllamaClient(
-            model=cfg.model, host=cfg.host,
-            temperature=cfg.temperature, num_ctx=cfg.num_ctx,
-        )
-        if not llm.ping():
-            raise HTTPException(503, "Ollama daemon not running")
-        known_terms = set(space.concepts.keys())
-        gen = stream_response(llm, space, si, req.messages, cfg, known_terms=known_terms)
+        return StreamingResponse(gen, media_type="text/event-stream")
 
+    llm = OllamaClient(
+        model=cfg.model, host=cfg.host,
+        temperature=cfg.temperature, num_ctx=cfg.num_ctx,
+    )
+    if not llm.ping():
+        def ollama_down_gen():
+            yield sse("error", {
+                "message": "Ollama не отвечает. Запусти Ollama чтобы продолжить разговор с картой. "
+                           "Карта работает и без чата — можешь продолжить исследовать узлы.",
+                "code": "ollama_down",
+                "hint_url": "https://ollama.com/download",
+            })
+            yield sse("done", {})
+        return StreamingResponse(ollama_down_gen(), media_type="text/event-stream")
+
+    known_terms = set(space.concepts.keys())
+    gen = stream_response(llm, space, si, req.messages, cfg, known_terms=known_terms)
     return StreamingResponse(gen, media_type="text/event-stream")
 
 
@@ -146,6 +185,8 @@ async def viz_concept_sources(term: str, top_k: int = 10):
     """
     from collections import Counter
     space, _ = _get_space()
+    if space is None:
+        raise HTTPException(404, detail="Карта ещё не построена")
     concept = space.concepts.get(term)
     if concept is None:
         # Strong concept not found — maybe it's in the silent pool?
@@ -242,6 +283,9 @@ async def viz_file_ingest(req: FileIngestRequest):
       - modify:  purge old contributions of this file, then ingest fresh.
     """
     space, _si = _get_space()
+    if space is None:
+        # Map not built yet — silently drop, watcher will reconcile after bootstrap.
+        return {"path": req.path, "action": req.action, "skipped": "no_space"}
     cfg = _get_parse_config()
 
     action = (req.action or "").lower()
@@ -349,6 +393,8 @@ async def viz_silent(query: str = "", min_freq: int = 1, max_freq: int = 4, limi
         limit: max entries to return, sorted by freq descending.
     """
     space, _ = _get_space()
+    if space is None:
+        return {"vault_name": _state["vault_path"].name, "total_silent": 0, "results": []}
     silent = getattr(space, "silent_pool", {}) or {}
     q = query.strip().lower()
 
@@ -382,8 +428,103 @@ async def viz_status():
         "vault": str(vault),
         "vault_cache_exists": (vault / CACHE_NAME).exists(),
         "space_loaded": space_loaded,
+        "bootstrap_running": _state.get("bootstrap_running", False),
         "concept_count": len(_state["space"].concepts) if space_loaded else None,
         "model": cfg.model,
         "ollama_up": llm.ping(),
         "models_available": llm.list_local_models(),
     }
+
+
+@router.post("/build_from_vault")
+async def viz_build_from_vault():
+    """Streaming bootstrap endpoint.
+
+    Runs the synchronous core/vault_sync.run() in a worker thread (via
+    asyncio.to_thread) so the FastAPI event loop keeps serving /viz/status
+    health pings from the plugin. Progress events arrive from the worker
+    through a thread-safe queue.Queue and are forwarded to the SSE stream.
+    """
+    if _state.get("bootstrap_running"):
+        raise HTTPException(409, detail="Карта уже строится — дождись завершения.")
+
+    vault = _state["vault_path"]
+    if not vault.exists():
+        raise HTTPException(400, detail=f"Папка vault'а не существует: {vault}")
+
+    # Thread-safe FIFO between worker thread and async-generator.
+    # asyncio.Queue would NOT work — its put_nowait is not safe across threads.
+    q: _queue.Queue = _queue.Queue(maxsize=256)
+
+    def progress_cb(stage: str, percent: float, message: str) -> None:
+        # Called from the worker thread by vault_sync.run().
+        # timeout=1.0 gives back-pressure without hanging the worker when
+        # the SSE client reads slowly. Dropping a tick is harmless.
+        try:
+            q.put(
+                ("progress", {"stage": stage, "percent": percent, "message": message}),
+                timeout=1.0,
+            )
+        except _queue.Full:
+            pass
+
+    def worker() -> None:
+        t0 = time.perf_counter()
+        try:
+            from core.vault_sync import run as vault_sync_run
+
+            project_root = Path(__file__).resolve().parent.parent
+            conceptnet = project_root / "data" / "conceptnet_ru.json"
+            space, si, _stats = vault_sync_run(
+                vault_dir=vault,
+                conceptnet_path=conceptnet,
+                top_n=150,
+                render_html_map=True,
+                dim=64,
+                progress_callback=progress_cb,
+            )
+            # Populate in-memory state BEFORE signalling done, so the very next
+            # /viz/status returns space_loaded=true without waiting on pickle.load.
+            _state["space"] = space
+            _state["si"] = si
+            q.put(
+                ("done", {
+                    "concept_count": len(space.concepts),
+                    "time_total": time.perf_counter() - t0,
+                }),
+            )
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            q.put(("error", {"message": str(e)}))
+
+    async def event_stream():
+        _state["bootstrap_running"] = True
+        worker_task = asyncio.create_task(asyncio.to_thread(worker))
+        try:
+            while True:
+                try:
+                    event_type, data = q.get_nowait()
+                except _queue.Empty:
+                    if worker_task.done():
+                        # Drain anything the worker pushed at the very end.
+                        try:
+                            event_type, data = q.get_nowait()
+                        except _queue.Empty:
+                            break
+                    else:
+                        await asyncio.sleep(0.1)  # 100ms — give event loop air
+                        continue
+
+                yield sse(event_type, data)
+                if event_type in ("done", "error"):
+                    break
+        finally:
+            _state["bootstrap_running"] = False
+            if not worker_task.done():
+                try:
+                    await asyncio.wait_for(worker_task, timeout=5.0)
+                except asyncio.TimeoutError:
+                    pass
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
