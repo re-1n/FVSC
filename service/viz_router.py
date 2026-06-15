@@ -422,11 +422,23 @@ async def viz_silent(query: str = "", min_freq: int = 1, max_freq: int = 4, limi
 async def viz_status():
     cfg = _state["config"]
     vault = _state["vault_path"]
+    # Trigger lazy load if cache exists on disk but isn't in memory yet.
+    # Without this, the plugin's view sees space_loaded=false right after
+    # backend startup and renders a misleading "Build map" CTA, even though
+    # a perfectly good cache is sitting on disk.
+    cache_exists = (vault / CACHE_NAME).exists()
+    if _state["space"] is None and cache_exists and not _state.get("bootstrap_running"):
+        try:
+            _load_vault_cache(vault)
+        except Exception:
+            # Cache corrupt or schema-incompatible — leave state unset so the
+            # view can offer a rebuild. Don't crash the status endpoint.
+            pass
     space_loaded = _state["space"] is not None
     llm = OllamaClient(model=cfg.model, host=cfg.host)
     return {
         "vault": str(vault),
-        "vault_cache_exists": (vault / CACHE_NAME).exists(),
+        "vault_cache_exists": cache_exists,
         "space_loaded": space_loaded,
         "bootstrap_running": _state.get("bootstrap_running", False),
         "concept_count": len(_state["space"].concepts) if space_loaded else None,
@@ -445,11 +457,17 @@ async def viz_build_from_vault():
     health pings from the plugin. Progress events arrive from the worker
     through a thread-safe queue.Queue and are forwarded to the SSE stream.
     """
+    # Atomic claim — must happen BEFORE we return StreamingResponse.
+    # Previously the flag was set inside event_stream(), which left a window
+    # where two near-simultaneous POSTs both passed the check and both spawned
+    # workers (cache corruption risk + duplicated 95s of CPU work).
     if _state.get("bootstrap_running"):
         raise HTTPException(409, detail="Карта уже строится — дождись завершения.")
+    _state["bootstrap_running"] = True
 
     vault = _state["vault_path"]
     if not vault.exists():
+        _state["bootstrap_running"] = False
         raise HTTPException(400, detail=f"Папка vault'а не существует: {vault}")
 
     # Thread-safe FIFO between worker thread and async-generator.
@@ -499,7 +517,8 @@ async def viz_build_from_vault():
             q.put(("error", {"message": str(e)}))
 
     async def event_stream():
-        _state["bootstrap_running"] = True
+        # bootstrap_running was already claimed by the endpoint above;
+        # this generator is just responsible for releasing it in `finally`.
         worker_task = asyncio.create_task(asyncio.to_thread(worker))
         try:
             while True:

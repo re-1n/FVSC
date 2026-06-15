@@ -10,6 +10,7 @@ interface VizStatus {
   space_loaded: boolean;
   bootstrap_running: boolean;
   ollama_up: boolean;
+  concept_count?: number | null;
 }
 
 export class AntourageView extends ItemView {
@@ -43,6 +44,14 @@ export class AntourageView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    // Detach every other AntourageView leaf — collapse all duplicates onto
+    // the freshest instance (this one). Symmetric: whichever view onOpen
+    // fires last wins, the rest disappear. Avoids the prior bug where two
+    // copies of the view rendered side-by-side inside the same pane.
+    for (const peer of this.app.workspace.getLeavesOfType(ANTOURAGE_VIEW_TYPE)) {
+      if (peer.view !== this) peer.detach();
+    }
+
     this.contentEl.empty();
     this.contentEl.addClass("fvsc-antourage-view");
 
@@ -67,14 +76,30 @@ export class AntourageView extends ItemView {
       return;
     }
 
-    if (!status.space_loaded) {
+    // CTA only when there's truly no data — neither in memory nor on disk.
+    // vault_cache_exists alone is enough: /viz/status now lazy-loads from disk,
+    // and the iframe's /viz call will trigger load if status didn't manage to.
+    if (!status.space_loaded && !status.vault_cache_exists) {
       const cta = this.contentEl.createDiv({ cls: "fvsc-empty-cta" });
       cta.createEl("p", { text: "Карта этого vault'а ещё не построена." });
       const btn = cta.createEl("button", { text: "Построить карту", cls: "mod-cta" });
       btn.onclick = () => {
-        BootstrapModal.maybeShow(this.getPlugin(), this.getBackend(), () => this.reload());
+        btn.disabled = true;
+        btn.setText("Открываю…");
+        void BootstrapModal.maybeShow(this.getPlugin(), this.getBackend(), () => this.reload())
+          .finally(() => {
+            btn.disabled = false;
+            btn.setText("Построить карту");
+          });
       };
       return;
+    }
+
+    // Cache exists but space not yet hydrated — show a tiny loading line.
+    // The iframe will trigger /viz which performs the load (~0.5–1s for big caches).
+    if (!status.space_loaded && status.vault_cache_exists) {
+      const loading = this.contentEl.createDiv({ cls: "fvsc-empty-cta" });
+      loading.createEl("p", { text: "Загружаю карту из cache…" });
     }
 
     if (!status.ollama_up) {

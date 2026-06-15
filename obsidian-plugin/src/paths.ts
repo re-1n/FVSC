@@ -1,6 +1,6 @@
 import { App, FileSystemAdapter } from "obsidian";
 import { spawnSync } from "child_process";
-import { existsSync } from "fs";
+import { existsSync, readdirSync, statSync } from "fs";
 import { join, dirname } from "path";
 import { homedir, platform } from "os";
 import type FvscPlugin from "./main";
@@ -25,7 +25,7 @@ function testPython(cmd: string): boolean {
   try {
     const r = spawnSync(
       cmd,
-      ["-c", "import sys; print(sys.version_info[0]*10+sys.version_info[1])"],
+      ["-c", "import sys; print(sys.version_info[0]*100+sys.version_info[1])"],
       { timeout: 3000, encoding: "utf8" },
     );
     if (r.status !== 0 || !r.stdout) return false;
@@ -36,13 +36,69 @@ function testPython(cmd: string): boolean {
   }
 }
 
+// existsSync returns true for broken symlinks (e.g. git-bash venvs where
+// venv/bin/python points at a removed system python3). statSync follows the
+// link and throws ENOENT on a dead target, which is the liveness signal we want.
+function isLiveFile(path: string): boolean {
+  try {
+    statSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Scan common Windows install locations directly — Obsidian doesn't always
+// inherit the user's shell PATH, so `python` / `python3` lookups fail even
+// when CPython is installed. We probe canonical install dirs instead.
+function windowsSystemCandidates(): string[] {
+  const out: string[] = [];
+  const localApp = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
+  const progFiles = process.env["ProgramFiles"] || "C:\\Program Files";
+  const progFilesX86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
+
+  // User-scope (most common — CPython installer default)
+  // %LOCALAPPDATA%\Programs\Python\Python3XX\python.exe
+  const userPyRoot = join(localApp, "Programs", "Python");
+  if (existsSync(userPyRoot)) {
+    try {
+      for (const sub of readdirSync(userPyRoot)) {
+        if (/^Python3\d{1,2}$/i.test(sub)) {
+          out.push(join(userPyRoot, sub, "python.exe"));
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  // System-scope: C:\Program Files\Python3XX\python.exe (less common but valid)
+  for (const root of [progFiles, progFilesX86]) {
+    if (!existsSync(root)) continue;
+    try {
+      for (const sub of readdirSync(root)) {
+        if (/^Python3\d{1,2}$/i.test(sub)) {
+          out.push(join(root, sub, "python.exe"));
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  // py launcher — single binary, knows how to dispatch to an installed Python.
+  // We probe it last because spawn cost is higher than a direct exe.
+  const pyLauncher = join(process.env.SystemRoot || "C:\\Windows", "py.exe");
+  if (existsSync(pyLauncher)) out.push(pyLauncher);
+
+  return out;
+}
+
 /**
  * Try to find a usable Python interpreter. Order:
  *   1. Bundled python inside the plugin folder (future PyInstaller layout).
  *   2. venv inside the FVSC repo — Windows-style `Scripts/` first, then Unix-style `bin/`
  *      (handles git-bash-created venvs on Windows).
- *   3. `python` on PATH.
- *   4. `python3` on PATH.
+ *   3. Windows: canonical install dirs (%LOCALAPPDATA%\Programs\Python\Python3XX,
+ *      Program Files\Python3XX, py launcher) — Obsidian's process PATH doesn't
+ *      always include user-scope installs.
+ *   4. `python` / `python3` on PATH (last resort — may be missing in Obsidian).
  */
 export async function detectPython(
   pluginAbsDir: string | null,
@@ -68,8 +124,10 @@ export async function detectPython(
     }
   }
 
+  if (isWin) candidates.push(...windowsSystemCandidates());
+
   for (const c of candidates) {
-    if (existsSync(c) && testPython(c)) return c;
+    if (isLiveFile(c) && testPython(c)) return c;
   }
 
   for (const c of ["python", "python3"]) {

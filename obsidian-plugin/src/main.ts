@@ -73,6 +73,13 @@ export default class FvscPlugin extends Plugin {
     });
     this.watcher.start((evt) => this.registerEvent(evt as Parameters<typeof this.registerEvent>[0]));
 
+    // Session restore can leave duplicate AntourageView leaves from the
+    // previous run; collapse them so the user starts with a single pane.
+    this.app.workspace.onLayoutReady(() => {
+      const leaves = this.app.workspace.getLeavesOfType(ANTOURAGE_VIEW_TYPE);
+      for (let i = 1; i < leaves.length; i++) leaves[i].detach();
+    });
+
     if (this.settings.autoStart) {
       if (!this.settings.pythonPath || !this.settings.fvscRepoPath) {
         new Notice("FVSC: не удалось найти Python или папку FVSC автоматически. Открой Настройки → FVSC Antourage.");
@@ -80,14 +87,28 @@ export default class FvscPlugin extends Plugin {
       } else {
         void this.backend.start().then(() => {
           if (this.backend.getStatus() === "up") {
-            // Give /viz/status a moment to be fully responsive, then check
-            // whether the user needs a first-time build.
-            window.setTimeout(() => {
-              void BootstrapModal.maybeShow(this, this.backend, () => this.reloadOpenAntourageViews());
-            }, 1000);
+            // Backend reports "up" the moment uvicorn's port opens, but
+            // /viz/status may still 500 for a beat while the router warms
+            // (lazy load of vault cache, conceptnet prior, etc.). Retry the
+            // first-time-build check up to ~10s so the modal reliably appears
+            // for new users instead of "через раз".
+            void this.scheduleBootstrapCheck();
           }
         });
       }
+    }
+  }
+
+  private async scheduleBootstrapCheck(): Promise<void> {
+    for (let i = 0; i < 10; i++) {
+      await new Promise((r) => window.setTimeout(r, 1000));
+      try {
+        const r = await fetch(`${this.backend.baseUrl()}/viz/status`);
+        if (r.ok) {
+          void BootstrapModal.maybeShow(this, this.backend, () => this.reloadOpenAntourageViews());
+          return;
+        }
+      } catch { /* keep retrying */ }
     }
   }
 
@@ -107,6 +128,12 @@ export default class FvscPlugin extends Plugin {
   async openAntourageView(): Promise<void> {
     const existing = this.app.workspace.getLeavesOfType(ANTOURAGE_VIEW_TYPE);
     if (existing.length > 0) {
+      // Workspace can hold duplicates after plugin reload / session restore.
+      // Keep the first, detach the rest — otherwise the user sees multiple
+      // identical CTA panes on screen.
+      for (let i = 1; i < existing.length; i++) {
+        existing[i].detach();
+      }
       this.app.workspace.revealLeaf(existing[0]);
       const view = existing[0].view;
       if (view instanceof AntourageView) view.reload();

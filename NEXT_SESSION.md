@@ -1,184 +1,191 @@
 # Следующая сессия — состояние проекта
 
-## Обновлено: 2026-06-13 (вечер) — SESSION SUMMARY (MVP onboarding layer)
+## Обновлено: 2026-06-15 (ночь) — SESSION SUMMARY (first honest live UX test)
 
 ---
 
-## 🔥 Что сделано за сессию 2026-06-13
+## 🔥 Что сделано за сессию 2026-06-15
 
-Тонкий 4-слойный онбординг сверху ядра — превращает «работает только у Rein» в «новый человек открывает плагин, видит карту через ~2 мин». Ядро не трогали.
+Первый честный прогон онбординга «как новый юзер» — бэкап cache + data.json, перезагрузка плагина, проход всей цепочки. Live-тест вскрыл 5 багов, **все запатчены**. Карта Rein'а (1193 концепта) теперь стабильно загружается в UI. Единственное что не сделано — Ollama auto-management (priority #1 следующей сессии).
 
-### Layer 1 — Backend SSE bootstrap
+### Live-тест баги и фиксы
 
-**`POST /viz/build_from_vault`** (`service/viz_router.py`) — стриминг прогресса первичного билда из vault'а:
-- Паттерн `asyncio.to_thread` + `queue.Queue(maxsize=256)` для синхронной `vault_sync.run()` без блокировки event loop. Без этого FastAPI терял бы health-pings от плагина на 95 секунд.
-- 9 пар start/end SSE events по `STAGE_WEIGHTS` (collect → prior → parse → provenance → materialize → deepen → export → render → save).
-- `_state["space"]` ставится В WORKER'е до `q.put("done")` → `/viz/status` сразу up-to-date, view.reload() не делает лишний pickle.load.
-- Защита от двойного старта: `_state["bootstrap_running"]` + `HTTPException(409)`.
+1. **`testPython` формула версии** (`obsidian-plugin/src/paths.ts`):
+   - `sys.version_info[0]*10+[1]` → для Py3.13 даёт `43`, проверка `v >= 310` всегда false.
+   - **Автодетект Python ни разу за всю историю не мог сработать.** Залив пользователей через INSTALL_RU.md «вписать pythonPath руками» это маскировал.
+   - Фикс: `*100+`.
 
-**Graceful degradation:**
-- `_get_space()` возвращает `(None, None)` при отсутствии cache (не 503). Защищены: `/viz`, `/viz/ask`, `/viz/concepts/.../sources`, `/viz/file_ingest`, `/viz/silent`.
-- `/viz/ask` без Ollama → HTTP 200 + SSE `event:error` с русским текстом и hint_url, не 503.
-- `/viz/status` расширен полем `bootstrap_running: bool`.
+2. **Obsidian не наследует bash PATH** (`paths.ts`):
+   - `which python` в bash показывает Python313, в процессе Obsidian'а — нет.
+   - Фикс: новая функция `windowsSystemCandidates()` — прямой системный поиск:
+     - `%LOCALAPPDATA%\Programs\Python\Python3*\python.exe`
+     - `Program Files\Python3*\python.exe` + x86
+     - `C:\Windows\py.exe` (launcher)
+   - Также: `isLiveFile()` через `statSync` — фильтрует broken symlinks (твой venv создан git-bash'ом в unix-стиле, `venv/bin/python` → broken).
 
-**`core/vault_sync.py`:**
-- Опциональный параметр `progress_callback: Callable[[str, float, str], None]`.
-- `STAGE_WEIGHTS` константа с весами на основе перфа 95с.
-- `_emit()` хелпер — callback errors не ломают pipeline.
-- CLI режим (без callback'а) работает как раньше.
+3. **Backend race на double-build** (`service/viz_router.py`):
+   - `_state["bootstrap_running"] = True` ставился ВНУТРИ `event_stream()` генератора, ПОСЛЕ возврата StreamingResponse.
+   - Два POST'а проходили проверку → два worker'а на cache → cache corruption.
+   - Фикс: атомарный claim в эндпоинте до return, release в finally генератора.
 
-### Layer 2 — Plugin: автодетекция путей
+4. **`/viz/status` не lazy-load cache** (`viz_router.py`) — главный виновник «карта не работает»:
+   - Смотрел `_state["space"]`, не вызывал `_get_space()`.
+   - После backend startup → cache на диске → `space_loaded=false`.
+   - View рендерил CTA «Построить карту» вместо загрузки существующей карты, и пользователь запускал build_from_vault заново каждый раз.
+   - Фикс: lazy-load внутри `viz_status()`.
+   - Бонус-фикс view: при `vault_cache_exists && !space_loaded` показывать «Загружаю карту из cache…», не CTA.
 
-**Новый `obsidian-plugin/src/paths.ts`:**
-- `getPluginAbsDir(app, manifest.dir)` — через `FileSystemAdapter.getFullPath`.
-- `detectPython(pluginAbsDir, repoCandidate)` — 4 кандидата с testPython (3.10+). Учитывает Windows venv-в-bin (git-bash layout).
-- `detectRepo(pluginAbsDir)` — 7 кандидатов: bundle, env, neighbouring, ~/FVSC, ~/Desktop/FVSC, ~/Documents/FVSC.
-- `autoFillSettings(plugin)` — пишет в settings только что нашло; не перезаписывает заполненное.
+5. **View self-dedup race** (`obsidian-plugin/src/view.ts`):
+   - Первая dedup-логика (`peers[0] !== ours`) сохраняла первый дубль.
+   - Симптом: две полные копии view (toolbar+iframe×2) внутри одного pane.
+   - Фикс: симметричная логика — каждый instance detach'ит ВСЕХ других peers.
 
-**`settings.ts`** — переписан целиком:
-- Все labels/desc на русский, без слов «venv», «uvicorn», «FastAPI».
-- Под каждым из двух путей — async-блок `.fvsc-autodetect-hint`: либо «Найдено: PATH [Использовать]», либо «Не найдено автоматически — укажи путь вручную».
+### Связанные UX-фиксы плагина
 
-### Layer 3 — Plugin: bootstrap UX + graceful
-
-**Новый `obsidian-plugin/src/bootstrap.ts`:**
-- `BootstrapModal extends Modal`. Шаг 1: confirm «У тебя ещё нет карты. ~2 мин. [Построить] [Отмена]». Шаг 2: прогресс-бар + текст стадии, AbortController для cancel.
-- SSE reading через `fetch().body.getReader()` + TextDecoder, ручной split по `\n\n`.
-- `BootstrapModal.maybeShow(plugin, backend, onDone)` — статический метод, проверяет `/viz/status` и показывает модалку только если нет кэша + не идёт другой build.
-- Pause/resume vault watcher на время билда (insurance — EXCLUDE_PREFIXES уже исключает _fvsc_concepts).
-
-**`view.ts`** переписан:
-- Конструктор расширен `getPlugin: () => FvscPlugin` и `getBackend: () => BackendController` (вместо хака `(app as any).plugins`).
-- `onOpen` сначала `await fetch('/viz/status')`, потом:
-  - `!status` → CTA «Движок карты не отвечает».
-  - `!space_loaded` → CTA «Построить карту» (открывает BootstrapModal). iframe НЕ создаётся.
-  - `!ollama_up` → оранжевая плашка `.fvsc-ollama-hint` над iframe.
-- `reload()` теперь ререндерит весь view, не просто свопает iframe src.
-
-**`backend.ts`** — RU error messages + `onConfigError?: () => void` callback в BackendOptions. ENOENT обработчик и failure path дёргают его → плагин открывает свои Settings.
-
-**`vault_watcher.ts`** — public `pause()` и `resume()`. Флаг `paused` фильтруется в `schedule()`. Логи в DevTools console.
-
-**`main.ts`** — orchestration:
-- `await autoFillSettings(this)` ДО создания BackendController.
-- BackendController получает `onConfigError: () => this.openOwnSettings()`.
-- AntourageView получает getPlugin/getBackend.
-- `watcher` теперь public field (для BootstrapModal).
-- После `backend.start()` если up — setTimeout 1с → `BootstrapModal.maybeShow`.
-- `openOwnSettings()` через полу-приватный `(this.app as any).setting.openTabById(this.manifest.id)`, fallback к Notice.
-
-**`styles.css`** — добавлены `.fvsc-modal-buttons`, `.fvsc-progress-wrap/-bar/-stage`, `.fvsc-autodetect-hint`, `.fvsc-empty-cta`, `.fvsc-ollama-hint`. Используют Obsidian CSS-переменные.
-
-### Layer 4 — Docs
-
-- **`INSTALL_RU.md`** — 7-шаговая инструкция без техтерминов. ConceptNet шаг 4 (обязательный по решению пользователя).
-- **`README.md`** — `> 🇷🇺 Установка на русском: [INSTALL_RU.md](./INSTALL_RU.md)` в самом верху.
+- `BootstrapModal.activeInstance` singleton — два клика не открывают две модалки.
+- `buildBtn.disabled = true` при клике — UI guard.
+- `attachToInflightBuild()` — если backend ответил 409 (билд уже идёт), второй модал переключается в passive polling вместо запуска дубля.
+- `scheduleBootstrapCheck` в main.ts — 10 ретраев по 1с на `/viz/status`. Раньше один setTimeout 1000ms давал «через раз».
+- `onLayoutReady` detach дублей view из session restore.
 
 ---
 
-## 📊 Метрики 2026-06-13
+## 📊 Метрики 2026-06-15
 
-| | До | После |
+| | До live-теста | После |
 |---|---|---|
-| Тесты ядра (test_invariants) | 125/125 | 125/125 |
-| Smoke service (test_smoke.py) | 11/11 | 11/11 |
-| Эндпоинты /viz | 7 | 8 (+build_from_vault) |
-| Файлов в obsidian-plugin/src | 5 | 7 (+paths.ts, +bootstrap.ts) |
-| Размер бандла main.js | ~18 KB | 37.9 KB |
-| Обязательные поля Settings для нового user'а | 2 | 0 (автодетект всегда пробует) |
-| Ответы на нерабочие условия | 503 + красная ошибка | HTTP 200 + русский SSE error |
+| Багов критичных для нового юзера | 5 невидимых | 0 |
+| Размер main.js | 37.9 KB | 43.6 KB |
+| Полей Settings обязательных | 0 (заявлено) | 0 (реально работает) |
+| Cache загружается на старте | нет (lazy на /viz, но плагин рендерил CTA до этого) | да (lazy через /viz/status) |
+| Защита от double-build | UI-only, обходилась race | UI + backend |
+| Тесты ядра (test_invariants) | 125/125 | 125/125 (не трогали) |
+| Smoke service (test_smoke.py) | 11/11 | 11/11 (не трогали) |
 
-### Verified end-to-end
+### Verified end-to-end (live, не мокированно)
+- Полный цикл «свежий vault → автодетект → backend start → Bootstrap → build → cache → reload → карта в UI».
+- Cache 99 MB load <1с.
+- Карта рендерится: 1193 концепта, кластеры видны.
+- BootstrapModal с прогрессом по 9 стадиям работает.
+- Dedup view: после фикса — одна view в одном pane.
 
-- `/viz/status` отдаёт новое поле `bootstrap_running` ✓
-- `/viz/ask` без Ollama: HTTP 200 + русский SSE error ✓
-- `npm run build` без ошибок TS ✓
-- 11/11 smoke ✓ (требуют запущенного backend'а)
-- 125/125 invariants ✓
-
-### Не проверено в этой сессии
-
-- Live build_from_vault на чистом vault'е через Obsidian UI (требует ~2-3 минуты UI-теста; первая задача следующей сессии).
-- Автодетекция repo + python на чистой машине без `data.json`.
+### Не сделано
+- **Ollama auto-management** (см. ниже, priority #1).
+- Live build_from_vault на полностью **первом** vault'е через UI на чистой машине без Python — не проверено (Python всё ещё ставится вручную).
 
 ---
 
 ## 🎯 Открытые направления (приоритет сверху вниз)
 
-### 1. 🔥 Live UI smoke (~20 мин)
-Перезагрузить Obsidian, удалить `<vault>/.obsidian/plugins/fvsc-antourage/data.json` и `<vault>/_fvsc_cache.pkl`. Проверить:
-- Settings заполнены автоматически.
-- Status-bar становится зелёным.
-- BootstrapModal всплывает через 3с.
-- Прогресс-бар двигается, view рендерится после done.
+### 1. 🔥 Ollama auto-management (~3-5ч) — БЛОКЕР MASS-ADOPTION
 
-### 2. 🔥 Silent_pool в Антураже (~1ч) — перенесено из 2026-06-06 roadmap
-Silent_pool существует и endpoint работает, но Антураж не использует его в ответах. Нужно: блок «known silent concepts» в system prompt'е (`service/viz_session.py`), особый ответ на silent-термин.
+См. `feedback_ollama_auto.md` в памяти. Rein чётко зафиксировал:
+> «подразумевается что это само будет при наличии ollama её запускать типо и выбирать загруженную модель или предлагать выбрать из списка загруженных моделей»
 
-### 3. CM6 подсветка слов в заметках (~2-3ч) — перенесено
-Маркер `[[locate:путь.md#"конкретная фраза"]]`, плагин слушает SSE напрямую, `Decoration.mark` через CM6.
+Конкретный план:
 
-### 4. Нативный TS-граф без iframe (~3-4ч) — перенесено
-cytoscape прямо в плагине, compound nodes для drill-down, прямой EventSource для SSE.
+**1.1 `obsidian-plugin/src/ollama.ts`** — новый модуль по аналогии с `paths.ts`:
+- `detectOllama()`: `where ollama` / `%LOCALAPPDATA%\Programs\Ollama\ollama.exe` / `D:\Ollama\ollama.exe` / macOS `/opt/homebrew/bin/ollama`, `/usr/local/bin/ollama`.
+- `ensureOllamaRunning(execPath)`: если 11434 не слушает — `spawn('ollama', ['serve'], { detached: true, stdio: 'ignore' })`. Health-poll каждые 500мс до 10с.
+- `listLocalModels()`: уже есть в backend (`/viz/status.models_available`), плагин может использовать через `/viz/status`.
 
-### 5. PyInstaller bundle (~6-10ч) — перенесено
-Заменяет шаги 1, 5 из INSTALL_RU.md. `detectPython` уже первым кандидатом проверяет `<plugin>/python/python.exe` — bundle подцепится автоматически.
+**1.2 Plugin orchestration** (`main.ts`):
+- После `backend.start()` up → проверить `/viz/status.ollama_up`.
+- Если false → `detectOllama()` → `ensureOllamaRunning()` → refresh status.
+- Если up + `settings.modelName` НЕ в `models_available` → открыть inline model-picker (`bootstrap.ts`-like, но без билда).
+
+**1.3 Race fix «Чат не подключён»**:
+- Сейчас view рендерит плашку Ollama-hint при `!ollama_up` мгновенно при `onOpen`.
+- Должен: ждать ~5-10с после открытия view, и только если за это время backend не сообщил ollama_up — рендерить плашку.
+- Реализация: в `view.ts` после первого `/viz/status` если `!ollama_up` — запустить setInterval опрос, рендерить плашку только когда стабильно false 3 подряд.
+
+**1.4 Model picker** (если model не из списка):
+- Inline-плашка с radio-кнопками установленных моделей + кнопка «Скачать qwen2.5:14b» если список пуст.
+- На клик: записать в settings, перезапустить backend.
+
+### 2. 🔥 Live UX тест: интерпретация через ρ (~30 мин — harness готов)
+
+Harness уже создан в этой сессии:
+- `service/tests/test_interpretation.py` — pytest golden с метриками divergence
+- `service/tests/interpret_cli.py` — интерактивный CLI
+- `service/tests/interpretation_cases.json` — кейс «хлам» + шаблон
+
+Прогнать на твоей карте 3-5 кейсов, посмотреть divergence_score. Если > 0.6 — interpretation lens работает; меньше — диагностика system prompt / top_n.
+
+### 3. macOS-аналог `windowsSystemCandidates` (~1ч)
+Иначе при попытке тестового онбординга на Mac будет тот же фейл что был у Python313 на Windows. Добавить:
+- `/opt/homebrew/bin/python3`, `/usr/local/bin/python3`, `~/.pyenv/shims/python3`
+- `/Applications/Python\ 3.*/IDLE.app` (CPython.org installer)
+
+### 4. PyInstaller bundle (~6-10ч) — перенесено
+Заменяет шаги 1, 5 из INSTALL_RU.md.
+
+### 5. Silent_pool в Антураже (~1ч) — перенесено
+Endpoint работает, чат не использует.
+
+### 6. CM6 подсветка слов (~2-3ч) — перенесено
+### 7. Нативный TS-граф без iframe (~3-4ч) — перенесено
 
 ---
 
 ## 🚦 Быстрый старт следующей сессии
 
 ```bash
-# Тесты ядра
+# Тесты ядра (без изменений)
 python -X utf8 -m core.test_invariants                # 125/125
 
 # Smoke service (требует запущенного backend'а)
 python -m uvicorn service.app:app --host 127.0.0.1 --port 8765 &
 python -m pytest service/tests/test_smoke.py -v       # 11/11
 
-# Verification 6.2 (без Ollama)
-curl -sN -X POST http://127.0.0.1:8765/viz/ask \
-  -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"hi"}],"stub":false}'
-# ожидание: event:error + event:done, HTTP 200
+# Interpretation harness — НОВОЕ в этой сессии
+python -m service.tests.interpret_cli                 # interactive
+python -m pytest service/tests/test_interpretation.py -v -s   # golden
 
 # Плагин: пересборка после правок TS
-cd obsidian-plugin && npm run build && install-to-vault.cmd
-
-# Live build через UI: см. Open направление 1
+cd obsidian-plugin && npm run build
+DEST="C:/Users/daur1/Desktop/экзокортекс для fvsc map/Rein/.obsidian/plugins/fvsc-antourage"
+cp -f main.js styles.css manifest.json "$DEST/"
 ```
 
 ---
 
 ## 🧠 Архитектурные принципы (обновлено)
 
-К предыдущим:
+К предыдущим (1-9):
 
-8. **MVP-граница = «новый человек видит свою карту без чтения документации»** (2026-06-13):
-   - Любой шаг setup'а с техтерминами (venv, uvicorn) — failed UX (см. memory `feedback_mass_adoption.md`).
-   - Любая ошибка должна вести к понятному действию пользователя, не к 503.
-   - Bootstrap-флоу должен запускаться автоматически при отсутствии данных, без чтения CLI-документации.
+10. **Live-тест ловит то, что unit-тесты пропускают** (2026-06-15):
+    - 125/125 invariants + 11/11 smoke были зелёные, но автодетект Python никогда не работал, cache никогда не lazy-load'ился через /viz/status, race в bootstrap всегда был.
+    - **Перед заявлением «MVP готов»** — обязательно прогонять полный live-цикл: бэкап cache+settings → reload плагина → дойти до карты + чата + интерпретации.
 
-9. **Долгие синхронные pipeline'ы в FastAPI = thread + queue** (2026-06-13):
-   - Не блокируем event loop никогда. Worker в `asyncio.to_thread`, прогресс через `queue.Queue`.
-   - asyncio.Queue не подходит — не thread-safe.
-   - Backpressure через `put(timeout=1)` без зависания worker'а.
+11. **Если что-то «через раз» в UX — это race**, не магия. Искать таймауты/последовательности фронт↔бэк.
+
+12. **Lazy-load в HTTP API смотрит на disk, не только на in-memory state** (2026-06-15):
+    - `/viz/status` обязан триггерить `_get_space()` если есть cache на диске.
+    - Иначе клиент видит «space_loaded=false» при наличии данных и принимает неправильные решения.
+
+13. **Mass-adoption — не «когда-нибудь»** (2026-06-15):
+    - Ollama auto-management — такой же блокер как автодетект Python.
+    - Любой шаг «открой терминал и запусти X» = failed UX для не-технического взрослого.
 
 ---
 
 ## Откуда мы пришли (предыдущие сессии)
 
+### 2026-06-13 (вечер) — MVP onboarding layer
+4-слойный онбординг сверху ядра: SSE build_from_vault, autodetect, BootstrapModal, INSTALL_RU. См. memory `mvp_onboarding_2026_06_13.md`.
+
 ### 2026-06-06 (вечер) — Provenance + plugin + live watcher
-TypeScript-плагин с auto-spawn uvicorn. Per-file provenance (каждый Judgment знает .md-источник). silent_pool (51K токенов). Live vault watcher с debounce 1.5с. cytoscape.js граф вместо vis-network. См. memory.
+TS plugin с auto-spawn uvicorn. Per-file provenance. silent_pool (51K). Live watcher с debounce 1.5с. cytoscape.
 
 ### 2026-06-06 (утро) — антураж MVP-1
-Антураж в браузере через `/viz`. SSE chat с маркерами `[[concept:X]]` синхронно с подсветкой узлов.
+Антураж в браузере через `/viz`. SSE chat с маркерами `[[concept:X]]`.
 
 ### 2026-06-05 — Sibling-FP fix
-Coordination-aware parser; F1 79.3% → 80.7%, sibling_fp_rate 2.5% → 0.66%. См. memory.
+Coordination-aware parser; F1 79.3% → 80.7%.
 
 ### 2026-06-04 — FVSC Core Service
-FastAPI обёртка, 11 endpoints, quantum retrieval через Tr(ρ_query·ρ_chunk), Markdown format adapter.
+FastAPI обёртка, 11 endpoints, quantum retrieval через Tr(ρ_query·ρ_chunk).
 
 ### 2026-05-31 — Empirical pivot
-Тезаурус покрывает 80% узлов, 1.2% рёбер. Bonus-only стратегия закреплена. См. memory.
+Тезаурус покрывает 80% узлов, 1.2% рёбер. Bonus-only стратегия закреплена.
