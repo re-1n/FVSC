@@ -122,3 +122,47 @@
   color: var(--color-accent);
   text-decoration: underline;
 }
+
+/* ── Ollama section: wrapper for hint / model picker / download ─ */
+.fvsc-ollama-section {
+  flex: 0 0 auto;
+}
+
+.fvsc-ollama-picker {
+  padding: 10px 12px;
+  background: var(--background-modifier-hover);
+  border-left: 3px solid var(--color-accent);
+  font-size: 0.9em;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fvsc-ollama-picker p {
+  margin: 0;
+}
+
+.fvsc-ollama-picker button {
+  align-self: flex-start;
+  padding: 4px 12px;
+  font-size: 0.9em;
+}
+
+.fvsc-ollama-models {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0;
+}
+
+.fvsc-ollama-model-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.fvsc-ollama-model-row:hover {
+  color: var(--text-normal);
+}

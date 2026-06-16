@@ -5,6 +5,7 @@ import { AntourageView, ANTOURAGE_VIEW_TYPE } from "./view";
 import { VaultWatcher } from "./vault_watcher";
 import { BootstrapModal } from "./bootstrap";
 import { autoFillSettings } from "./paths";
+import { tryAutoStartOllama } from "./ollama";
 
 export default class FvscPlugin extends Plugin {
   settings!: FvscSettings;
@@ -85,6 +86,12 @@ export default class FvscPlugin extends Plugin {
         new Notice("FVSC: не удалось найти Python или папку FVSC автоматически. Открой Настройки → FVSC Antourage.");
         window.setTimeout(() => this.openOwnSettings(), 500);
       } else {
+        // Ollama is independent of the backend — warm both in parallel so the
+        // chat is ready by the time the user opens the Antourage view.
+        // Without this, mass-adoption-blocker: a fresh install with Ollama
+        // present-but-not-running shows "Чат не подключён" forever and the
+        // user has no idea what to do.
+        void this.startOllamaIfAvailable();
         void this.backend.start().then(() => {
           if (this.backend.getStatus() === "up") {
             // Backend reports "up" the moment uvicorn's port opens, but
@@ -96,6 +103,23 @@ export default class FvscPlugin extends Plugin {
           }
         });
       }
+    }
+  }
+
+  private async startOllamaIfAvailable(): Promise<void> {
+    try {
+      const r = await tryAutoStartOllama();
+      if (r.status === "started") {
+        console.log(`[fvsc-ollama] started: ${r.execPath}`);
+      } else if (r.status === "already_up") {
+        console.log("[fvsc-ollama] already running");
+      } else if (r.status === "no_binary") {
+        console.log("[fvsc-ollama] binary not found — install hint will surface in view");
+      } else if (r.status === "spawn_failed") {
+        console.warn(`[fvsc-ollama] spawn failed: ${r.execPath}`);
+      }
+    } catch (e) {
+      console.warn("[fvsc-ollama] orchestration error:", e);
     }
   }
 

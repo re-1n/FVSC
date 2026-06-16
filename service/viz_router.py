@@ -448,6 +448,92 @@ async def viz_status():
     }
 
 
+class OllamaPullRequest(BaseModel):
+    model: str
+
+
+def _normalize_pull_chunk(chunk: dict) -> dict:
+    """Flatten Ollama's /api/pull NDJSON into something the UI can render
+    without parsing edge cases. percent is None when the daemon hasn't
+    reported sizes yet (e.g. during 'pulling manifest').
+    """
+    status = chunk.get("status", "")
+    total = chunk.get("total") or 0
+    completed = chunk.get("completed") or 0
+    percent: Optional[float] = None
+    if total > 0:
+        percent = round(100.0 * completed / total, 1)
+    elif "success" in status.lower():
+        percent = 100.0
+    return {
+        "status": status,
+        "percent": percent,
+        "completed": completed,
+        "total": total,
+        "digest": chunk.get("digest", ""),
+    }
+
+
+@router.post("/ollama_pull")
+async def viz_ollama_pull(req: OllamaPullRequest):
+    """Stream `ollama pull <model>` progress as SSE.
+
+    Proxies POST /api/pull on the local Ollama daemon. We run the blocking
+    urllib stream in a worker thread and forward events to the SSE client
+    via a thread-safe queue (same pattern as /viz/build_from_vault).
+    """
+    cfg = _state["config"]
+    model_name = (req.model or "").strip()
+    if not model_name:
+        raise HTTPException(400, detail="model name required")
+
+    q: _queue.Queue = _queue.Queue(maxsize=512)
+
+    def worker() -> None:
+        try:
+            llm = OllamaClient(model=cfg.model, host=cfg.host)
+            if not llm.ping():
+                q.put(("error", {
+                    "message": "Ollama не отвечает. Запусти Ollama и повтори.",
+                    "code": "ollama_down",
+                }))
+                return
+            for chunk in llm.pull_stream(model_name):
+                q.put(("progress", _normalize_pull_chunk(chunk)))
+                if str(chunk.get("status", "")).lower() == "success":
+                    break
+            q.put(("done", {"model": model_name}))
+        except Exception as e:
+            q.put(("error", {"message": str(e)}))
+
+    async def event_stream():
+        worker_task = asyncio.create_task(asyncio.to_thread(worker))
+        try:
+            while True:
+                try:
+                    event_type, data = q.get_nowait()
+                except _queue.Empty:
+                    if worker_task.done():
+                        try:
+                            event_type, data = q.get_nowait()
+                        except _queue.Empty:
+                            break
+                    else:
+                        await asyncio.sleep(0.15)
+                        continue
+                yield sse(event_type, data)
+                if event_type in ("done", "error"):
+                    break
+        finally:
+            if not worker_task.done():
+                try:
+                    await asyncio.wait_for(worker_task, timeout=5.0)
+                except asyncio.TimeoutError:
+                    pass
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 @router.post("/build_from_vault")
 async def viz_build_from_vault():
     """Streaming bootstrap endpoint.

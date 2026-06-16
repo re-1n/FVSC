@@ -51,6 +51,40 @@ function isLiveFile(path: string): boolean {
 // Scan common Windows install locations directly — Obsidian doesn't always
 // inherit the user's shell PATH, so `python` / `python3` lookups fail even
 // when CPython is installed. We probe canonical install dirs instead.
+function macosSystemCandidates(): string[] {
+  const out: string[] = [];
+  const home = homedir();
+
+  // Homebrew (Apple Silicon — most common in 2026)
+  out.push("/opt/homebrew/bin/python3");
+
+  // pyenv shims (very common among developers)
+  out.push(join(home, ".pyenv", "shims", "python3"));
+
+  // Homebrew Intel / legacy `python3` in /usr/local
+  out.push("/usr/local/bin/python3");
+
+  // Homebrew formula-pinned versions
+  for (const v of ["3.13", "3.12", "3.11", "3.10"]) {
+    out.push(`/usr/local/opt/python@${v}/bin/python3`);
+    out.push(`/opt/homebrew/opt/python@${v}/bin/python3`);
+  }
+
+  // python.org installer (CPython framework)
+  const frameworkRoot = "/Library/Frameworks/Python.framework/Versions";
+  if (existsSync(frameworkRoot)) {
+    try {
+      for (const sub of readdirSync(frameworkRoot)) {
+        if (/^3\.\d{1,2}$/.test(sub)) {
+          out.push(join(frameworkRoot, sub, "bin", "python3"));
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  return out;
+}
+
 function windowsSystemCandidates(): string[] {
   const out: string[] = [];
   const localApp = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
@@ -98,6 +132,8 @@ function windowsSystemCandidates(): string[] {
  *   3. Windows: canonical install dirs (%LOCALAPPDATA%\Programs\Python\Python3XX,
  *      Program Files\Python3XX, py launcher) — Obsidian's process PATH doesn't
  *      always include user-scope installs.
+ *   3b. macOS: Homebrew (/opt/homebrew, /usr/local), pyenv shims, python.org
+ *      framework. Same PATH-inheritance problem as Windows.
  *   4. `python` / `python3` on PATH (last resort — may be missing in Obsidian).
  */
 export async function detectPython(
@@ -105,6 +141,7 @@ export async function detectPython(
   repoCandidate: string | null,
 ): Promise<string | null> {
   const isWin = platform() === "win32";
+  const isMac = platform() === "darwin";
   const candidates: string[] = [];
 
   if (pluginAbsDir) {
@@ -125,6 +162,7 @@ export async function detectPython(
   }
 
   if (isWin) candidates.push(...windowsSystemCandidates());
+  else if (isMac) candidates.push(...macosSystemCandidates());
 
   for (const c of candidates) {
     if (isLiveFile(c) && testPython(c)) return c;

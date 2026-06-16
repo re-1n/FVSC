@@ -107,6 +107,45 @@ class OllamaClient:
         sys.stdout.write("\n")
         return "".join(chunks)
 
+    # ---------- model management ----------
+
+    def pull_stream(self, model: str) -> Iterator[dict]:
+        """Stream `ollama pull` progress as parsed JSON dicts.
+
+        Yields each NDJSON line from POST /api/pull. Caller is responsible
+        for surfacing progress / detecting the terminal {"status": "success"}.
+        Uses no timeout on the response read — pulls can take many minutes
+        on slow networks and we don't want to bail mid-download.
+        """
+        payload = {"model": model, "stream": True}
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.host}/api/pull",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            resp = urllib.request.urlopen(req, timeout=None)
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Ollama HTTP {e.code}: {err_body}") from e
+        except urllib.error.URLError as e:
+            raise RuntimeError(
+                f"Cannot reach Ollama at {self.host} ({e.reason})"
+            ) from e
+
+        for raw_line in resp:
+            line = raw_line.decode("utf-8", errors="replace").strip()
+            if not line:
+                continue
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+    # ---------- chat ----------
+
     def chat_stream(self, messages: list[ChatMessage]) -> Iterator[str]:
         """Generator variant — yields token chunks as they arrive, no stdout.
 

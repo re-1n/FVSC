@@ -101,7 +101,13 @@ def _stream_ask(messages: list[dict], timeout: float = 120.0) -> dict:
 
 @pytest.fixture(scope="module")
 def status():
-    r = httpx.get(f"{BASE}/viz/status", timeout=5.0)
+    try:
+        # 15s — /viz/status calls Ollama's /api/tags which can be slow to
+        # refuse when the daemon is down (2s ping + 5s list_models). 5s
+        # wasn't enough to even reach the "ollama_up=false" branch.
+        r = httpx.get(f"{BASE}/viz/status", timeout=15.0)
+    except httpx.HTTPError as e:
+        pytest.skip(f"backend not reachable: {e}")
     if r.status_code != 200:
         pytest.skip(f"backend not running: {r.status_code}")
     return r.json()
@@ -113,6 +119,15 @@ def known_concepts(status):
         pytest.skip("карта не построена — открой плагин и нажми «Построить карту» или вызови POST /viz/build_from_vault")
     if not status.get("ollama_up"):
         pytest.skip(f"ollama down ({status.get('model')}) — запусти Ollama")
+    # Skip cleanly if the configured model isn't pulled — without this we get
+    # an opaque HTTP 404 from the chat stream and the test "fails" for a
+    # config reason, not a correctness reason.
+    model = status.get("model", "")
+    available = status.get("models_available", []) or []
+    if not available:
+        pytest.skip(f"no models pulled — run `ollama pull {model}`")
+    if model and model not in available:
+        pytest.skip(f"configured model '{model}' not in {available} — pull it first")
     # Pull full vocabulary via /silent + a probe. Easier: just collect from /viz HTML graph?
     # Simpler — use concept_count as sanity, but membership check uses /viz/concepts/.../sources.
     return status
