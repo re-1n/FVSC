@@ -31,7 +31,8 @@ function isLiveFile(path: string): boolean {
 function whichOllama(): string | null {
   const cmd = platform() === "win32" ? "where" : "which";
   try {
-    const r = spawnSync(cmd, ["ollama"], { timeout: 2000, encoding: "utf8" });
+    // windowsHide stops the cmd.exe console from flashing on screen.
+    const r = spawnSync(cmd, ["ollama"], { timeout: 2000, encoding: "utf8", windowsHide: true });
     if (r.status === 0 && r.stdout) {
       // `where` on Windows can list multiple lines; take the first.
       const first = r.stdout.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)[0];

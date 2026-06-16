@@ -26,7 +26,10 @@ function testPython(cmd: string): boolean {
     const r = spawnSync(
       cmd,
       ["-c", "import sys; print(sys.version_info[0]*100+sys.version_info[1])"],
-      { timeout: 3000, encoding: "utf8" },
+      // windowsHide stops a cmd.exe window from flashing on screen each
+      // time we probe a candidate. detectPython can try 20+ binaries in a
+      // row, so without this the user sees a stroboscope of console pops.
+      { timeout: 3000, encoding: "utf8", windowsHide: true },
     );
     if (r.status !== 0 || !r.stdout) return false;
     const v = parseInt(r.stdout.trim(), 10);
@@ -173,7 +176,7 @@ export async function detectPython(
       const r = spawnSync(
         c,
         ["-c", "import sys; print(sys.executable)"],
-        { timeout: 3000, encoding: "utf8" },
+        { timeout: 3000, encoding: "utf8", windowsHide: true },
       );
       if (r.status === 0 && r.stdout) return r.stdout.trim();
     }
