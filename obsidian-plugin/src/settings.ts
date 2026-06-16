@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import type FvscPlugin from "./main";
 import { detectPython, detectRepo, getPluginAbsDir } from "./paths";
+import { detectOllamaModelsDir } from "./ollama";
 
 export interface FvscSettings {
   pythonPath: string;
@@ -116,6 +117,8 @@ export class FvscSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+    const ollamaModelsHintEl = containerEl.createDiv({ cls: "fvsc-autodetect-hint" });
+    void this.renderAutodetectHint(ollamaModelsHintEl, "ollama-models");
 
     new Setting(containerEl)
       .setName("Запускать движок при старте Obsidian")
@@ -149,14 +152,20 @@ export class FvscSettingTab extends PluginSettingTab {
    * Show "Found automatically: PATH [Use]" under a path field when it's empty
    * and detection succeeded; show "Not found — fill in manually" otherwise.
    */
-  private async renderAutodetectHint(el: HTMLElement, kind: "python" | "repo"): Promise<void> {
+  private async renderAutodetectHint(
+    el: HTMLElement,
+    kind: "python" | "repo" | "ollama-models",
+  ): Promise<void> {
     el.empty();
     const s = this.plugin.settings;
-    const current = kind === "python" ? s.pythonPath : s.fvscRepoPath;
+    const current =
+      kind === "python" ? s.pythonPath
+      : kind === "repo" ? s.fvscRepoPath
+      : s.ollamaModelsPath;
     if (current) return;
 
     const pluginAbsDir = getPluginAbsDir(this.app, this.plugin.manifest.dir);
-    if (!pluginAbsDir) {
+    if (!pluginAbsDir && kind !== "ollama-models") {
       el.createSpan({ text: "Не удалось определить папку плагина — укажи путь вручную." });
       return;
     }
@@ -165,10 +174,12 @@ export class FvscSettingTab extends PluginSettingTab {
 
     let found: string | null = null;
     if (kind === "repo") {
-      found = await detectRepo(pluginAbsDir);
+      found = await detectRepo(pluginAbsDir!);
+    } else if (kind === "python") {
+      const repoForPython = s.fvscRepoPath || (await detectRepo(pluginAbsDir!));
+      found = await detectPython(pluginAbsDir!, repoForPython);
     } else {
-      const repoForPython = s.fvscRepoPath || (await detectRepo(pluginAbsDir));
-      found = await detectPython(pluginAbsDir, repoForPython);
+      found = await detectOllamaModelsDir();
     }
 
     el.empty();
@@ -177,10 +188,15 @@ export class FvscSettingTab extends PluginSettingTab {
       const btn = el.createEl("button", { text: "Использовать" });
       btn.onclick = async () => {
         if (kind === "python") s.pythonPath = found!;
-        else s.fvscRepoPath = found!;
+        else if (kind === "repo") s.fvscRepoPath = found!;
+        else s.ollamaModelsPath = found!;
         await this.plugin.saveSettings();
         this.display();
       };
+    } else if (kind === "ollama-models") {
+      // For models dir, "not found" is normal — Ollama uses its default ~/.ollama/models.
+      // Don't pester the user; just say so.
+      el.createSpan({ text: "Других папок с моделями не найдено — Ollama использует свою по умолчанию." });
     } else {
       el.createSpan({ text: "Не найдено автоматически — укажи путь вручную." });
     }
