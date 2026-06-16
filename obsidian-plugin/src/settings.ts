@@ -8,6 +8,10 @@ export interface FvscSettings {
   port: number;
   modelName: string;
   autoStart: boolean;
+  /** OLLAMA_MODELS path. Empty = let Ollama use its default ~/.ollama/models.
+   *  Set when the user keeps models on a different drive (e.g. D:\ollama models)
+   *  so the plugin can spawn `ollama serve` with the right env. */
+  ollamaModelsPath: string;
 }
 
 export const DEFAULT_SETTINGS: FvscSettings = {
@@ -16,6 +20,7 @@ export const DEFAULT_SETTINGS: FvscSettings = {
   port: 8765,
   modelName: "qwen2.5:14b-instruct-q4_K_M",
   autoStart: true,
+  ollamaModelsPath: "",
 };
 
 export class FvscSettingTab extends PluginSettingTab {
@@ -91,6 +96,23 @@ export class FvscSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.modelName)
           .onChange(async (v) => {
             this.plugin.settings.modelName = v.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Папка моделей Ollama")
+      .setDesc(
+        "Пустое = Ollama сама решит (обычно ~/.ollama/models). Заполни если " +
+          "модели лежат на другом диске (например D:\\ollama models). Плагин " +
+          "запустит свою Ollama с этим OLLAMA_MODELS и подхватит существующие модели.",
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("D:\\ollama models")
+          .setValue(this.plugin.settings.ollamaModelsPath)
+          .onChange(async (v) => {
+            this.plugin.settings.ollamaModelsPath = v.trim();
             await this.plugin.saveSettings();
           }),
       );

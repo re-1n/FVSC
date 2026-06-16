@@ -108,9 +108,11 @@ export default class FvscPlugin extends Plugin {
 
   private async startOllamaIfAvailable(): Promise<void> {
     try {
-      const r = await tryAutoStartOllama();
+      const r = await tryAutoStartOllama({
+        modelsDir: this.settings.ollamaModelsPath || undefined,
+      });
       if (r.status === "started") {
-        console.log(`[fvsc-ollama] started: ${r.execPath}`);
+        console.log(`[fvsc-ollama] started: ${r.execPath} (models=${this.settings.ollamaModelsPath || "default"})`);
       } else if (r.status === "already_up") {
         console.log("[fvsc-ollama] already running");
       } else if (r.status === "no_binary") {

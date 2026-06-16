@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf, App, Notice } from "obsidian";
 import type FvscPlugin from "./main";
 import type { BackendController } from "./backend";
 import { BootstrapModal } from "./bootstrap";
+import { detectOllama, detectOllamaModelsDir, restartOllamaWithModelsDir } from "./ollama";
 
 export const ANTOURAGE_VIEW_TYPE = "fvsc-antourage-view";
 
@@ -21,6 +22,20 @@ const OLLAMA_POLL_MS = 2_000;
 // hint (the daemon takes a beat to bind, Obsidian's PATH is flaky, etc).
 const OLLAMA_DOWN_THRESHOLD = 3;
 const DEFAULT_MODEL = "qwen2.5:14b-instruct-q4_K_M";
+
+/**
+ * Curated list of Ollama models that work well as map-chat backends.
+ * Names match exactly what `ollama pull` accepts. Sizes are approximate
+ * disk footprint so the user can pick what fits their drive.
+ */
+const RECOMMENDED_MODELS: { name: string; size: string; note: string }[] = [
+  { name: "qwen2.5:7b-instruct-q4_K_M",  size: "~4.7 GB", note: "лёгкая, быстрая" },
+  { name: "qwen2.5:14b-instruct-q4_K_M", size: "~9 GB",   note: "рекомендую — баланс" },
+  { name: "qwen2.5:32b-instruct-q4_K_M", size: "~20 GB",  note: "максимум, нужна 32GB+ RAM" },
+  { name: "llama3.1:8b-instruct-q4_K_M", size: "~4.9 GB", note: "Meta, английский" },
+  { name: "gemma2:9b-instruct-q4_K_M",   size: "~5.4 GB", note: "Google" },
+  { name: "qwen2.5-coder:14b-instruct-q4_K_M", size: "~9 GB", note: "под код" },
+];
 
 export class AntourageView extends ItemView {
   private getBaseUrl: () => string;
@@ -151,12 +166,14 @@ export class AntourageView extends ItemView {
   }
 
   /**
-   * Three states:
-   *   1. ollama_up=false → bump streak; render install/start hint only after
-   *      OLLAMA_DOWN_THRESHOLD consecutive misses (kills the flap on cold start).
-   *   2. ollama_up=true, configured model not in models_available → model picker
-   *      with radio of installed models + "download default" button.
-   *   3. ollama_up=true, configured model present → clear the section.
+   * Decision tree:
+   *   - !ollama_up   → install/start hint (after OLLAMA_DOWN_THRESHOLD misses).
+   *   - ollama_up, available=[], settings.ollamaModelsPath set
+   *                  → mismatch warning + restart-with-env button.
+   *   - ollama_up, model ∈ available
+   *                  → empty (chat is good to go).
+   *   - ollama_up, model ∉ available
+   *                  → picker with installed + recommended + custom name field.
    */
   private renderOllamaSection(status: VizStatus): void {
     if (!this.ollamaSection) return;
@@ -176,11 +193,56 @@ export class AntourageView extends ItemView {
 
     // Up — reset streak so a future down counts from zero.
     this.ollamaDownStreak = 0;
+
+    // Mismatch: user pointed us at a models dir but the running daemon
+    // doesn't see anything → it's pre-existing tray-app launched without
+    // OLLAMA_MODELS. Offer to restart it with our env.
+    if (available.length === 0 && settings.ollamaModelsPath) {
+      this.renderMismatchWarning(settings.ollamaModelsPath);
+      return;
+    }
+
     if (modelName && available.includes(modelName)) {
       this.ollamaSection.empty();
       return;
     }
     this.renderModelPicker(available, modelName);
+  }
+
+  private renderMismatchWarning(modelsPath: string): void {
+    if (!this.ollamaSection) return;
+    this.ollamaSection.empty();
+    const wrap = this.ollamaSection.createDiv({ cls: "fvsc-ollama-picker" });
+    wrap.createEl("p", {
+      text: `Ollama запущена, но не видит моделей в ${modelsPath}. ` +
+            `Скорее всего она стартовала без OLLAMA_MODELS. ` +
+            `Могу её перезапустить с правильной настройкой.`,
+    });
+    const btn = wrap.createEl("button", { text: "Перезапустить Ollama", cls: "mod-cta" });
+    btn.onclick = async () => {
+      btn.disabled = true;
+      btn.setText("Перезапускаю…");
+      try {
+        const exec = await detectOllama();
+        if (!exec) {
+          new Notice("FVSC: ollama не найден.");
+          btn.disabled = false;
+          btn.setText("Перезапустить Ollama");
+          return;
+        }
+        const r = await restartOllamaWithModelsDir(exec, modelsPath);
+        if (r.ok) {
+          new Notice("FVSC: Ollama перезапущена с твоей папкой моделей.");
+        } else {
+          new Notice("FVSC: не удалось дождаться Ollama после перезапуска.");
+        }
+      } catch (e) {
+        new Notice(`FVSC: ошибка перезапуска — ${String(e)}`);
+      } finally {
+        btn.disabled = false;
+        btn.setText("Перезапустить Ollama");
+      }
+    };
   }
 
   private renderOllamaDownHint(): void {
@@ -198,41 +260,63 @@ export class AntourageView extends ItemView {
     this.ollamaSection.empty();
     const wrap = this.ollamaSection.createDiv({ cls: "fvsc-ollama-picker" });
 
+    // Headline depends on whether the user already has something pulled.
     if (available.length === 0) {
       wrap.createEl("p", {
-        text: "Ollama запущена, но ни одна модель не скачана. " +
-              `Скачаю ${DEFAULT_MODEL} (~9GB)?`,
+        text: "Ollama запущена, но моделей не скачано. Выбери одну из рекомендованных:",
       });
-      const dlBtn = wrap.createEl("button", {
-        text: `Скачать ${DEFAULT_MODEL}`,
-        cls: "mod-cta",
+    } else if (configured) {
+      wrap.createEl("p", {
+        text: `Модель ${configured} не найдена. Выбери одну из установленных или скачай новую:`,
       });
-      dlBtn.onclick = () => this.beginPull(DEFAULT_MODEL);
-      return;
+    } else {
+      wrap.createEl("p", { text: "Выбери модель для чата:" });
     }
 
-    wrap.createEl("p", {
-      text: configured
-        ? `Модель ${configured} не найдена в Ollama. Выбери одну из скачанных:`
-        : "Выбери модель для чата:",
-    });
-
-    const list = wrap.createDiv({ cls: "fvsc-ollama-models" });
-    for (const m of available) {
-      const row = list.createEl("label", { cls: "fvsc-ollama-model-row" });
-      const radio = row.createEl("input");
-      radio.type = "radio";
-      radio.name = "fvsc-model";
-      row.createSpan({ text: ` ${m}` });
-      radio.onclick = () => this.selectModel(m);
+    // ── Installed (radio-pick, no download needed) ─────────────────
+    if (available.length > 0) {
+      wrap.createEl("h4", { text: "Установлено у тебя:", cls: "fvsc-ollama-h" });
+      const list = wrap.createDiv({ cls: "fvsc-ollama-models" });
+      for (const m of available) {
+        const row = list.createEl("label", { cls: "fvsc-ollama-model-row" });
+        const radio = row.createEl("input");
+        radio.type = "radio";
+        radio.name = "fvsc-model";
+        row.createSpan({ text: ` ${m}` });
+        radio.onclick = () => this.selectModel(m);
+      }
     }
 
-    if (!available.includes(DEFAULT_MODEL)) {
-      const dlBtn = wrap.createEl("button", {
-        text: `Или скачать ${DEFAULT_MODEL} (~9GB)`,
-      });
-      dlBtn.onclick = () => this.beginPull(DEFAULT_MODEL);
+    // ── Recommended (not yet installed → pull button) ───────────────
+    const toRecommend = RECOMMENDED_MODELS.filter((m) => !available.includes(m.name));
+    if (toRecommend.length > 0) {
+      wrap.createEl("h4", { text: "Рекомендованные:", cls: "fvsc-ollama-h" });
+      const recList = wrap.createDiv({ cls: "fvsc-ollama-models" });
+      for (const m of toRecommend) {
+        const row = recList.createDiv({ cls: "fvsc-ollama-rec-row" });
+        const meta = row.createDiv({ cls: "fvsc-ollama-rec-meta" });
+        meta.createEl("strong", { text: m.name });
+        meta.createSpan({ text: ` · ${m.size} · ${m.note}`, cls: "fvsc-ollama-rec-note" });
+        const dlBtn = row.createEl("button", { text: "Скачать" });
+        dlBtn.onclick = () => this.beginPull(m.name);
+      }
     }
+
+    // ── Custom: any name from ollama.com/library ────────────────────
+    wrap.createEl("h4", { text: "Своя модель:", cls: "fvsc-ollama-h" });
+    const customRow = wrap.createDiv({ cls: "fvsc-ollama-custom" });
+    const input = customRow.createEl("input", { cls: "fvsc-ollama-custom-input" });
+    input.type = "text";
+    input.placeholder = "например llama3.2:3b-instruct-q4_K_M";
+    const pullBtn = customRow.createEl("button", { text: "Скачать" });
+    pullBtn.onclick = () => {
+      const name = input.value.trim();
+      if (!name) {
+        new Notice("Введи имя модели из ollama.com/library");
+        return;
+      }
+      this.beginPull(name);
+    };
   }
 
   private async selectModel(model: string): Promise<void> {

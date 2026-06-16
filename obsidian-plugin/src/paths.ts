@@ -4,6 +4,7 @@ import { existsSync, readdirSync, statSync } from "fs";
 import { join, dirname } from "path";
 import { homedir, platform } from "os";
 import type FvscPlugin from "./main";
+import { detectOllamaModelsDir } from "./ollama";
 
 /**
  * Resolve the absolute filesystem path of the plugin's own directory.
@@ -237,6 +238,16 @@ export async function autoFillSettings(
     py = await detectPython(pluginAbsDir, repo);
     if (py) {
       s.pythonPath = py;
+      changed = true;
+    }
+  }
+  // Find an OLLAMA_MODELS dir on disk that actually has manifests in it —
+  // covers the common "I moved models to D:\ to save SSD space" case where
+  // the daemon would otherwise launch with the default empty dir.
+  if (!s.ollamaModelsPath) {
+    const md = await detectOllamaModelsDir();
+    if (md) {
+      s.ollamaModelsPath = md;
       changed = true;
     }
   }

@@ -166,3 +166,50 @@
 .fvsc-ollama-model-row:hover {
   color: var(--text-normal);
 }
+
+.fvsc-ollama-h {
+  margin: 8px 0 2px 0;
+  font-size: 0.85em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fvsc-ollama-rec-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.fvsc-ollama-rec-row:last-child {
+  border-bottom: none;
+}
+
+.fvsc-ollama-rec-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fvsc-ollama-rec-note {
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.fvsc-ollama-custom {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.fvsc-ollama-custom-input {
+  flex: 1 1 auto;
+  padding: 4px 8px;
+  font-size: 0.9em;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  color: var(--text-normal);
+}
