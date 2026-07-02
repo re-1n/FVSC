@@ -10,8 +10,37 @@ No external dependencies beyond numpy.
 
 import numpy as np
 import time
+import hashlib
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Optional
+
+
+def stable_hash(s: str) -> int:
+    """Deterministic cross-process string hash.
+
+    Python's built-in hash() is randomized per process (PYTHONHASHSEED),
+    which silently breaks determinism between service restarts: the same
+    term would get a different base vector, consolidation stops firing,
+    and compare_maps across processes compares incompatible bases.
+    """
+    return int.from_bytes(hashlib.sha256(s.encode("utf-8")).digest()[:4], "little")
+
+
+@lru_cache(maxsize=512)
+def _orthogonal_matrix(seed_key: str, dim: int) -> np.ndarray:
+    """Deterministic orthogonal matrix for a role/relation, cached.
+
+    QR of a dim x dim matrix is O(d^3) -- without caching it is recomputed
+    for every judgment and for every pair in recursive_deepen. The matrix is
+    a pure function of (seed_key, dim), so cache it. Returned array must be
+    treated as read-only.
+    """
+    rng = np.random.default_rng(stable_hash(seed_key) % (2 ** 31))
+    M = rng.standard_normal((dim, dim))
+    Q, _ = np.linalg.qr(M)
+    Q.setflags(write=False)
+    return Q
 
 
 # ---------------------------------------------------------------------------
@@ -419,7 +448,8 @@ class SemanticSpace:
             return v / (np.linalg.norm(v) + 1e-10)
 
         # Deterministic pseudo-random vector from term hash
-        h = hash(term) % (2**31)
+        # (stable_hash: cross-process deterministic, unlike built-in hash())
+        h = stable_hash(term) % (2**31)
         rng = np.random.default_rng(h)
         v = rng.standard_normal(self.dim)
         return v / (np.linalg.norm(v) + 1e-10)
@@ -449,11 +479,8 @@ class SemanticSpace:
         This breaks symmetry: the same word in subject vs object position
         produces different vectors.
         """
-        role_seed = hash(role) % (2**31)
-        rng = np.random.default_rng(role_seed)
-        # Random orthogonal matrix (deterministic from role)
-        M = rng.standard_normal((self.dim, self.dim))
-        Q, _ = np.linalg.qr(M)
+        # Deterministic orthogonal matrix (cached; stable across processes)
+        Q = _orthogonal_matrix(f"role:{role}", self.dim)
         rotated = Q @ v
         return rotated / (np.linalg.norm(rotated) + 1e-10)
 
@@ -599,10 +626,8 @@ class SemanticSpace:
         R_r is orthogonal, so Φ_r preserves trace (mass) and eigenvalues,
         but rotates the meaning facets into a relation-dependent subspace.
         """
-        role_seed = hash(f"transform:{relation}") % (2**31)
-        rng = np.random.default_rng(role_seed)
-        M = rng.standard_normal((self.dim, self.dim))
-        R, _ = np.linalg.qr(M)
+        # Deterministic orthogonal matrix (cached; stable across processes)
+        R = _orthogonal_matrix(f"transform:{relation}", self.dim)
         return R @ rho @ R.T
 
     def _dominant_relation(self, term_a: str, term_b: str) -> str:
@@ -856,11 +881,10 @@ class SemanticSpace:
                 if not c.archived and c.judgment.source_text == source_text:
                     c.archived = True
                     n_archived += 1
-            # Force ρ rebuild on next query
-            concept.rho = None
-            concept.rho_norm = None
-            concept.rho_deep = None
-            concept.rho_deep_norm = None
+            # Force ρ rebuild on next query (rho/rho_norm/rho_deep/rho_deep_norm
+            # are read-only properties derived from these caches -- assigning to
+            # them raises AttributeError and broke live vault-watch)
+            concept.invalidate()
 
         # Prune silent_pool entries for this source
         for tok in list(self.silent_pool.keys()):
