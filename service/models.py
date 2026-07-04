@@ -32,6 +32,7 @@ class IngestResponse(BaseModel):
     chunks_added: int
     concepts_total: int
     source_id: str
+    skeleton_seeded: int = 0
 
 
 class DeepenRequest(BaseModel):

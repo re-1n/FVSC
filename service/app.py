@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from core.density_core import SemanticSpace, facets, purity, von_neumann_entropy
+from core.skeleton import SkeletonIndex, seed_skeleton
 from core.text_parser_agnostic import ParseConfig
 from core.thesaurus_prior import ThesaurusPrior
 
@@ -49,19 +50,23 @@ AUTOSAVE_THRESHOLD = int(os.environ.get("FVSC_AUTOSAVE_THRESHOLD", "10"))
 
 store: SpaceStore
 shared_config: ParseConfig
+skeleton_index: Optional[SkeletonIndex] = None
 
 
 # ── Lifespan ──────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global store, shared_config
+    global store, shared_config, skeleton_index
     # Startup
     store = SpaceStore(DATA_DIR, autosave_threshold=AUTOSAVE_THRESHOLD)
     # Build default ParseConfig
     prior = None
     if CONCEPTNET_PATH.exists():
         prior = ThesaurusPrior.from_conceptnet(str(CONCEPTNET_PATH))
+        # First cascade layer: term-indexed thesaurus judgments, loaded once
+        # per process. seed_skeleton() after each ingest is then cheap.
+        skeleton_index = SkeletonIndex.from_conceptnet(str(CONCEPTNET_PATH))
     shared_config = ParseConfig(
         window=4,
         min_freq=1,     # service handles small inputs — one paragraph at a time
@@ -217,14 +222,25 @@ async def deepen_space(name: str, req: DeepenRequest):
 @app.post("/spaces/{name}/ingest")
 async def ingest(name: str, req: IngestRequest):
     bundle = store.get_or_create(name)
+    terms_before = set(bundle.space.concepts.keys())
     bundle, chunks_added, concepts_before = ingest_text(
         bundle, req.text, req.source_id, fmt=req.format, config=shared_config,
     )
+    # Skeleton seeding (first cascade layer): only terms NEW in this ingest.
+    # seed_skeleton is idempotent per term, so re-ingests are no-ops.
+    skeleton_seeded = 0
+    if skeleton_index is not None and chunks_added:
+        new_terms = set(bundle.space.concepts.keys()) - terms_before
+        if new_terms:
+            skeleton_seeded = seed_skeleton(
+                bundle.space, skeleton_index, terms=new_terms,
+            )
     store.mark_dirty(name)
     return IngestResponse(
         chunks_added=chunks_added,
         concepts_total=len(bundle.space.concepts),
         source_id=req.source_id,
+        skeleton_seeded=skeleton_seeded,
     )
 
 
