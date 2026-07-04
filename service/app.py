@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 import sys
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
@@ -313,6 +315,82 @@ async def retrieve(name: str, req: RetrieveRequest):
     return RetrieveResponse(
         hits=[ChunkHit(**h) for h in hits]
     )
+
+
+# ── Feedback (third cascade layer) ────────────────────────────────
+#
+# Wires core/feedback.py FeedbackEngine into the service. Engines are
+# per-space and per-process: history/_asked_keys are session state, the
+# actual map updates (confirm/reject/promote/...) mutate the space and
+# are persisted through the normal dirty-flag autosave path.
+
+_feedback_engines: dict = {}          # space name -> FeedbackEngine
+_pending_questions: dict = {}         # space name -> {question_id: FeedbackQuestion}
+
+
+class FeedbackAnswerRequest(BaseModel):
+    question_id: str
+    answer_index: int
+
+
+def _get_engine(name: str):
+    from core.feedback import FeedbackEngine
+    bundle = _require_space(name)
+    engine = _feedback_engines.get(name)
+    if engine is None or engine.space is not bundle.space:
+        # New engine if space was (re)loaded — engine must track the live object
+        engine = FeedbackEngine(bundle.space)
+        _feedback_engines[name] = engine
+        _pending_questions[name] = {}
+    return engine
+
+
+@app.get("/spaces/{name}/feedback/questions")
+async def feedback_questions(name: str, max_count: int = 5):
+    """Generate calibration questions from the current map state."""
+    engine = _get_engine(name)
+    pending = _pending_questions.setdefault(name, {})
+    questions = engine.generate_questions(max_count=max_count)
+
+    out = []
+    for q in questions:
+        qid = uuid.uuid4().hex[:12]
+        pending[qid] = q
+        out.append({
+            "question_id": qid,
+            "question_type": q.question_type,
+            "priority": q.priority,
+            "prompt_text": q.prompt_text,
+            "options": q.options,
+            "related_concepts": q.related_concepts,
+        })
+    return {"questions": out}
+
+
+@app.post("/spaces/{name}/feedback/answer")
+async def feedback_answer(name: str, req: FeedbackAnswerRequest):
+    """Apply the user's answer to the map (confirm/reject/promote/...)."""
+    engine = _get_engine(name)
+    pending = _pending_questions.setdefault(name, {})
+    question = pending.pop(req.question_id, None)
+    if question is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Question '{req.question_id}' not found or already answered",
+        )
+    if not (0 <= req.answer_index < len(question.options)):
+        raise HTTPException(status_code=422, detail="answer_index out of range")
+
+    engine.process_answer(question, req.answer_index)
+    store.mark_dirty(name)
+    return {"processed": True, "stats": engine.stats()}
+
+
+@app.get("/spaces/{name}/feedback/stats")
+async def feedback_stats(name: str):
+    """Review progress: how much of the map has been calibrated."""
+    engine = _get_engine(name)
+    return engine.stats()
 
 
 # ── Cross-space compare ───────────────────────────────────────────
