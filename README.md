@@ -1,4 +1,4 @@
-> 🇷🇺 Установка на русском: [INSTALL_RU.md](./INSTALL_RU.md)
+> Установка на русском: [INSTALL_RU.md](./INSTALL_RU.md)
 
 # FVSC — Fractal-Vector Semantic Core
 
