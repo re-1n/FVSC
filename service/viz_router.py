@@ -26,6 +26,7 @@ from core.thesaurus_prior import ThesaurusPrior
 from core.exocortex_ingest import _RU_STOPWORDS
 from core.vault_ingest import strip_markdown, _TG_STRUCTURAL
 from core.exocortex_ingest import _clean_for_fvsc
+from . import skeleton_service
 from .viz_session import (
     VizConfig,
     sse,
@@ -291,6 +292,8 @@ async def viz_file_ingest(req: FileIngestRequest):
     action = (req.action or "").lower()
     purged = 0
     added = 0
+    skeleton_added = 0
+    terms_before = set(space.concepts.keys())
 
     if action == "delete":
         purged = space.purge_source(req.path)
@@ -309,6 +312,12 @@ async def viz_file_ingest(req: FileIngestRequest):
     else:
         raise HTTPException(400, detail=f"unknown action: {action}")
 
+    # Skeleton layer: seed thesaurus judgments for terms this change introduced.
+    if added:
+        new_terms = set(space.concepts.keys()) - terms_before
+        if new_terms:
+            skeleton_added = skeleton_service.seed_terms(space, terms=new_terms)
+
     _state["live_dirty_count"] += 1
     saved = False
     if _state["live_dirty_count"] >= _state["live_save_every"]:
@@ -323,6 +332,7 @@ async def viz_file_ingest(req: FileIngestRequest):
     return {
         "path": req.path, "action": action,
         "added": added, "purged": purged,
+        "skeleton_added": skeleton_added,
         "concept_count": len(space.concepts),
         "silent_count": len(getattr(space, "silent_pool", {}) or {}),
         "dirty": _state["live_dirty_count"],
@@ -587,6 +597,17 @@ async def viz_build_from_vault():
                 dim=64,
                 progress_callback=progress_cb,
             )
+            # Skeleton layer: seed every concept in the freshly built space.
+            # Idempotent (per-term has_skeleton check), so re-builds are safe.
+            try:
+                n_skel = skeleton_service.seed_terms(space)
+                if n_skel:
+                    progress_cb("skeleton", 99.0,
+                                f"Скелет тезауруса: +{n_skel} суждений")
+            except Exception:
+                # Skeleton failure must never kill a successful build.
+                import traceback
+                traceback.print_exc()
             # Populate in-memory state BEFORE signalling done, so the very next
             # /viz/status returns space_loaded=true without waiting on pickle.load.
             _state["space"] = space

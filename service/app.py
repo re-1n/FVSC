@@ -18,6 +18,7 @@ from core.density_core import SemanticSpace, facets, purity, von_neumann_entropy
 from core.text_parser_agnostic import ParseConfig
 from core.thesaurus_prior import ThesaurusPrior
 
+from . import skeleton_service
 from .ingest import ingest_text
 from .models import (
     ChunkHit,
@@ -217,9 +218,15 @@ async def deepen_space(name: str, req: DeepenRequest):
 @app.post("/spaces/{name}/ingest")
 async def ingest(name: str, req: IngestRequest):
     bundle = store.get_or_create(name)
+    terms_before = set(bundle.space.concepts.keys())
     bundle, chunks_added, concepts_before = ingest_text(
         bundle, req.text, req.source_id, fmt=req.format, config=shared_config,
     )
+    # Skeleton layer (first cascade layer): seed thesaurus judgments for
+    # terms this ingest introduced. Idempotent, no-op when disabled/missing.
+    new_terms = set(bundle.space.concepts.keys()) - terms_before
+    if new_terms:
+        skeleton_service.seed_terms(bundle.space, terms=new_terms)
     store.mark_dirty(name)
     return IngestResponse(
         chunks_added=chunks_added,

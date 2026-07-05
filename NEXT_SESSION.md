@@ -61,15 +61,17 @@
 
 ## 🎯 Открытые направления (приоритет сверху вниз)
 
-### 1. 🔥 Skeleton layer → service wiring (~1-2ч) — начатое незаконченное
+### 1. ✅ Skeleton layer → service wiring — ЗАКРЫТ 2026-07-05
 
-`core/skeleton.py` готов и оттестирован, но ничего в `service/` его не вызывает.
-План:
-- Singleton `SkeletonIndex` в service (lazy, один load на процесс).
-- Вызов `seed_skeleton()` в ingest-пути (после добавления personal judgments,
-  на новые термы) — и в `build_from_vault`, и в live watcher / инкрементальном ingest.
-- Настройка/флаг чтобы можно было выключить (и путь к conceptnet_ru.json конфигурируемый).
-- Smoke-тест через TestClient: ingest → термы обросли skeleton-компонентами.
+Реализовано полностью по плану:
+- `service/skeleton_service.py` — lazy thread-safe singleton `SkeletonIndex`
+  (один load ~1.4с на процесс); env-флаги `FVSC_SKELETON=0` (выключить) и
+  `FVSC_CONCEPTNET_PATH` (кастомный путь к JSON). Отсутствующий JSON = no-op.
+- Врезки во все 3 ingest-пути: `POST /spaces/{name}/ingest` (новые термы),
+  `POST /viz/file_ingest` (live watcher, новые термы, `skeleton_added` в ответе),
+  `build_from_vault` worker (полный seed после билда, ошибка не роняет билд).
+- `service/tests/test_skeleton_wiring.py` — 3/3 через TestClient (in-process,
+  без live-сервера): seeding, disable-флаг, идемпотентность повторного ingest.
 
 ### 2. ⚠️ Re-ingest живой карты после stable_hash (~30 мин + время билда)
 
