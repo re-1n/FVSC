@@ -1,146 +1,122 @@
 # Следующая сессия — состояние проекта
 
-## Обновлено: 2026-06-15 (ночь) — SESSION SUMMARY (first honest live UX test)
+## Обновлено: 2026-07-05 — синхронизация с реальностью (файл отставал на 3 сессии)
 
 ---
 
-## 🔥 Что сделано за сессию 2026-06-15
+## 🔥 Что сделано после 2026-06-15 (файл не обновлялся, вот сводка по коммитам)
 
-Первый честный прогон онбординга «как новый юзер» — бэкап cache + data.json, перезагрузка плагина, проход всей цепочки. Live-тест вскрыл 5 багов, **все запатчены**. Карта Rein'а (1193 концепта) теперь стабильно загружается в UI. Единственное что не сделано — Ollama auto-management (priority #1 следующей сессии).
+### 2026-06-16 — Ollama auto-management ✅ ЗАКРЫТ (был priority #1)
 
-### Live-тест баги и фиксы
+Полностью реализован план 1.1–1.4 из прошлой версии этого файла:
 
-1. **`testPython` формула версии** (`obsidian-plugin/src/paths.ts`):
-   - `sys.version_info[0]*10+[1]` → для Py3.13 даёт `43`, проверка `v >= 310` всегда false.
-   - **Автодетект Python ни разу за всю историю не мог сработать.** Залив пользователей через INSTALL_RU.md «вписать pythonPath руками» это маскировал.
-   - Фикс: `*100+`.
+- `obsidian-plugin/src/ollama.ts` — autodetect (Win/macOS/Linux) + spawn `ollama serve`
+  detached (unref + stdio=ignore), переживает закрытие Obsidian как tray-app.
+- `main.ts`: `tryAutoStartOllama()` в параллель с `backend.start()` — к моменту
+  открытия view `ollama_up` уже true.
+- `view.ts`: inline model picker когда `modelName ∉ models_available`;
+  race fix плашки «Чат не подключён» — 3 consecutive misses вместо мгновенного рендера.
+- `POST /viz/ollama_pull` SSE (worker-thread + queue.Queue, как build_from_vault);
+  `OllamaClient.pull_stream()`.
+- `paths.ts`: `macosSystemCandidates()` — закрыт и Mac-эквивалент бага автодетекта Python.
+- Custom `OLLAMA_MODELS`: `detectOllamaModelsDir()`, поле Settings «Папка моделей Ollama»
+  с autodetect-hint, плашка «Перезапустить Ollama» (taskkill + respawn с env),
+  `killAllOllama()` / `restartOllamaWithModelsDir()`.
+- Model picker в 3 секции: «Установлено у тебя» / «Рекомендованные» (qwen2.5 7/14/32b,
+  llama3.1:8b, gemma2:9b, qwen2.5-coder:14b) / «Своя модель».
+- `windowsHide` на всех spawnSync — убраны мигающие cmd-окна.
 
-2. **Obsidian не наследует bash PATH** (`paths.ts`):
-   - `which python` в bash показывает Python313, в процессе Obsidian'а — нет.
-   - Фикс: новая функция `windowsSystemCandidates()` — прямой системный поиск:
-     - `%LOCALAPPDATA%\Programs\Python\Python3*\python.exe`
-     - `Program Files\Python3*\python.exe` + x86
-     - `C:\Windows\py.exe` (launcher)
-   - Также: `isLiveFile()` через `statSync` — фильтрует broken symlinks (твой venv создан git-bash'ом в unix-стиле, `venv/bin/python` → broken).
+### 2026-07-02 — restart-invariant core (fix фундаментального бага)
 
-3. **Backend race на double-build** (`service/viz_router.py`):
-   - `_state["bootstrap_running"] = True` ставился ВНУТРИ `event_stream()` генератора, ПОСЛЕ возврата StreamingResponse.
-   - Два POST'а проходили проверку → два worker'а на cache → cache corruption.
-   - Фикс: атомарный claim в эндпоинте до return, release в finally генератора.
+- `stable_hash()` (SHA-256) вместо встроенного `hash()` в `get_term_vector`,
+  `_role_transform`, `_relation_transform`. Встроенный hash рандомизирован
+  per-process (PYTHONHASHSEED): после рестарта сервиса тот же терм получал
+  другой базовый вектор → consolidation переставала срабатывать, compare_maps
+  сравнивал несовместимые базисы.
+- ⚠️ **Старые .pkl карты построены на нестабильных хешах — их нужно
+  пере-ingest'ить из vault'а** (касается живой карты Rein'а!).
+- `_orthogonal_matrix()` — lru_cache детерминированного QR: 500 judgments
+  @ dim=128: 3.56s → 0.36s (~10x).
+- `purge_source()` crash fix (read-only properties → `concept.invalidate()`).
+- Новый suite `core/test_restart_invariance.py` — байт-идентичность векторов
+  между процессами с разным PYTHONHASHSEED.
 
-4. **`/viz/status` не lazy-load cache** (`viz_router.py`) — главный виновник «карта не работает»:
-   - Смотрел `_state["space"]`, не вызывал `_get_space()`.
-   - После backend startup → cache на диске → `space_loaded=false`.
-   - View рендерил CTA «Построить карту» вместо загрузки существующей карты, и пользователь запускал build_from_vault заново каждый раз.
-   - Фикс: lazy-load внутри `viz_status()`.
-   - Бонус-фикс view: при `vault_cache_exists && !space_loaded` показывать «Загружаю карту из cache…», не CTA.
+### 2026-07-04 — cascade-слои: feedback (live) + skeleton (core-only)
 
-5. **View self-dedup race** (`obsidian-plugin/src/view.ts`):
-   - Первая dedup-логика (`peers[0] !== ours`) сохраняла первый дубль.
-   - Симптом: две полные копии view (toolbar+iframe×2) внутри одного pane.
-   - Фикс: симметричная логика — каждый instance detach'ит ВСЕХ других peers.
-
-### Связанные UX-фиксы плагина
-
-- `BootstrapModal.activeInstance` singleton — два клика не открывают две модалки.
-- `buildBtn.disabled = true` при клике — UI guard.
-- `attachToInflightBuild()` — если backend ответил 409 (билд уже идёт), второй модал переключается в passive polling вместо запуска дубля.
-- `scheduleBootstrapCheck` в main.ts — 10 ретраев по 1с на `/viz/status`. Раньше один setTimeout 1000ms давал «через раз».
-- `onLayoutReady` detach дублей view из session restore.
-
----
-
-## 📊 Метрики 2026-06-15
-
-| | До live-теста | После |
-|---|---|---|
-| Багов критичных для нового юзера | 5 невидимых | 0 |
-| Размер main.js | 37.9 KB | 43.6 KB |
-| Полей Settings обязательных | 0 (заявлено) | 0 (реально работает) |
-| Cache загружается на старте | нет (lazy на /viz, но плагин рендерил CTA до этого) | да (lazy через /viz/status) |
-| Защита от double-build | UI-only, обходилась race | UI + backend |
-| Тесты ядра (test_invariants) | 125/125 | 125/125 (не трогали) |
-| Smoke service (test_smoke.py) | 11/11 | 11/11 (не трогали) |
-
-### Verified end-to-end (live, не мокированно)
-- Полный цикл «свежий vault → автодетект → backend start → Bootstrap → build → cache → reload → карта в UI».
-- Cache 99 MB load <1с.
-- Карта рендерится: 1193 концепта, кластеры видны.
-- BootstrapModal с прогрессом по 9 стадиям работает.
-- Dedup view: после фикса — одна view в одном pane.
-
-### Не сделано
-- **Ollama auto-management** (см. ниже, priority #1).
-- Live build_from_vault на полностью **первом** vault'е через UI на чистой машине без Python — не проверено (Python всё ещё ставится вручную).
+- **FeedbackEngine → сервис** (третий слой каскада, live):
+  - `GET  /spaces/{name}/feedback/questions` — калибровочные вопросы из состояния карты
+  - `POST /spaces/{name}/feedback/answer` — confirm/reject/promote/... (id одноразовые, 404 на повтор)
+  - `GET  /spaces/{name}/feedback/stats` — прогресс ревью
+  - Контрактные тесты `core/test_feedback.py` (138 строк): противоречия AFFIRM/NEGATIVE,
+    confirm/reject/rebuild ρ, dedup вопросов, defeasible promotion в L0, reactivation.
+- **Skeleton layer** (первый слой каскада, `core/skeleton.py`) — **ТОЛЬКО core, в сервис НЕ подключён**:
+  - `SkeletonIndex.from_conceptnet()` — 132,838 judgments индексируются за ~1.4с один раз,
+    per-ingest seeding ~0.01с (раньше `load_for_terms()` перечитывал весь JSON на каждый вызов).
+  - `seed_skeleton(space, index, terms)`: сидирует ТОЛЬКО термы уже присутствующие
+    в space (стенографический принцип), идемпотентен, `max_per_term` против
+    RelatedTo-хабов, modality 0.3 — личные высказывания доминируют.
+  - Коммит-месседж прямо говорит: «Service wiring comes in the next commit» — этого коммита ещё нет.
 
 ---
 
 ## 🎯 Открытые направления (приоритет сверху вниз)
 
-### 1. 🔥 Ollama auto-management (~3-5ч) — БЛОКЕР MASS-ADOPTION
+### 1. 🔥 Skeleton layer → service wiring (~1-2ч) — начатое незаконченное
 
-См. `feedback_ollama_auto.md` в памяти. Rein чётко зафиксировал:
-> «подразумевается что это само будет при наличии ollama её запускать типо и выбирать загруженную модель или предлагать выбрать из списка загруженных моделей»
+`core/skeleton.py` готов и оттестирован, но ничего в `service/` его не вызывает.
+План:
+- Singleton `SkeletonIndex` в service (lazy, один load на процесс).
+- Вызов `seed_skeleton()` в ingest-пути (после добавления personal judgments,
+  на новые термы) — и в `build_from_vault`, и в live watcher / инкрементальном ingest.
+- Настройка/флаг чтобы можно было выключить (и путь к conceptnet_ru.json конфигурируемый).
+- Smoke-тест через TestClient: ingest → термы обросли skeleton-компонентами.
 
-Конкретный план:
+### 2. ⚠️ Re-ingest живой карты после stable_hash (~30 мин + время билда)
 
-**1.1 `obsidian-plugin/src/ollama.ts`** — новый модуль по аналогии с `paths.ts`:
-- `detectOllama()`: `where ollama` / `%LOCALAPPDATA%\Programs\Ollama\ollama.exe` / `D:\Ollama\ollama.exe` / macOS `/opt/homebrew/bin/ollama`, `/usr/local/bin/ollama`.
-- `ensureOllamaRunning(execPath)`: если 11434 не слушает — `spawn('ollama', ['serve'], { detached: true, stdio: 'ignore' })`. Health-poll каждые 500мс до 10с.
-- `listLocalModels()`: уже есть в backend (`/viz/status.models_available`), плагин может использовать через `/viz/status`.
+Карта Rein'а (1193 концепта, cache 99 MB) построена до 0bbb147 — на нестабильных
+хешах. Формально работает, но consolidation/compare с новыми данными некорректны.
+Прогнать build_from_vault заново, убедиться что cache пересоздан.
 
-**1.2 Plugin orchestration** (`main.ts`):
-- После `backend.start()` up → проверить `/viz/status.ollama_up`.
-- Если false → `detectOllama()` → `ensureOllamaRunning()` → refresh status.
-- Если up + `settings.modelName` НЕ в `models_available` → открыть inline model-picker (`bootstrap.ts`-like, но без билда).
+### 3. Live UX тест: интерпретация через ρ (~30 мин — harness готов)
 
-**1.3 Race fix «Чат не подключён»**:
-- Сейчас view рендерит плашку Ollama-hint при `!ollama_up` мгновенно при `onOpen`.
-- Должен: ждать ~5-10с после открытия view, и только если за это время backend не сообщил ollama_up — рендерить плашку.
-- Реализация: в `view.ts` после первого `/viz/status` если `!ollama_up` — запустить setInterval опрос, рендерить плашку только когда стабильно false 3 подряд.
+- `service/tests/test_interpretation.py`, `interpret_cli.py`, `interpretation_cases.json`.
+- Прогнать на свежей (пере-ingest'нутой!) карте 3-5 кейсов, смотреть divergence_score.
+  > 0.6 — interpretation lens работает; меньше — диагностика system prompt / top_n.
+- Требует скачанной модели (теперь ставится через model picker в UI).
 
-**1.4 Model picker** (если model не из списка):
-- Inline-плашка с radio-кнопками установленных моделей + кнопка «Скачать qwen2.5:14b» если список пуст.
-- На клик: записать в settings, перезапустить backend.
+### 4. Feedback UI в плагине (~2-3ч)
 
-### 2. 🔥 Live UX тест: интерпретация через ρ (~30 мин — harness готов)
+Endpoints третьего слоя live, но плагин их не использует. Минимум: панель/модал
+«Калибровка» — вопросы из `/feedback/questions`, кнопки confirm/reject/skip,
+прогресс из `/feedback/stats`.
 
-Harness уже создан в этой сессии:
-- `service/tests/test_interpretation.py` — pytest golden с метриками divergence
-- `service/tests/interpret_cli.py` — интерактивный CLI
-- `service/tests/interpretation_cases.json` — кейс «хлам» + шаблон
-
-Прогнать на твоей карте 3-5 кейсов, посмотреть divergence_score. Если > 0.6 — interpretation lens работает; меньше — диагностика system prompt / top_n.
-
-### 3. macOS-аналог `windowsSystemCandidates` (~1ч)
-Иначе при попытке тестового онбординга на Mac будет тот же фейл что был у Python313 на Windows. Добавить:
-- `/opt/homebrew/bin/python3`, `/usr/local/bin/python3`, `~/.pyenv/shims/python3`
-- `/Applications/Python\ 3.*/IDLE.app` (CPython.org installer)
-
-### 4. PyInstaller bundle (~6-10ч) — перенесено
+### 5. PyInstaller bundle (~6-10ч) — перенесено
 Заменяет шаги 1, 5 из INSTALL_RU.md.
 
-### 5. Silent_pool в Антураже (~1ч) — перенесено
+### 6. Silent_pool в Антураже (~1ч) — перенесено
 Endpoint работает, чат не использует.
 
-### 6. CM6 подсветка слов (~2-3ч) — перенесено
-### 7. Нативный TS-граф без iframe (~3-4ч) — перенесено
+### 7. CM6 подсветка слов (~2-3ч) — перенесено
+### 8. Нативный TS-граф без iframe (~3-4ч) — перенесено
 
 ---
 
 ## 🚦 Быстрый старт следующей сессии
 
 ```bash
-# Тесты ядра (без изменений)
+# Тесты ядра
 python -X utf8 -m core.test_invariants                # 125/125
+python -m pytest core/test_restart_invariance.py -v   # НОВОЕ 07-02
+python -m pytest core/test_feedback.py -v             # НОВОЕ 07-04
+python -m pytest core/test_skeleton.py -v             # НОВОЕ 07-04
 
 # Smoke service (требует запущенного backend'а)
 python -m uvicorn service.app:app --host 127.0.0.1 --port 8765 &
 python -m pytest service/tests/test_smoke.py -v       # 11/11
 
-# Interpretation harness — НОВОЕ в этой сессии
+# Interpretation harness
 python -m service.tests.interpret_cli                 # interactive
-python -m pytest service/tests/test_interpretation.py -v -s   # golden
+python -m pytest service/tests/test_interpretation.py -v -s   # golden (skip без модели)
 
 # Плагин: пересборка после правок TS
 cd obsidian-plugin && npm run build
@@ -165,12 +141,31 @@ cp -f main.js styles.css manifest.json "$DEST/"
     - Иначе клиент видит «space_loaded=false» при наличии данных и принимает неправильные решения.
 
 13. **Mass-adoption — не «когда-нибудь»** (2026-06-15):
-    - Ollama auto-management — такой же блокер как автодетект Python.
+    - Ollama auto-management — такой же блокер как автодетект Python. ✅ Закрыт 06-16.
     - Любой шаг «открой терминал и запусти X» = failed UX для не-технического взрослого.
+
+14. **Никогда не использовать встроенный `hash()` для персистентных данных** (2026-07-02):
+    - PYTHONHASHSEED рандомизирует его per-process → «работает в сессии, ломается после рестарта».
+    - Только `stable_hash()` (SHA-256). Старые артефакты на нестабильных хешах — пере-ingest.
+
+15. **Слой каскада не существует, пока сервис его не вызывает** (2026-07-04):
+    - ThesaurusLoader умел конвертировать edges с 05-31, но никто его не звал.
+    - FeedbackEngine лежал в core без единого импорта.
+    - Чек: `grep -r "ИмяКласса" service/` — если пусто, слоя в продукте нет.
+
+16. **NEXT_SESSION.md обновлять в конце КАЖДОЙ сессии с коммитами** (2026-07-05):
+    - Файл отставал на 3 сессии; «priority #1 Ollama» был закрыт 3 недели назад.
 
 ---
 
 ## Откуда мы пришли (предыдущие сессии)
+
+### 2026-06-15 (ночь) — первый честный live UX тест
+5 корневых багов найдено и запатчено: формула версии Python в testPython
+(`*10` → `*100`), Obsidian не наследует bash PATH (`windowsSystemCandidates()`),
+backend race на double-build (атомарный claim), `/viz/status` без lazy-load cache
+(главный виновник «карта не работает»), view self-dedup race. Карта Rein'а
+(1193 концепта) стабильно грузится. Создан interpretation harness.
 
 ### 2026-06-13 (вечер) — MVP onboarding layer
 4-слойный онбординг сверху ядра: SSE build_from_vault, autodetect, BootstrapModal, INSTALL_RU. См. memory `mvp_onboarding_2026_06_13.md`.
