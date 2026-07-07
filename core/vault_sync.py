@@ -4,9 +4,13 @@ vault_sync.py — One-shot pipeline: vault -> SemanticSpace -> .md concept notes
 vault after editing notes.
 
 Usage:
-    python -m core.vault_sync                       # default vault path
-    python -m core.vault_sync --vault "C:\\path\\to\\vault"
+    python -m core.vault_sync --vault "/path/to/vault"
+    python -m core.vault_sync --vault "/path/to/vault" --conceptnet "/path/to/conceptnet_ru.json"
     python -m core.vault_sync --top 200 --no-html
+
+Environment variables (used if --vault is not provided):
+    FVSC_VAULT_PATH — path to Obsidian vault
+    FVSC_CONCEPTNET_PATH — path to conceptnet_ru.json (optional, will warn if missing)
 
 What it does:
     1. Walks vault, strips Markdown, builds corpus.
@@ -20,6 +24,7 @@ What it does:
 from __future__ import annotations
 
 import argparse
+import os
 import pickle
 import sys
 import time
@@ -43,8 +48,24 @@ from .visualize_space import render_html
 from .provenance import build_provenance_and_silent
 
 
-DEFAULT_VAULT = Path(r"C:\Users\daur1\Desktop\экзокортекс для fvsc map\Rein")
-DEFAULT_CONCEPTNET = Path(r"C:\Users\daur1\Desktop\FVSC\data\conceptnet_ru.json")
+def _get_default_vault() -> Optional[Path]:
+    """Get vault path from environment variable or return None."""
+    vault_path = os.environ.get("FVSC_VAULT_PATH")
+    return Path(vault_path) if vault_path else None
+
+
+def _get_default_conceptnet() -> Optional[Path]:
+    """Get ConceptNet path from environment variable or FVSC/data dir."""
+    conceptnet_path = os.environ.get("FVSC_CONCEPTNET_PATH")
+    if conceptnet_path:
+        return Path(conceptnet_path)
+    
+    # Try to find conceptnet_ru.json in FVSC/data relative to this file
+    fvsc_root = Path(__file__).resolve().parent.parent
+    default_path = fvsc_root / "data" / "conceptnet_ru.json"
+    return default_path if default_path.exists() else None
+
+
 CACHE_NAME = "_fvsc_cache.pkl"
 
 
@@ -235,8 +256,23 @@ def run(
 
 def main():
     ap = argparse.ArgumentParser(description="Sync Obsidian vault into FVSC concept notes.")
-    ap.add_argument("--vault", type=Path, default=DEFAULT_VAULT)
-    ap.add_argument("--conceptnet", type=Path, default=DEFAULT_CONCEPTNET)
+    
+    default_vault = _get_default_vault()
+    default_conceptnet = _get_default_conceptnet()
+    
+    ap.add_argument(
+        "--vault",
+        type=Path,
+        default=default_vault,
+        required=default_vault is None,
+        help="Path to Obsidian vault (or set FVSC_VAULT_PATH env var)"
+    )
+    ap.add_argument(
+        "--conceptnet",
+        type=Path,
+        default=default_conceptnet,
+        help="Path to conceptnet_ru.json (or set FVSC_CONCEPTNET_PATH env var)"
+    )
     ap.add_argument("--top", type=int, default=150, help="Top N concepts to export as notes")
     ap.add_argument("--no-html", action="store_true", help="Skip HTML map rendering")
     ap.add_argument("--dim", type=int, default=64)
