@@ -393,6 +393,14 @@ async def compare_spaces(a: str, b: str, top_k: int = 20):
         raise HTTPException(status_code=404, detail=f"Space '{a}' not found")
     if bundle_b is None:
         raise HTTPException(status_code=404, detail=f"Space '{b}' not found")
+    if bundle_a.space.dim != bundle_b.space.dim:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Spaces use incompatible dimensions: "
+                f"{a}={bundle_a.space.dim}, {b}={bundle_b.space.dim}"
+            ),
+        )
     result = SemanticSpace.compare_maps(bundle_a.space, bundle_b.space, top_k=top_k)
     return CompareResponse(
         shared_concepts=[{"term": t, "similarity": round(float(s), 4)} for t, s in result.get("shared_concepts", [])],
