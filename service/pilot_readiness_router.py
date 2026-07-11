@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
 
-from .pilot_evaluation_router import EVALUATION_REPORT_NAME
 from .pilot_feedback import feedback_summary
-from .pilot_router import PILOT_DIRECTORY, _ensure_loaded
+from .pilot_report_store import load_evaluation_report
+from .pilot_router import _ensure_loaded
 
 
 router = APIRouter(prefix="/pilot", tags=["pilot-readiness"])
@@ -32,14 +31,7 @@ def _feedback_metrics(feedback: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _load_latest_evaluation(vault: Path) -> dict[str, Any] | None:
-    path = vault / PILOT_DIRECTORY / EVALUATION_REPORT_NAME
-    if not path.exists() or not path.is_file() or path.is_symlink():
-        return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        return None
-    return payload if isinstance(payload, dict) else None
+    return load_evaluation_report(vault)
 
 
 def assess_readiness(
