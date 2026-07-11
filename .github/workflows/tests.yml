@@ -24,30 +24,51 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip && python -m pip install -r requirements-dev.txt
       - name: Run unit tests
-        run: python -m pytest -q
+        run: |
+          mkdir -p artifacts
+          python -m pytest -q --junitxml=artifacts/pytest.xml 2>&1 | tee artifacts/pytest.log
+      - name: Upload unit-test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fvsc-unit-test-diagnostics
+          path: |
+            artifacts/pytest.log
+            artifacts/pytest.xml
+          if-no-files-found: warn
       - name: Run controlled viability benchmark
         run: python -m core.viability_benchmark --output artifacts/viability-report.json
       - name: Upload viability report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fvsc-viability-report
           path: artifacts/viability-report.json
-          if-no-files-found: error
+          if-no-files-found: warn
 
   obsidian-plugin:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: obsidian-plugin
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
       - name: Install plugin dependencies
-        run: npm install --no-audit --no-fund
+        working-directory: obsidian-plugin
+        run: |
+          mkdir -p ../artifacts
+          npm install --legacy-peer-deps --no-audit --no-fund 2>&1 | tee ../artifacts/npm-install.log
       - name: Typecheck plugin
-        run: npx tsc --noEmit
+        working-directory: obsidian-plugin
+        run: npx tsc --noEmit 2>&1 | tee ../artifacts/typecheck.log
       - name: Build plugin
-        run: npm run build
+        working-directory: obsidian-plugin
+        run: npm run build 2>&1 | tee ../artifacts/plugin-build.log
+      - name: Upload plugin diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fvsc-plugin-diagnostics
+          path: artifacts/*.log
+          if-no-files-found: warn
