@@ -11,7 +11,6 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from core.density_core import SemanticSpace, facets, purity, von_neumann_entropy
@@ -34,6 +33,7 @@ from .models import (
     SpaceMeta,
 )
 from .retrieval import retrieve_by_query
+from .security import configure_security
 from .store import SpaceStore
 from . import viz_router as viz_router_module
 from .viz_router import router as viz_router
@@ -88,17 +88,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
-
-# Local-only service: allow any origin so the Obsidian plugin (origin
-# `app://obsidian.md`) can fetch /viz/status and stream SSE. Service binds
-# 127.0.0.1, so there's no real risk surface here.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+configure_security(app)
 app.include_router(viz_router)
 
 
