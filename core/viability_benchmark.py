@@ -1,13 +1,14 @@
 """Controlled viability benchmark for FVSC density-matrix semantics.
 
-This benchmark is deliberately falsifiable.  It asks whether the density-matrix
-layer preserves the directed containment relations annotated in
-``evaluation.GOLD_CONTAINMENT`` and whether the result is stable across matrix
-dimensions.  It also compares FVSC with the direct parser-edge baseline.
+The primary test reproduces FVSC's production containment query: graded
+hyponymy is computed on *mass-preserving* (not trace-normalised) density
+matrices.  A trace-normalised variant is retained as a negative control because
+normalising both operators to equal trace removes the mass asymmetry on which
+this implementation's directed relation depends.
 
-Passing this benchmark establishes only *controlled technical viability*.
-It does not establish ecological validity for personal semantic maps; that
-requires blinded human annotations from held-out vault material.
+Passing this benchmark establishes only controlled technical viability.  It
+does not validate psychological or personal-semantic interpretation; that
+requires a blinded study on held-out vault material.
 """
 
 from __future__ import annotations
@@ -37,12 +38,13 @@ class PairObservation:
     container: str
     contained: str
     resolved: bool
-    matrix_margin: float
+    mass_preserving_margin: float
+    trace_normalized_margin: float
     direct_edge_margin: float
 
 
 def _term_matches(actual: str, expected: str) -> bool:
-    """Conservative compatibility matcher for the current non-lemmatised parser."""
+    """Compatibility matcher for the current non-lemmatised parser."""
     actual = actual.casefold()
     expected = expected.casefold()
     if actual == expected:
@@ -64,31 +66,39 @@ def _edge_weight(si: dict, source: str, target: str) -> float:
         return 0.0
     contains = si.get(source_key, {}).get("contains", {})
     target_key = _find_key(target, contains)
-    if target_key is None:
-        return 0.0
-    return float(contains[target_key])
+    return float(contains[target_key]) if target_key is not None else 0.0
 
 
 def _normalise_density(rho: np.ndarray) -> np.ndarray:
     trace = float(np.trace(rho))
-    if trace <= _EPS:
-        return rho
-    return rho / trace
+    return rho if trace <= _EPS else rho / trace
 
 
-def _matrix_margin(rhos: dict[str, np.ndarray], container: str, contained: str) -> tuple[bool, float]:
-    """Return directional margin for ``container contains contained``.
+def _direction_margin(
+    rhos: dict[str, np.ndarray],
+    container: str,
+    contained: str,
+    *,
+    normalize: bool,
+) -> tuple[bool, float]:
+    """Return margin for the hypothesis ``container contains contained``.
 
-    ``graded_hyponymy(A, B)`` measures the degree to which A is included in B.
-    Therefore the forward direction is ``contained -> container``.
+    ``graded_hyponymy(A, B)`` is the degree to which A is included in B, so the
+    forward score is ``contained -> container``.  Production FVSC queries use
+    unnormalised matrices here; the optional normalisation is a diagnostic
+    control only.
     """
     container_key = _find_key(container, rhos)
     contained_key = _find_key(contained, rhos)
     if container_key is None or contained_key is None:
         return False, 0.0
 
-    rho_container = _normalise_density(rhos[container_key])
-    rho_contained = _normalise_density(rhos[contained_key])
+    rho_container = rhos[container_key]
+    rho_contained = rhos[contained_key]
+    if normalize:
+        rho_container = _normalise_density(rho_container)
+        rho_contained = _normalise_density(rho_contained)
+
     forward = graded_hyponymy(rho_contained, rho_container)
     reverse = graded_hyponymy(rho_container, rho_contained)
     return True, float(forward - reverse)
@@ -100,7 +110,6 @@ def collect_observations(
     dim: int = 64,
     config: ParseConfig | None = None,
 ) -> list[PairObservation]:
-    """Parse the gold sentences and collect one observation per directed pair."""
     config = config or ParseConfig(min_freq=1, window=5)
     observations: list[PairObservation] = []
 
@@ -108,7 +117,12 @@ def collect_observations(
         si = text_to_semantic_input(sentence, config=config)
         _, rhos = parse_semantic_input(si, dim=dim)
         for container, contained in expected_pairs:
-            resolved, matrix_margin = _matrix_margin(rhos, container, contained)
+            resolved, mass_margin = _direction_margin(
+                rhos, container, contained, normalize=False
+            )
+            _, normalized_margin = _direction_margin(
+                rhos, container, contained, normalize=True
+            )
             direct_margin = (
                 _edge_weight(si, container, contained)
                 - _edge_weight(si, contained, container)
@@ -119,7 +133,8 @@ def collect_observations(
                     container=container,
                     contained=contained,
                     resolved=resolved,
-                    matrix_margin=matrix_margin,
+                    mass_preserving_margin=mass_margin,
+                    trace_normalized_margin=normalized_margin,
                     direct_edge_margin=direct_margin,
                 )
             )
@@ -150,7 +165,6 @@ def _bootstrap_ci(values: Sequence[float], *, samples: int, seed: int) -> tuple[
 
 
 def _one_sided_sign_pvalue(margins: Iterable[float]) -> float:
-    """Exact one-sided sign test against chance, excluding numerical ties."""
     non_ties = [margin for margin in margins if abs(margin) > _EPS]
     n = len(non_ties)
     if n == 0:
@@ -178,7 +192,7 @@ def _summarise_model(
     margins = [
         float(getattr(obs, field))
         for obs in observations
-        if (obs.resolved or not use_resolution)
+        if obs.resolved or not use_resolution
     ]
     ci_low, ci_high = _bootstrap_ci(outcomes, samples=bootstrap_samples, seed=seed)
     return {
@@ -201,7 +215,6 @@ def _summarise_model(
 def _decision(matrix: dict, direct: dict, dimensional_scores: dict[str, float]) -> dict:
     score_range = max(dimensional_scores.values()) - min(dimensional_scores.values())
     reasons: list[str] = []
-
     passes_signal = (
         matrix["coverage"] >= 0.80
         and matrix["accuracy"] >= 0.65
@@ -211,8 +224,10 @@ def _decision(matrix: dict, direct: dict, dimensional_scores: dict[str, float]) 
 
     if passes_signal and stable:
         controlled_viability = "pass"
-        reasons.append("directional signal exceeds the pre-registered chance threshold")
-        reasons.append("accuracy is stable across tested dimensions")
+        reasons.extend([
+            "directional signal exceeds the pre-registered chance threshold",
+            "accuracy is stable across tested dimensions",
+        ])
     elif matrix["accuracy"] >= 0.55 and matrix["coverage"] >= 0.70:
         controlled_viability = "inconclusive"
         reasons.append("a directional signal exists, but evidence is not strong enough")
@@ -246,49 +261,65 @@ def run_benchmark(
     seed: int = 20260711,
     gold_set: Sequence[tuple[str, list[tuple[str, str]]]] = GOLD_CONTAINMENT,
 ) -> dict:
-    """Run the controlled benchmark and return a JSON-serialisable report."""
     dimensional_scores: dict[str, float] = {}
     observations_by_dim: dict[int, list[PairObservation]] = {}
 
     for dim in dims:
         observations = collect_observations(gold_set=gold_set, dim=dim)
         observations_by_dim[dim] = observations
-        outcomes = [_outcome(obs.matrix_margin, resolved=obs.resolved) for obs in observations]
+        outcomes = [
+            _outcome(obs.mass_preserving_margin, resolved=obs.resolved)
+            for obs in observations
+        ]
         dimensional_scores[str(dim)] = float(np.mean(outcomes)) if outcomes else 0.0
 
     primary_dim = 64 if 64 in observations_by_dim else dims[0]
     primary = observations_by_dim[primary_dim]
-    matrix = _summarise_model(
+    mass_matrix = _summarise_model(
         primary,
-        field="matrix_margin",
+        field="mass_preserving_margin",
         bootstrap_samples=bootstrap_samples,
         seed=seed,
+        use_resolution=True,
+    )
+    normalized_control = _summarise_model(
+        primary,
+        field="trace_normalized_margin",
+        bootstrap_samples=bootstrap_samples,
+        seed=seed + 1,
         use_resolution=True,
     )
     direct = _summarise_model(
         primary,
         field="direct_edge_margin",
         bootstrap_samples=bootstrap_samples,
-        seed=seed + 1,
+        seed=seed + 2,
         use_resolution=False,
     )
 
-    report = {
-        "benchmark": "fvsc-controlled-directionality-v1",
+    return {
+        "benchmark": "fvsc-controlled-directionality-v2",
         "primary_dimension": primary_dim,
         "n_sentences": len(gold_set),
         "n_directional_pairs": len(primary),
         "models": {
-            "fvsc_density": matrix,
+            "fvsc_density_mass_preserving": mass_matrix,
+            "fvsc_density_trace_normalized_control": normalized_control,
             "direct_parser_edges": direct,
             "chance": {"accuracy": 0.5},
         },
         "dimension_accuracy": dimensional_scores,
-        "decision": _decision(matrix, direct, dimensional_scores),
+        "decision": _decision(mass_matrix, direct, dimensional_scores),
+        "method_note": (
+            "v1 incorrectly normalised both matrices before graded hyponymy; "
+            "equal trace makes the directional margin symmetric. v2 matches "
+            "production FVSC and retains that variant as a negative control."
+        ),
         "limitations": [
             "small, hand-authored Russian controlled set",
             "gold relations are not independently annotated",
             "prefix matching compensates for missing lemmatisation",
+            "mass asymmetry may encode frequency/weight rather than semantic direction",
             "this does not validate personal-semantic interpretation",
             "a blinded held-out human study is required for external validity",
         ],
@@ -298,28 +329,30 @@ def run_benchmark(
                 "container": obs.container,
                 "contained": obs.contained,
                 "resolved": obs.resolved,
-                "matrix_margin": obs.matrix_margin,
+                "mass_preserving_margin": obs.mass_preserving_margin,
+                "trace_normalized_margin": obs.trace_normalized_margin,
                 "direct_edge_margin": obs.direct_edge_margin,
             }
             for obs in primary
         ],
     }
-    return report
 
 
 def _print_summary(report: dict) -> None:
-    matrix = report["models"]["fvsc_density"]
+    mass = report["models"]["fvsc_density_mass_preserving"]
+    normalized = report["models"]["fvsc_density_trace_normalized_control"]
     direct = report["models"]["direct_parser_edges"]
     decision = report["decision"]
-    print("FVSC controlled viability benchmark")
+    print("FVSC controlled viability benchmark v2")
     print(f"pairs: {report['n_directional_pairs']} | primary dim: {report['primary_dimension']}")
     print(
-        "density: "
-        f"accuracy={matrix['accuracy']:.3f} "
-        f"CI95=[{matrix['ci95'][0]:.3f}, {matrix['ci95'][1]:.3f}] "
-        f"coverage={matrix['coverage']:.3f} "
-        f"p={matrix['p_vs_chance_one_sided']:.4g}"
+        "mass-preserving density: "
+        f"accuracy={mass['accuracy']:.3f} "
+        f"CI95=[{mass['ci95'][0]:.3f}, {mass['ci95'][1]:.3f}] "
+        f"coverage={mass['coverage']:.3f} "
+        f"p={mass['p_vs_chance_one_sided']:.4g}"
     )
+    print(f"trace-normalized control: accuracy={normalized['accuracy']:.3f}")
     print(f"direct parser edges: accuracy={direct['accuracy']:.3f}")
     print(f"dimension accuracy: {report['dimension_accuracy']}")
     print(f"controlled viability: {decision['controlled_viability']}")
@@ -328,7 +361,7 @@ def _print_summary(report: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, help="Optional path for the JSON report")
+    parser.add_argument("--output", type=Path, help="Optional JSON report path")
     parser.add_argument("--bootstrap-samples", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=20260711)
     args = parser.parse_args()
