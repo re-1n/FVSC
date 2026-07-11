@@ -6,15 +6,13 @@ import type { BackendController } from "./backend";
  * the semantic map stays in sync without manual rebuilds.
  *
  * Per-path debouncing: rapid edits to one note collapse into a single POST.
- * The backend handles ingest incrementally — see service/viz_router.py
- * /viz/file_ingest. We post the full file text on every change rather than a
- * diff, because the backend purges the file's prior contributions and re-adds
- * cleanly anyway.
+ * The legacy visualization map and the append-only pilot ledger are updated
+ * independently so a pilot failure never blocks the established map workflow.
  */
 
 const DEBOUNCE_MS = 1500;
 const MAX_FILE_SIZE = 5 * 1024 * 1024;   // 5 MB safety cap
-const EXCLUDE_PREFIXES = ["_fvsc_concepts/", ".obsidian/", ".trash/"];
+const EXCLUDE_PREFIXES = ["_fvsc_concepts/", ".obsidian/", ".trash/", ".fvsc/"];
 
 export interface WatcherCallbacks {
   onActivity: (msg: string) => void;
@@ -125,11 +123,13 @@ export class VaultWatcher {
     this.cb.onActivity(change.action === "delete" ? `–${shortPath(change.path)}` : `↻${shortPath(change.path)}`);
 
     let text: string | undefined;
+    let observedAt = Date.now() / 1000;
     if (change.action !== "delete") {
       const file = this.app.vault.getAbstractFileByPath(change.path);
       if (file instanceof TFile) {
         try {
           text = await this.app.vault.cachedRead(file);
+          observedAt = file.stat.mtime / 1000;
         } catch {
           /* file gone between schedule and send */
           return;
@@ -137,16 +137,19 @@ export class VaultWatcher {
       }
     }
 
+    const payload = {
+      path: change.path,
+      action: change.action,
+      text,
+      old_path: change.oldPath,
+      observed_at: observedAt,
+    };
+
     try {
       const r = await fetch(`${this.backend.baseUrl()}/viz/file_ingest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          path: change.path,
-          action: change.action,
-          text,
-          old_path: change.oldPath,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!r.ok) {
         const body = await r.text().catch(() => "");
@@ -155,6 +158,19 @@ export class VaultWatcher {
         const data = await r.json();
         console.log(`[fvsc-watch] ${change.action} ${shortPath(change.path)} +${data.added}/-${data.purged}` +
           (data.saved ? " 💾" : ""));
+      }
+
+      const pilot = await fetch(`${this.backend.baseUrl()}/pilot/file_ingest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!pilot.ok) {
+        const body = await pilot.text().catch(() => "");
+        console.warn(`[fvsc-pilot] ${change.action} ${change.path} → ${pilot.status}: ${body}`);
+      } else {
+        const data = await pilot.json();
+        console.log(`[fvsc-pilot] snapshot=${String(data.snapshot_id).slice(0, 12)} concepts=${data.concept_count}`);
       }
     } catch (err) {
       console.warn(`[fvsc-watch] network error for ${change.path}:`, err);
