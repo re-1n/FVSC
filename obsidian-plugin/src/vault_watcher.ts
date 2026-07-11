@@ -1,4 +1,4 @@
-import { App, TAbstractFile, TFile, TFolder, Notice } from "obsidian";
+import { App, TAbstractFile, TFile } from "obsidian";
 import type { BackendController } from "./backend";
 
 /**
@@ -12,7 +12,13 @@ import type { BackendController } from "./backend";
 
 const DEBOUNCE_MS = 1500;
 const MAX_FILE_SIZE = 5 * 1024 * 1024;   // 5 MB safety cap
-const EXCLUDE_PREFIXES = ["_fvsc_concepts/", ".obsidian/", ".trash/", ".fvsc/"];
+const EXCLUDE_PREFIXES = [
+  "_fvsc_concepts/",
+  "_fvsc_review/",
+  ".obsidian/",
+  ".trash/",
+  ".fvsc/",
+];
 
 export interface WatcherCallbacks {
   onActivity: (msg: string) => void;
