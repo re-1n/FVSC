@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from .pilot_feedback import latest_feedback_records
 from .pilot_router import _ensure_loaded, _lock, _save
 
 
@@ -82,14 +83,25 @@ async def pilot_review_feedback(req: PilotReviewFeedbackRequest):
             if runtime.snapshot.snapshot_id.startswith(snapshot_ref)
             else snapshot_ref
         )
-        existing = {str(record.get("query_id")) for record in feedback}
+        latest_by_query = {
+            str(record.get("query_id")): record
+            for record in latest_feedback_records(feedback)
+            if str(record.get("query_id", "")).strip()
+        }
         submitted: list[dict[str, Any]] = []
         duplicates: list[str] = []
+        revisions: list[str] = []
         for mark in marks:
             query_id = _query_id(snapshot_ref, mark.term)
-            if query_id in existing:
-                duplicates.append(mark.term)
-                continue
+            previous = latest_by_query.get(query_id)
+            if previous is not None:
+                if (
+                    bool(previous.get("useful")) == mark.useful
+                    and int(previous.get("rating", 0)) == mark.rating
+                ):
+                    duplicates.append(mark.term)
+                    continue
+                revisions.append(mark.term)
             record = {
                 "feedback_id": uuid.uuid4().hex,
                 "recorded_at": time.time(),
@@ -101,9 +113,12 @@ async def pilot_review_feedback(req: PilotReviewFeedbackRequest):
                 "snapshot_id": resolved_snapshot,
                 "term": mark.term,
                 "source_path": str(req.source_path),
+                "supersedes_feedback_id": (
+                    previous.get("feedback_id") if previous is not None else None
+                ),
             }
             feedback.append(record)
-            existing.add(query_id)
+            latest_by_query[query_id] = record
             submitted.append(record)
         _save(runtime, feedback, vault)
         return {
@@ -111,6 +126,8 @@ async def pilot_review_feedback(req: PilotReviewFeedbackRequest):
             "submitted": submitted,
             "submitted_count": len(submitted),
             "duplicates": duplicates,
+            "revisions": revisions,
             "ambiguous": ambiguous,
-            "feedback_count": len(feedback),
+            "feedback_history_count": len(feedback),
+            "feedback_count": len(latest_feedback_records(feedback)),
         }
