@@ -102,6 +102,31 @@ def test_pilot_rebuild_live_update_trace_feedback_and_reload(tmp_path: Path) -> 
         assert review.status_code == 200, review.text
         assert review.json()["concepts"]
 
+        evaluation = client.post(
+            "/pilot/evaluate",
+            json={
+                "train_fraction": 0.5,
+                "bootstrap_samples": 100,
+                "max_files": 100,
+            },
+        )
+        assert evaluation.status_code == 200, evaluation.text
+        evaluation_data = evaluation.json()
+        assert evaluation_data["benchmark"] == "fvsc-chronological-heldout-v1"
+        assert evaluation_data["train_documents"] == 1
+        assert evaluation_data["test_documents"] == 1
+        assert evaluation_data["verdict"] in {
+            "insufficient_data",
+            "promising_added_value",
+            "not_predictive",
+            "no_demonstrated_added_value",
+        }
+        assert Path(evaluation_data["report_path"]).exists()
+
+        latest = client.get("/pilot/evaluate/latest")
+        assert latest.status_code == 200
+        assert latest.json()["benchmark"] == "fvsc-chronological-heldout-v1"
+
     state_file = tmp_path / ".fvsc" / "pilot-state.json"
     assert state_file.exists()
 
