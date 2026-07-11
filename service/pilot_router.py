@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from core.exocortex_ingest import _clean_for_fvsc
+from core.pilot_batch import PilotSourceDocument, build_runtime_from_sources
 from core.pilot_persistence import load_pilot_state, save_pilot_state
 from core.pilot_runtime import PilotRuntime, source_revision
 from core.text_parser_agnostic import text_to_semantic_input
@@ -32,7 +33,7 @@ router = APIRouter(prefix="/pilot", tags=["pilot"])
 PILOT_DIRECTORY = ".fvsc"
 PILOT_STATE_NAME = "pilot-state.json"
 MAX_FILE_SIZE = 5 * 1024 * 1024
-EXCLUDED_PARTS = {".obsidian", ".trash", ".fvsc", "_fvsc_concepts"}
+EXCLUDED_PARTS = {".obsidian", ".trash", ".fvsc", "_fvsc_concepts", "_fvsc_review"}
 
 _runtime: PilotRuntime | None = None
 _feedback: list[dict[str, Any]] = []
@@ -190,17 +191,16 @@ async def pilot_file_ingest(req: PilotFileIngestRequest):
 
 @router.post("/rebuild")
 async def pilot_rebuild():
-    """Rebuild the pilot ledger from all eligible Markdown files in the vault."""
+    """Rebuild the pilot ledger from all eligible Markdown files in one pass."""
     global _runtime, _feedback, _loaded_vault
     async with _lock:
         vault = _vault_path()
         if not vault.exists() or not vault.is_dir():
             raise HTTPException(404, detail="configured vault directory does not exist")
 
-        runtime = PilotRuntime()
+        documents: list[PilotSourceDocument] = []
         files_seen = 0
         files_indexed = 0
-        assertions = 0
         errors: list[dict[str, str]] = []
         for path in sorted(vault.rglob("*.md")):
             relative = path.relative_to(vault)
@@ -208,22 +208,24 @@ async def pilot_rebuild():
                 continue
             files_seen += 1
             try:
-                if path.stat().st_size > MAX_FILE_SIZE:
+                stat = path.stat()
+                if stat.st_size > MAX_FILE_SIZE:
                     errors.append({"path": relative.as_posix(), "error": "file_too_large"})
                     continue
                 text = path.read_text(encoding="utf-8")
-                result = runtime.replace_source(
+                semantic_input = _parse_text(text)
+                documents.append(PilotSourceDocument(
                     source_id=relative.as_posix(),
-                    semantic_input=_parse_text(text),
+                    semantic_input=semantic_input,
                     source_revision=source_revision(text),
-                    observed_at=path.stat().st_mtime,
-                )
-                if result.asserted_events:
+                    observed_at=stat.st_mtime,
+                ))
+                if semantic_input:
                     files_indexed += 1
-                    assertions += result.asserted_events
             except Exception as exc:
                 errors.append({"path": relative.as_posix(), "error": str(exc)})
 
+        runtime = build_runtime_from_sources(documents)
         _runtime = runtime
         _feedback = []
         _loaded_vault = vault
@@ -232,7 +234,7 @@ async def pilot_rebuild():
             "rebuilt": True,
             "files_seen": files_seen,
             "files_indexed": files_indexed,
-            "assertions": assertions,
+            "assertions": runtime.ledger.active_count,
             "errors": errors[:50],
             **runtime.status(),
         }
