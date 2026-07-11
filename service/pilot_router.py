@@ -193,12 +193,17 @@ async def pilot_file_ingest(req: PilotFileIngestRequest):
 
 @router.post("/rebuild")
 async def pilot_rebuild():
-    """Rebuild the pilot ledger from all eligible Markdown files in one pass."""
+    """Rebuild semantic evidence while preserving human feedback history."""
     global _runtime, _feedback, _loaded_vault
     async with _lock:
         vault = _vault_path()
         if not vault.exists() or not vault.is_dir():
             raise HTTPException(404, detail="configured vault directory does not exist")
+
+        try:
+            _old_runtime, preserved_feedback = load_pilot_state(_state_path(vault))
+        except ValueError:
+            preserved_feedback = list(_feedback) if _loaded_vault == vault else []
 
         documents: list[PilotSourceDocument] = []
         files_seen = 0
@@ -229,15 +234,18 @@ async def pilot_rebuild():
 
         runtime = build_runtime_from_sources(documents)
         _runtime = runtime
-        _feedback = []
+        _feedback = preserved_feedback
         _loaded_vault = vault
         _save(runtime, _feedback, vault)
+        summary = feedback_summary(_feedback)
         return {
             "rebuilt": True,
             "files_seen": files_seen,
             "files_indexed": files_indexed,
             "assertions": runtime.ledger.active_count,
             "errors": errors[:50],
+            "feedback_count": summary["count"],
+            "feedback_history_count": summary["history_count"],
             **runtime.status(),
         }
 
