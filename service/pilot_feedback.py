@@ -35,16 +35,16 @@ def latest_feedback_records(records: Iterable[dict[str, Any]]) -> list[dict[str,
 
 def feedback_summary(records: Iterable[dict[str, Any]]) -> dict[str, Any]:
     """Summarize only current feedback revisions."""
-    current = latest_feedback_records(records)
+    history = [dict(record) for record in records]
+    current = latest_feedback_records(history)
     if not current:
         return {
             "count": 0,
-            "history_count": 0,
+            "history_count": len(history),
             "mean_rating": None,
             "useful_rate": None,
             "by_query_type": {},
         }
-    history = list(records) if not isinstance(records, list) else records
     by_type: dict[str, list[dict[str, Any]]] = {}
     for record in current:
         by_type.setdefault(str(record.get("query_type", "unknown")), []).append(record)
