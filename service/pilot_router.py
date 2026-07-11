@@ -27,6 +27,7 @@ from core.text_parser_agnostic import text_to_semantic_input
 from core.vault_ingest import strip_markdown
 
 from . import viz_router as viz_router_module
+from .pilot_feedback import feedback_summary
 
 
 router = APIRouter(prefix="/pilot", tags=["pilot"])
@@ -137,7 +138,8 @@ async def pilot_status():
         **runtime.status(),
         "vault_name": vault.name,
         "state_exists": _state_path(vault).exists(),
-        "feedback_count": len(feedback),
+        "feedback_count": feedback_summary(feedback)["count"],
+        "feedback_history_count": len(feedback),
     }
 
 
@@ -321,28 +323,7 @@ async def pilot_feedback(req: PilotFeedbackRequest):
 @router.get("/feedback/summary")
 async def pilot_feedback_summary():
     runtime, feedback, _vault = _ensure_loaded()
-    if not feedback:
-        return {
-            "snapshot_id": runtime.snapshot.snapshot_id,
-            "count": 0,
-            "mean_rating": None,
-            "useful_rate": None,
-            "by_query_type": {},
-        }
-    by_type: dict[str, list[dict[str, Any]]] = {}
-    for record in feedback:
-        by_type.setdefault(str(record.get("query_type", "unknown")), []).append(record)
     return {
         "snapshot_id": runtime.snapshot.snapshot_id,
-        "count": len(feedback),
-        "mean_rating": sum(int(item["rating"]) for item in feedback) / len(feedback),
-        "useful_rate": sum(bool(item["useful"]) for item in feedback) / len(feedback),
-        "by_query_type": {
-            query_type: {
-                "count": len(records),
-                "mean_rating": sum(int(item["rating"]) for item in records) / len(records),
-                "useful_rate": sum(bool(item["useful"]) for item in records) / len(records),
-            }
-            for query_type, records in sorted(by_type.items())
-        },
+        **feedback_summary(feedback),
     }
