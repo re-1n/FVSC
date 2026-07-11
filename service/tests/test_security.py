@@ -19,6 +19,10 @@ def _client() -> TestClient:
     async def ping():
         return {"ok": True}
 
+    @app.post("/mutate")
+    async def mutate():
+        return {"mutated": True}
+
     return TestClient(app, base_url="http://127.0.0.1")
 
 
@@ -57,8 +61,28 @@ def test_arbitrary_web_origin_is_rejected() -> None:
         },
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 403
     assert "access-control-allow-origin" not in response.headers
+
+
+def test_simple_cross_origin_post_never_reaches_endpoint() -> None:
+    response = _client().post(
+        "/mutate",
+        headers={
+            "Origin": "https://attacker.example",
+            "Content-Type": "text/plain",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Browser origin is not allowed"}
+
+
+def test_non_browser_local_client_remains_supported() -> None:
+    response = _client().post("/mutate")
+
+    assert response.status_code == 200
+    assert response.json() == {"mutated": True}
 
 
 def test_untrusted_host_is_rejected() -> None:
