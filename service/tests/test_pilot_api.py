@@ -42,6 +42,15 @@ def test_pilot_rebuild_live_update_trace_feedback_and_reload(tmp_path: Path) -> 
         assert rebuilt["files_indexed"] >= 1
         assert rebuilt["active_event_count"] > 0
         assert rebuilt["concept_count"] > 0
+        assert rebuilt["evaluation"]["status"] == "completed"
+        assert rebuilt["evaluation"]["verdict"] in {
+            "insufficient_data",
+            "promising_added_value",
+            "not_predictive",
+            "no_demonstrated_added_value",
+        }
+        assert Path(rebuilt["evaluation"]["report_path"]).exists()
+        assert Path(rebuilt["evaluation"]["review_path"]).exists()
 
         status = client.get("/pilot/status")
         assert status.status_code == 200
@@ -96,6 +105,7 @@ def test_pilot_rebuild_live_update_trace_feedback_and_reload(tmp_path: Path) -> 
         summary = client.get("/pilot/feedback/summary")
         assert summary.status_code == 200
         assert summary.json()["count"] == 1
+        assert summary.json()["history_count"] == 1
         assert summary.json()["useful_rate"] == 1.0
 
         review = client.get("/pilot/daily-review?limit=5")
@@ -122,10 +132,12 @@ def test_pilot_rebuild_live_update_trace_feedback_and_reload(tmp_path: Path) -> 
             "no_demonstrated_added_value",
         }
         assert Path(evaluation_data["report_path"]).exists()
+        assert Path(evaluation_data["review_path"]).exists()
 
         latest = client.get("/pilot/evaluate/latest")
         assert latest.status_code == 200
         assert latest.json()["benchmark"] == "fvsc-chronological-heldout-v1"
+        assert Path(latest.json()["review_path"]).exists()
 
     state_file = tmp_path / ".fvsc" / "pilot-state.json"
     assert state_file.exists()
