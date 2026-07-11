@@ -1,6 +1,6 @@
 """Local API for the FVSC daily-life pilot.
 
-The pilot runs beside the legacy visualization map.  It stores an append-only
+The pilot runs beside the legacy visualization map. It stores an append-only
 JSON evidence ledger in ``<vault>/.fvsc/pilot-state.json`` and exposes a narrow
 set of endpoints for rebuild, live note updates, semantic tracing and usefulness
 feedback.
@@ -21,6 +21,7 @@ from pydantic import BaseModel
 
 from core.exocortex_ingest import _clean_for_fvsc
 from core.pilot_batch import PilotSourceDocument, build_runtime_from_sources
+from core.pilot_evaluation import HeldoutDocument, run_heldout_evaluation
 from core.pilot_persistence import load_pilot_state, save_pilot_state
 from core.pilot_runtime import PilotRuntime, source_revision
 from core.text_parser_agnostic import text_to_semantic_input
@@ -28,12 +29,14 @@ from core.vault_ingest import strip_markdown
 
 from . import viz_router as viz_router_module
 from .pilot_feedback import feedback_summary
+from .pilot_report_store import save_evaluation_report
 
 
 router = APIRouter(prefix="/pilot", tags=["pilot"])
 PILOT_DIRECTORY = ".fvsc"
 PILOT_STATE_NAME = "pilot-state.json"
 MAX_FILE_SIZE = 5 * 1024 * 1024
+MAX_AUTO_EVALUATION_FILES = 5000
 EXCLUDED_PARTS = {".obsidian", ".trash", ".fvsc", "_fvsc_concepts", "_fvsc_review"}
 
 _runtime: PilotRuntime | None = None
@@ -131,15 +134,78 @@ def _concept_payload(runtime: PilotRuntime, term: str, *, related_limit: int = 1
     }
 
 
+async def _auto_evaluate(
+    vault: Path,
+    documents: list[PilotSourceDocument],
+    errors: list[dict[str, str]],
+) -> dict[str, Any]:
+    """Run the default held-out test and persist both JSON and Markdown reports."""
+    ordered = sorted(documents, key=lambda item: (item.observed_at, item.source_id))
+    if len(ordered) > MAX_AUTO_EVALUATION_FILES:
+        ordered = ordered[-MAX_AUTO_EVALUATION_FILES:]
+    if len(ordered) < 2:
+        return {
+            "status": "not_run",
+            "reason": "at least two parseable dated notes are required",
+        }
+    heldout = [
+        HeldoutDocument(
+            source_id=document.source_id,
+            observed_at=document.observed_at,
+            semantic_input=document.semantic_input,
+            source_revision=document.source_revision,
+        )
+        for document in ordered
+        if document.semantic_input
+    ]
+    if len(heldout) < 2:
+        return {
+            "status": "not_run",
+            "reason": "at least two notes with semantic relations are required",
+        }
+    try:
+        report = await asyncio.to_thread(
+            run_heldout_evaluation,
+            heldout,
+            train_fraction=0.8,
+            bootstrap_samples=1000,
+        )
+        payload = {
+            "generated_at": time.time(),
+            "vault_name": vault.name,
+            "documents_loaded": len(heldout),
+            "parse_errors": errors[:100],
+            **report,
+        }
+        json_path, markdown_path = await asyncio.to_thread(
+            save_evaluation_report, vault, payload
+        )
+        return {
+            "status": "completed",
+            "verdict": report["verdict"],
+            "report_path": str(json_path),
+            "review_path": str(markdown_path),
+            "models": report["models"],
+            "best_baseline": report["best_baseline"],
+            "fvsc_auc_delta_vs_best_baseline": report[
+                "fvsc_auc_delta_vs_best_baseline"
+            ],
+            "paired_bootstrap_ci95": report["paired_bootstrap_ci95"],
+        }
+    except Exception as exc:
+        return {"status": "failed", "reason": str(exc)}
+
+
 @router.get("/status")
 async def pilot_status():
     runtime, feedback, vault = _ensure_loaded()
+    summary = feedback_summary(feedback)
     return {
         **runtime.status(),
         "vault_name": vault.name,
         "state_exists": _state_path(vault).exists(),
-        "feedback_count": feedback_summary(feedback)["count"],
-        "feedback_history_count": len(feedback),
+        "feedback_count": summary["count"],
+        "feedback_history_count": summary["history_count"],
     }
 
 
@@ -193,7 +259,7 @@ async def pilot_file_ingest(req: PilotFileIngestRequest):
 
 @router.post("/rebuild")
 async def pilot_rebuild():
-    """Rebuild semantic evidence while preserving human feedback history."""
+    """Rebuild evidence, preserve ratings, and run the default held-out test."""
     global _runtime, _feedback, _loaded_vault
     async with _lock:
         vault = _vault_path()
@@ -237,6 +303,7 @@ async def pilot_rebuild():
         _feedback = preserved_feedback
         _loaded_vault = vault
         _save(runtime, _feedback, vault)
+        evaluation = await _auto_evaluate(vault, documents, errors)
         summary = feedback_summary(_feedback)
         return {
             "rebuilt": True,
@@ -246,6 +313,7 @@ async def pilot_rebuild():
             "errors": errors[:50],
             "feedback_count": summary["count"],
             "feedback_history_count": summary["history_count"],
+            "evaluation": evaluation,
             **runtime.status(),
         }
 
