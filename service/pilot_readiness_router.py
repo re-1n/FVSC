@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from .pilot_evaluation_router import EVALUATION_REPORT_NAME
+from .pilot_feedback import feedback_summary
 from .pilot_router import PILOT_DIRECTORY, _ensure_loaded
 
 
@@ -21,14 +22,12 @@ MIN_KNOWN_POSITIVE_COVERAGE = 0.5
 
 
 def _feedback_metrics(feedback: list[dict[str, Any]]) -> dict[str, Any]:
-    if not feedback:
-        return {"count": 0, "mean_rating": None, "useful_rate": None}
-    ratings = [int(record.get("rating", 0)) for record in feedback]
-    useful = [bool(record.get("useful", False)) for record in feedback]
+    summary = feedback_summary(feedback)
     return {
-        "count": len(feedback),
-        "mean_rating": sum(ratings) / len(ratings),
-        "useful_rate": sum(useful) / len(useful),
+        "count": summary["count"],
+        "history_count": summary["history_count"],
+        "mean_rating": summary["mean_rating"],
+        "useful_rate": summary["useful_rate"],
     }
 
 
