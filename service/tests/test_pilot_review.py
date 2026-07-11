@@ -93,6 +93,7 @@ def test_review_feedback_is_persisted_idempotent_and_revisable(tmp_path: Path) -
         assert summary.status_code == 200
         summary_data = summary.json()
         assert summary_data["count"] == 2
+        assert summary_data["history_count"] == 2
         assert summary_data["by_query_type"]["daily_review_concept"]["count"] == 2
         assert summary_data["by_query_type"]["daily_review_concept"]["useful_rate"] == 0.5
 
@@ -115,6 +116,17 @@ def test_review_feedback_is_persisted_idempotent_and_revisable(tmp_path: Path) -
         assert readiness_feedback["count"] == 2
         assert readiness_feedback["history_count"] == 3
         assert readiness_feedback["useful_rate"] == 0.0
+
+        rebuilt_again = client.post("/pilot/rebuild")
+        assert rebuilt_again.status_code == 200, rebuilt_again.text
+        assert rebuilt_again.json()["feedback_count"] == 2
+        assert rebuilt_again.json()["feedback_history_count"] == 3
+
+        summary_after_rebuild = client.get("/pilot/feedback/summary")
+        assert summary_after_rebuild.status_code == 200
+        assert summary_after_rebuild.json()["count"] == 2
+        assert summary_after_rebuild.json()["history_count"] == 3
+        assert summary_after_rebuild.json()["useful_rate"] == 0.0
 
     state_file = tmp_path / ".fvsc" / "pilot-state.json"
     assert state_file.exists()
