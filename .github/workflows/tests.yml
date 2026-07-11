@@ -33,3 +33,21 @@ jobs:
           name: fvsc-viability-report
           path: artifacts/viability-report.json
           if-no-files-found: error
+
+  obsidian-plugin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: obsidian-plugin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install plugin dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck plugin
+        run: npx tsc --noEmit
+      - name: Build plugin
+        run: npm run build
