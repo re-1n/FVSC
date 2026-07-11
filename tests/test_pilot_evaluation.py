@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from core.pilot_evaluation import (
     HeldoutDocument,
+    _average_precision,
     chronological_split,
     run_heldout_evaluation,
 )
@@ -42,6 +43,17 @@ def test_chronological_split_never_uses_future_documents_for_training() -> None:
     assert max(document.observed_at for document in train) < min(
         document.observed_at for document in test
     )
+
+
+def test_average_precision_ties_do_not_depend_on_input_label_order() -> None:
+    examples = [
+        (True, 0.5, "b-positive"),
+        (False, 0.5, "a-negative"),
+        (True, 0.4, "c-positive"),
+    ]
+
+    assert _average_precision(examples) == _average_precision(list(reversed(examples)))
+    assert _average_precision(examples) < 1.0
 
 
 def test_heldout_report_is_deterministic_and_bounded() -> None:
