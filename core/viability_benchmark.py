@@ -1,13 +1,8 @@
 """Controlled viability benchmark for FVSC density-matrix semantics.
 
-The benchmark tests two distinct properties:
-
-1. direction accuracy on annotated containment pairs;
-2. all-pairs ranking AUC, which asks whether annotated links outrank unrelated
-   directed concept pairs from the same sentence.
-
-Ablations isolate the source of any signal: trace-normalised matrices, a
-trace-mass-only rule, direct parser edges, and chance.
+The benchmark tests direction accuracy, all-pairs ranking, and trace-matched
+ranking.  The last metric compares gold and negative pairs only when their
+``Tr(rho_A)-Tr(rho_B)`` is equal, forcing a trace-only baseline to chance.
 """
 
 from __future__ import annotations
@@ -267,16 +262,25 @@ def _decision(
         reasons.append("the density layer does not discriminate directed relations reliably")
 
     parser_value, parser_delta = _compare_metric(matrix, direct, "ranking_auc")
-    geometry_value, trace_delta = _compare_metric(matrix, trace_only, "ranking_auc")
-    if geometry_value == "not_distinguishable_from_baseline":
-        reasons.append("all-pairs ranking is not distinguishable from trace mass alone")
+    if matrix.get("trace_matched_comparisons", 0) < 20:
+        geometry_value = "insufficient_evidence"
+        trace_delta = 0.0
+        reasons.append("too few trace-matched comparisons to isolate geometry")
+    else:
+        geometry_value, trace_delta = _compare_metric(
+            matrix, trace_only, "trace_matched_auc"
+        )
+        if geometry_value == "not_distinguishable_from_baseline":
+            reasons.append("trace-matched ranking is not distinguishable from mass alone")
+        elif geometry_value == "demonstrated_on_controlled_set":
+            reasons.append("a residual signal remains after matching on trace mass")
 
     return {
         "controlled_viability": controlled_viability,
         "matrix_added_value_over_direct_edges": parser_value,
         "direction_beyond_trace_mass": geometry_value,
         "ranking_auc_delta_vs_direct_edges": parser_delta,
-        "ranking_auc_delta_vs_trace_mass": trace_delta,
+        "trace_matched_auc_delta_vs_trace_mass": trace_delta,
         "dimension_accuracy_range": score_range,
         "reasons": reasons,
     }
@@ -330,7 +334,7 @@ def run_benchmark(
         model.update(ranking[model_name])
 
     return {
-        "benchmark": "fvsc-controlled-directionality-v4",
+        "benchmark": "fvsc-controlled-directionality-v5",
         "primary_dimension": primary_dim,
         "n_sentences": len(gold_set),
         "n_directional_pairs": len(primary),
@@ -339,20 +343,24 @@ def run_benchmark(
             "fvsc_density_trace_normalized_control": normalized_control,
             "trace_mass_only": trace_only,
             "direct_parser_edges": direct,
-            "chance": {"accuracy": 0.5, "ranking_auc": 0.5},
+            "chance": {
+                "accuracy": 0.5,
+                "ranking_auc": 0.5,
+                "trace_matched_auc": 0.5,
+            },
         },
         "dimension_accuracy": dimensional_scores,
         "decision": _decision(mass_matrix, direct, trace_only, dimensional_scores),
         "method_note": (
-            "v1 erased direction by normalising traces; v2 matched production; "
-            "v3 added trace-only ablation; v4 additionally ranks gold links "
-            "against every unrelated directed pair in each sentence."
+            "v5 adds trace-matched AUC: positives and negatives are compared only "
+            "when their trace-mass difference is identical."
         ),
         "limitations": [
             "small, hand-authored Russian controlled set",
             "gold relations are not independently annotated",
             "prefix matching compensates for missing lemmatisation",
             "the set is structurally derived from parser edges",
+            "trace matching controls mass but not every correlated parser feature",
             "this does not validate personal-semantic interpretation",
             "a blinded held-out human study is required for external validity",
         ],
@@ -380,20 +388,31 @@ def _print_summary(report: dict) -> None:
     trace_only = models["trace_mass_only"]
     direct = models["direct_parser_edges"]
     decision = report["decision"]
-    print("FVSC controlled viability benchmark v4")
+    print("FVSC controlled viability benchmark v5")
     print(f"pairs: {report['n_directional_pairs']} | primary dim: {report['primary_dimension']}")
     print(
         "mass-preserving density: "
         f"accuracy={mass['accuracy']:.3f} AUC={mass['ranking_auc']:.3f} "
+        f"matched-AUC={mass['trace_matched_auc']:.3f} "
+        f"matched-n={mass['trace_matched_comparisons']} "
         f"CI95=[{mass['ci95'][0]:.3f}, {mass['ci95'][1]:.3f}] "
-        f"coverage={mass['coverage']:.3f} p={mass['p_vs_chance_one_sided']:.4g}"
+        f"p={mass['p_vs_chance_one_sided']:.4g}"
     )
     print(
         f"trace-normalized control: accuracy={normalized['accuracy']:.3f} "
-        f"AUC={normalized['ranking_auc']:.3f}"
+        f"AUC={normalized['ranking_auc']:.3f} "
+        f"matched-AUC={normalized['trace_matched_auc']:.3f}"
     )
-    print(f"trace-mass only: accuracy={trace_only['accuracy']:.3f} AUC={trace_only['ranking_auc']:.3f}")
-    print(f"direct parser edges: accuracy={direct['accuracy']:.3f} AUC={direct['ranking_auc']:.3f}")
+    print(
+        f"trace-mass only: accuracy={trace_only['accuracy']:.3f} "
+        f"AUC={trace_only['ranking_auc']:.3f} "
+        f"matched-AUC={trace_only['trace_matched_auc']:.3f}"
+    )
+    print(
+        f"direct parser edges: accuracy={direct['accuracy']:.3f} "
+        f"AUC={direct['ranking_auc']:.3f} "
+        f"matched-AUC={direct['trace_matched_auc']:.3f}"
+    )
     print(f"dimension accuracy: {report['dimension_accuracy']}")
     print(f"controlled viability: {decision['controlled_viability']}")
     print(f"direction beyond trace mass: {decision['direction_beyond_trace_mass']}")
