@@ -26,6 +26,7 @@ export class BootstrapModal extends Modal {
   private onDone: () => void;
   private abortController: AbortController | null = null;
   private watcherWasPaused = false;
+  private inflightPollTimer: number | null = null;
 
   constructor(plugin: FvscPlugin, backend: BackendController, onDone: () => void) {
     super(plugin.app);
@@ -102,6 +103,7 @@ export class BootstrapModal extends Modal {
    * still show the user that work is happening.
    */
   private async attachToInflightBuild(): Promise<void> {
+    this.clearInflightPoll();
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl("h2", { text: "Карта уже строится…" });
@@ -116,7 +118,7 @@ export class BootstrapModal extends Modal {
     // Indeterminate-ish pulse: backend doesn't expose progress through /status,
     // so we just animate the bar slowly until status flips.
     let phase = 0;
-    const tick = window.setInterval(async () => {
+    this.inflightPollTimer = window.setInterval(async () => {
       phase = (phase + 5) % 95;
       bar.style.width = `${10 + phase}%`;
       try {
@@ -124,14 +126,20 @@ export class BootstrapModal extends Modal {
         if (!r.ok) return;
         const s = await r.json() as { bootstrap_running: boolean; space_loaded: boolean };
         if (!s.bootstrap_running && s.space_loaded) {
-          window.clearInterval(tick);
+          this.clearInflightPoll();
           bar.style.width = "100%";
           stageText.setText("Готово.");
           window.setTimeout(() => { this.close(); this.onDone(); }, 600);
         }
       } catch { /* keep polling */ }
     }, 1500);
-    this.register(() => window.clearInterval(tick));
+  }
+
+  private clearInflightPoll(): void {
+    if (this.inflightPollTimer !== null) {
+      window.clearInterval(this.inflightPollTimer);
+      this.inflightPollTimer = null;
+    }
   }
 
   private async startBuild(): Promise<void> {
@@ -256,6 +264,7 @@ export class BootstrapModal extends Modal {
 
   onClose(): void {
     this.abortController?.abort();
+    this.clearInflightPoll();
     if (this.watcherWasPaused && this.plugin.watcher) {
       this.plugin.watcher.resume();
       this.watcherWasPaused = false;
