@@ -8,7 +8,7 @@ def test_viability_benchmark_report_is_deterministic_and_bounded() -> None:
     report_b = run_benchmark(dims=(16,), bootstrap_samples=100, seed=7)
 
     assert report_a == report_b
-    assert report_a["benchmark"] == "fvsc-controlled-directionality-v3"
+    assert report_a["benchmark"] == "fvsc-controlled-directionality-v4"
     assert report_a["n_directional_pairs"] > 0
 
     for model_name in (
@@ -21,11 +21,14 @@ def test_viability_benchmark_report_is_deterministic_and_bounded() -> None:
         assert 0.0 <= model["accuracy"] <= 1.0
         assert 0.0 <= model["coverage"] <= 1.0
         assert 0.0 <= model["p_vs_chance_one_sided"] <= 1.0
+        assert 0.0 <= model["ranking_auc"] <= 1.0
+        assert model["ranking_comparisons"] > 0
         assert len(model["ci95"]) == 2
         assert 0.0 <= model["ci95"][0] <= model["ci95"][1] <= 1.0
 
     normalized = report_a["models"]["fvsc_density_trace_normalized_control"]
     assert normalized["accuracy"] == 0.5
+    assert normalized["ranking_auc"] == 0.5
 
     assert report_a["decision"]["controlled_viability"] in {
         "pass",
