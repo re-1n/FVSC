@@ -28,7 +28,7 @@ def _validated_psd_matrix(value: np.ndarray, *, name: str) -> np.ndarray:
     """Return a symmetric, read-only PSD copy of ``value``.
 
     Tiny negative eigenvalues caused by floating-point roundoff are projected to
-    zero.  Materially non-symmetric or indefinite matrices are rejected rather
+    zero. Materially non-symmetric or indefinite matrices are rejected rather
     than silently reinterpreted.
     """
     matrix = np.asarray(value, dtype=float)
@@ -62,8 +62,8 @@ def _validated_psd_matrix(value: np.ndarray, *, name: str) -> np.ndarray:
 class SemanticState:
     """Immutable semantic state with explicit evidence mass and normalized shape.
 
-    Non-empty states require ``trace(shape) == 1``.  Empty states use a zero
-    matrix and ``mass == 0``.  The shape array is copied and marked read-only.
+    Non-empty states require ``trace(shape) == 1``. Empty states use a zero
+    matrix and ``mass == 0``. The shape array is copied and marked read-only.
     """
 
     mass: float
@@ -74,6 +74,9 @@ class SemanticState:
     def __post_init__(self) -> None:
         mass = float(self.mass)
         uncertainty = float(self.uncertainty)
+
+        if isinstance(self.evidence_count, (bool, np.bool_)):
+            raise ValueError("evidence_count must be a non-negative integer")
         evidence_count = int(self.evidence_count)
 
         if not np.isfinite(mass) or mass < 0.0:
@@ -154,6 +157,8 @@ class SemanticState:
     def with_mass(self, mass: float) -> "SemanticState":
         """Return the same semantic shape with a different evidence mass."""
         mass = float(mass)
+        if not np.isfinite(mass) or mass < 0.0:
+            raise ValueError("mass must be finite and non-negative")
         if mass <= TRACE_EPSILON:
             return SemanticState.empty(
                 self.dim,
