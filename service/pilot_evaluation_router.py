@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import os
 from pathlib import Path
-import tempfile
 import time
-from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -16,40 +12,22 @@ from pydantic import BaseModel
 from core.pilot_evaluation import HeldoutDocument, run_heldout_evaluation
 from core.pilot_runtime import source_revision
 
+from .pilot_report_store import load_evaluation_report, save_evaluation_report
 from .pilot_router import (
     EXCLUDED_PARTS,
     MAX_FILE_SIZE,
-    PILOT_DIRECTORY,
     _parse_text,
     _vault_path,
 )
 
 
 router = APIRouter(prefix="/pilot", tags=["pilot-evaluation"])
-EVALUATION_REPORT_NAME = "heldout-evaluation-latest.json"
 
 
 class PilotEvaluationRequest(BaseModel):
     train_fraction: float = 0.8
     bootstrap_samples: int = 1000
     max_files: int = 5000
-
-
-def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
-    )
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
 
 
 def _load_documents(vault: Path, *, max_files: int) -> tuple[list[HeldoutDocument], list[dict[str, str]]]:
@@ -110,21 +88,25 @@ async def pilot_evaluate(req: PilotEvaluationRequest):
         "parse_errors": errors[:100],
         **report,
     }
-    report_path = vault / PILOT_DIRECTORY / EVALUATION_REPORT_NAME
-    await asyncio.to_thread(_atomic_json, report_path, payload)
-    payload["report_path"] = str(report_path)
-    return payload
+    json_path, markdown_path = await asyncio.to_thread(
+        save_evaluation_report, vault, payload
+    )
+    return {
+        **payload,
+        "report_path": str(json_path),
+        "review_path": str(markdown_path),
+    }
 
 
 @router.get("/evaluate/latest")
 async def pilot_evaluate_latest():
     vault = _vault_path()
-    report_path = vault / PILOT_DIRECTORY / EVALUATION_REPORT_NAME
-    if not report_path.exists():
+    payload = await asyncio.to_thread(load_evaluation_report, vault)
+    if payload is None:
         raise HTTPException(404, detail="no held-out evaluation report exists")
-    try:
-        payload = json.loads(report_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise HTTPException(500, detail=f"invalid evaluation report: {exc}") from exc
-    payload["report_path"] = str(report_path)
-    return payload
+    json_path, markdown_path = save_evaluation_report(vault, payload)
+    return {
+        **payload,
+        "report_path": str(json_path),
+        "review_path": str(markdown_path),
+    }
