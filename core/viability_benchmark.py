@@ -1,14 +1,14 @@
 """Controlled viability benchmark for FVSC density-matrix semantics.
 
 The primary test reproduces FVSC's production containment query: graded
-hyponymy is computed on *mass-preserving* (not trace-normalised) density
-matrices.  A trace-normalised variant is retained as a negative control because
-normalising both operators to equal trace removes the mass asymmetry on which
-this implementation's directed relation depends.
+hyponymy is computed on mass-preserving density matrices. Two ablations test
+where the directional signal comes from:
 
-Passing this benchmark establishes only controlled technical viability.  It
-does not validate psychological or personal-semantic interpretation; that
-requires a blinded study on held-out vault material.
+* trace-normalised matrices remove mass asymmetry;
+* a trace-only baseline ignores all matrix geometry and compares Tr(rho).
+
+Passing establishes controlled technical viability only. Psychological or
+personal-semantic validity requires blinded ratings on held-out vault data.
 """
 
 from __future__ import annotations
@@ -40,11 +40,11 @@ class PairObservation:
     resolved: bool
     mass_preserving_margin: float
     trace_normalized_margin: float
+    trace_mass_margin: float
     direct_edge_margin: float
 
 
 def _term_matches(actual: str, expected: str) -> bool:
-    """Compatibility matcher for the current non-lemmatised parser."""
     actual = actual.casefold()
     expected = expected.casefold()
     if actual == expected:
@@ -74,6 +74,16 @@ def _normalise_density(rho: np.ndarray) -> np.ndarray:
     return rho if trace <= _EPS else rho / trace
 
 
+def _resolve_pair(
+    rhos: dict[str, np.ndarray], container: str, contained: str
+) -> tuple[np.ndarray, np.ndarray] | None:
+    container_key = _find_key(container, rhos)
+    contained_key = _find_key(contained, rhos)
+    if container_key is None or contained_key is None:
+        return None
+    return rhos[container_key], rhos[contained_key]
+
+
 def _direction_margin(
     rhos: dict[str, np.ndarray],
     container: str,
@@ -81,27 +91,32 @@ def _direction_margin(
     *,
     normalize: bool,
 ) -> tuple[bool, float]:
-    """Return margin for the hypothesis ``container contains contained``.
+    """Return margin for ``container contains contained``.
 
     ``graded_hyponymy(A, B)`` is the degree to which A is included in B, so the
-    forward score is ``contained -> container``.  Production FVSC queries use
-    unnormalised matrices here; the optional normalisation is a diagnostic
-    control only.
+    forward score is ``contained -> container``.
     """
-    container_key = _find_key(container, rhos)
-    contained_key = _find_key(contained, rhos)
-    if container_key is None or contained_key is None:
+    pair = _resolve_pair(rhos, container, contained)
+    if pair is None:
         return False, 0.0
-
-    rho_container = rhos[container_key]
-    rho_contained = rhos[contained_key]
+    rho_container, rho_contained = pair
     if normalize:
         rho_container = _normalise_density(rho_container)
         rho_contained = _normalise_density(rho_contained)
-
     forward = graded_hyponymy(rho_contained, rho_container)
     reverse = graded_hyponymy(rho_container, rho_contained)
     return True, float(forward - reverse)
+
+
+def _trace_mass_margin(
+    rhos: dict[str, np.ndarray], container: str, contained: str
+) -> tuple[bool, float]:
+    """Ablation that uses only total operator mass, not eigenvectors/facets."""
+    pair = _resolve_pair(rhos, container, contained)
+    if pair is None:
+        return False, 0.0
+    rho_container, rho_contained = pair
+    return True, float(np.trace(rho_container) - np.trace(rho_contained))
 
 
 def collect_observations(
@@ -123,6 +138,7 @@ def collect_observations(
             _, normalized_margin = _direction_margin(
                 rhos, container, contained, normalize=True
             )
+            _, trace_margin = _trace_mass_margin(rhos, container, contained)
             direct_margin = (
                 _edge_weight(si, container, contained)
                 - _edge_weight(si, contained, container)
@@ -135,6 +151,7 @@ def collect_observations(
                     resolved=resolved,
                     mass_preserving_margin=mass_margin,
                     trace_normalized_margin=normalized_margin,
+                    trace_mass_margin=trace_margin,
                     direct_edge_margin=direct_margin,
                 )
             )
@@ -142,7 +159,6 @@ def collect_observations(
 
 
 def _outcome(margin: float, *, resolved: bool = True) -> float:
-    """1=correct direction, 0.5=tie, 0=wrong or unresolved."""
     if not resolved:
         return 0.0
     if margin > _EPS:
@@ -170,8 +186,7 @@ def _one_sided_sign_pvalue(margins: Iterable[float]) -> float:
     if n == 0:
         return 1.0
     wins = sum(margin > 0 for margin in non_ties)
-    tail = sum(math.comb(n, k) for k in range(wins, n + 1))
-    return float(tail / (2**n))
+    return float(sum(math.comb(n, k) for k in range(wins, n + 1)) / (2**n))
 
 
 def _summarise_model(
@@ -212,7 +227,21 @@ def _summarise_model(
     }
 
 
-def _decision(matrix: dict, direct: dict, dimensional_scores: dict[str, float]) -> dict:
+def _compare_accuracy(primary: dict, baseline: dict) -> tuple[str, float]:
+    delta = primary["accuracy"] - baseline["accuracy"]
+    if delta > 0.02:
+        return "demonstrated_on_controlled_set", delta
+    if delta >= -0.02:
+        return "not_distinguishable_from_baseline", delta
+    return "worse_than_baseline", delta
+
+
+def _decision(
+    matrix: dict,
+    direct: dict,
+    trace_only: dict,
+    dimensional_scores: dict[str, float],
+) -> dict:
     score_range = max(dimensional_scores.values()) - min(dimensional_scores.values())
     reasons: list[str] = []
     passes_signal = (
@@ -237,18 +266,17 @@ def _decision(matrix: dict, direct: dict, dimensional_scores: dict[str, float]) 
         controlled_viability = "fail"
         reasons.append("the density layer does not recover directed relations reliably")
 
-    improvement = matrix["accuracy"] - direct["accuracy"]
-    if improvement > 0.02:
-        added_value = "demonstrated_on_controlled_set"
-    elif improvement >= -0.02:
-        added_value = "not_distinguishable_from_parser_edges"
-    else:
-        added_value = "worse_than_parser_edges"
+    parser_value, parser_delta = _compare_accuracy(matrix, direct)
+    geometry_value, trace_delta = _compare_accuracy(matrix, trace_only)
+    if geometry_value == "not_distinguishable_from_baseline":
+        reasons.append("direction is not distinguishable from a trace-mass-only rule")
 
     return {
         "controlled_viability": controlled_viability,
-        "matrix_added_value_over_direct_edges": added_value,
-        "accuracy_delta_vs_direct_edges": improvement,
+        "matrix_added_value_over_direct_edges": parser_value,
+        "direction_beyond_trace_mass": geometry_value,
+        "accuracy_delta_vs_direct_edges": parser_delta,
+        "accuracy_delta_vs_trace_mass": trace_delta,
         "dimension_accuracy_range": score_range,
         "reasons": reasons,
     }
@@ -276,50 +304,45 @@ def run_benchmark(
     primary_dim = 64 if 64 in observations_by_dim else dims[0]
     primary = observations_by_dim[primary_dim]
     mass_matrix = _summarise_model(
-        primary,
-        field="mass_preserving_margin",
-        bootstrap_samples=bootstrap_samples,
-        seed=seed,
-        use_resolution=True,
+        primary, field="mass_preserving_margin", bootstrap_samples=bootstrap_samples,
+        seed=seed, use_resolution=True,
     )
     normalized_control = _summarise_model(
-        primary,
-        field="trace_normalized_margin",
-        bootstrap_samples=bootstrap_samples,
-        seed=seed + 1,
-        use_resolution=True,
+        primary, field="trace_normalized_margin", bootstrap_samples=bootstrap_samples,
+        seed=seed + 1, use_resolution=True,
+    )
+    trace_only = _summarise_model(
+        primary, field="trace_mass_margin", bootstrap_samples=bootstrap_samples,
+        seed=seed + 2, use_resolution=True,
     )
     direct = _summarise_model(
-        primary,
-        field="direct_edge_margin",
-        bootstrap_samples=bootstrap_samples,
-        seed=seed + 2,
-        use_resolution=False,
+        primary, field="direct_edge_margin", bootstrap_samples=bootstrap_samples,
+        seed=seed + 3, use_resolution=False,
     )
 
     return {
-        "benchmark": "fvsc-controlled-directionality-v2",
+        "benchmark": "fvsc-controlled-directionality-v3",
         "primary_dimension": primary_dim,
         "n_sentences": len(gold_set),
         "n_directional_pairs": len(primary),
         "models": {
             "fvsc_density_mass_preserving": mass_matrix,
             "fvsc_density_trace_normalized_control": normalized_control,
+            "trace_mass_only": trace_only,
             "direct_parser_edges": direct,
             "chance": {"accuracy": 0.5},
         },
         "dimension_accuracy": dimensional_scores,
-        "decision": _decision(mass_matrix, direct, dimensional_scores),
+        "decision": _decision(mass_matrix, direct, trace_only, dimensional_scores),
         "method_note": (
-            "v1 incorrectly normalised both matrices before graded hyponymy; "
-            "equal trace makes the directional margin symmetric. v2 matches "
-            "production FVSC and retains that variant as a negative control."
+            "v1 normalised both matrices and erased direction; v2 matched production; "
+            "v3 adds a trace-only ablation to test whether spectral geometry adds signal."
         ),
         "limitations": [
             "small, hand-authored Russian controlled set",
             "gold relations are not independently annotated",
             "prefix matching compensates for missing lemmatisation",
-            "mass asymmetry may encode frequency/weight rather than semantic direction",
+            "the set is structurally derived from parser edges",
             "this does not validate personal-semantic interpretation",
             "a blinded held-out human study is required for external validity",
         ],
@@ -331,6 +354,7 @@ def run_benchmark(
                 "resolved": obs.resolved,
                 "mass_preserving_margin": obs.mass_preserving_margin,
                 "trace_normalized_margin": obs.trace_normalized_margin,
+                "trace_mass_margin": obs.trace_mass_margin,
                 "direct_edge_margin": obs.direct_edge_margin,
             }
             for obs in primary
@@ -339,23 +363,26 @@ def run_benchmark(
 
 
 def _print_summary(report: dict) -> None:
-    mass = report["models"]["fvsc_density_mass_preserving"]
-    normalized = report["models"]["fvsc_density_trace_normalized_control"]
-    direct = report["models"]["direct_parser_edges"]
+    models = report["models"]
+    mass = models["fvsc_density_mass_preserving"]
+    normalized = models["fvsc_density_trace_normalized_control"]
+    trace_only = models["trace_mass_only"]
+    direct = models["direct_parser_edges"]
     decision = report["decision"]
-    print("FVSC controlled viability benchmark v2")
+    print("FVSC controlled viability benchmark v3")
     print(f"pairs: {report['n_directional_pairs']} | primary dim: {report['primary_dimension']}")
     print(
         "mass-preserving density: "
         f"accuracy={mass['accuracy']:.3f} "
         f"CI95=[{mass['ci95'][0]:.3f}, {mass['ci95'][1]:.3f}] "
-        f"coverage={mass['coverage']:.3f} "
-        f"p={mass['p_vs_chance_one_sided']:.4g}"
+        f"coverage={mass['coverage']:.3f} p={mass['p_vs_chance_one_sided']:.4g}"
     )
     print(f"trace-normalized control: accuracy={normalized['accuracy']:.3f}")
+    print(f"trace-mass only: accuracy={trace_only['accuracy']:.3f}")
     print(f"direct parser edges: accuracy={direct['accuracy']:.3f}")
     print(f"dimension accuracy: {report['dimension_accuracy']}")
     print(f"controlled viability: {decision['controlled_viability']}")
+    print(f"direction beyond trace mass: {decision['direction_beyond_trace_mass']}")
     print(f"added value over direct edges: {decision['matrix_added_value_over_direct_edges']}")
 
 
@@ -367,15 +394,13 @@ def main() -> None:
     args = parser.parse_args()
 
     report = run_benchmark(
-        bootstrap_samples=max(100, args.bootstrap_samples),
-        seed=args.seed,
+        bootstrap_samples=max(100, args.bootstrap_samples), seed=args.seed
     )
     _print_summary(report)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
-            json.dumps(report, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+            json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         print(f"report: {args.output}")
 
