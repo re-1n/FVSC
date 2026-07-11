@@ -4,7 +4,7 @@ networkx>=2.5
 wtpsplit>=2.0
 fastapi>=0.100.0
 uvicorn[standard]>=0.23.0
+mistune>=3.0,<4
 # Note: spaCy intentionally removed — core pipeline runs on numpy alone.
 # spaCy legacy path preserved in core/ for tree_extractor/density_core/context_classifier;
 # active refactor target is pymorphy3-based adapter (whitepaper § XIX.2).
-
