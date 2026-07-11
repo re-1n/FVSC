@@ -1,36 +1,62 @@
-"""Security helpers for the local FVSC HTTP service."""
+"""Security helpers for the local FVSC HTTP service.
+
+Loopback binding is not a browser security boundary: arbitrary web pages can
+still send requests to 127.0.0.1.  These helpers keep browser access limited to
+Obsidian and FVSC pages served from loopback, and reject unexpected Host headers
+to reduce DNS-rebinding exposure.
+"""
 
 from __future__ import annotations
 
 import os
-from urllib.parse import urlparse
+import re
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+DEFAULT_ALLOWED_ORIGINS = {"app://obsidian.md"}
+DEFAULT_ALLOWED_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
+LOOPBACK_ORIGIN_RE = r"^https?://(?:127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$"
 
 
-DEFAULT_ALLOWED_ORIGINS = {
-    "app://obsidian.md",
-    "http://127.0.0.1",
-    "http://localhost",
-}
-
-
-def allowed_origins() -> list[str]:
-    extra = os.environ.get("FVSC_ALLOWED_ORIGINS", "")
-    values = set(DEFAULT_ALLOWED_ORIGINS)
-    values.update(x.strip() for x in extra.split(",") if x.strip())
-    return sorted(values)
-
-
-def allowed_hosts() -> set[str]:
+def _csv_env(name: str) -> set[str]:
     return {
-        "127.0.0.1",
-        "localhost",
-        "[::1]",
+        value.strip()
+        for value in os.environ.get(name, "").split(",")
+        if value.strip()
     }
 
 
+def allowed_origins() -> list[str]:
+    """Return exact browser origins allowed to call the service."""
+    return sorted(DEFAULT_ALLOWED_ORIGINS | _csv_env("FVSC_ALLOWED_ORIGINS"))
+
+
+def allowed_hosts() -> list[str]:
+    """Return HTTP Host values accepted by TrustedHostMiddleware."""
+    return sorted(DEFAULT_ALLOWED_HOSTS | _csv_env("FVSC_ALLOWED_HOSTS"))
+
+
 def origin_is_allowed(origin: str | None) -> bool:
+    """Pure helper used by tests and diagnostics."""
     if not origin:
         return True
-    parsed = urlparse(origin)
-    normalized = f"{parsed.scheme}://{parsed.netloc}"
-    return normalized in allowed_origins()
+    return origin in allowed_origins() or re.fullmatch(LOOPBACK_ORIGIN_RE, origin) is not None
+
+
+def configure_security(app: FastAPI) -> None:
+    """Attach restrictive browser and Host-header middleware to ``app``."""
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins(),
+        allow_origin_regex=LOOPBACK_ORIGIN_RE,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Accept", "Content-Type", "X-FVSC-Token"],
+        allow_credentials=False,
+    )
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=allowed_hosts(),
+        www_redirect=False,
+    )
