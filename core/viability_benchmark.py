@@ -1,14 +1,13 @@
 """Controlled viability benchmark for FVSC density-matrix semantics.
 
-The primary test reproduces FVSC's production containment query: graded
-hyponymy is computed on mass-preserving density matrices. Two ablations test
-where the directional signal comes from:
+The benchmark tests two distinct properties:
 
-* trace-normalised matrices remove mass asymmetry;
-* a trace-only baseline ignores all matrix geometry and compares Tr(rho).
+1. direction accuracy on annotated containment pairs;
+2. all-pairs ranking AUC, which asks whether annotated links outrank unrelated
+   directed concept pairs from the same sentence.
 
-Passing establishes controlled technical viability only. Psychological or
-personal-semantic validity requires blinded ratings on held-out vault data.
+Ablations isolate the source of any signal: trace-normalised matrices, a
+trace-mass-only rule, direct parser edges, and chance.
 """
 
 from __future__ import annotations
@@ -26,6 +25,7 @@ from .density_core import graded_hyponymy
 from .evaluation import GOLD_CONTAINMENT
 from .semantic_input import parse_semantic_input
 from .text_parser_agnostic import ParseConfig, text_to_semantic_input
+from .viability_ranking import evaluate_all_pairs_ranking
 
 
 DEFAULT_DIMS = (16, 32, 64, 128)
@@ -91,11 +91,6 @@ def _direction_margin(
     *,
     normalize: bool,
 ) -> tuple[bool, float]:
-    """Return margin for ``container contains contained``.
-
-    ``graded_hyponymy(A, B)`` is the degree to which A is included in B, so the
-    forward score is ``contained -> container``.
-    """
     pair = _resolve_pair(rhos, container, contained)
     if pair is None:
         return False, 0.0
@@ -111,7 +106,6 @@ def _direction_margin(
 def _trace_mass_margin(
     rhos: dict[str, np.ndarray], container: str, contained: str
 ) -> tuple[bool, float]:
-    """Ablation that uses only total operator mass, not eigenvectors/facets."""
     pair = _resolve_pair(rhos, container, contained)
     if pair is None:
         return False, 0.0
@@ -227,8 +221,8 @@ def _summarise_model(
     }
 
 
-def _compare_accuracy(primary: dict, baseline: dict) -> tuple[str, float]:
-    delta = primary["accuracy"] - baseline["accuracy"]
+def _compare_metric(primary: dict, baseline: dict, metric: str) -> tuple[str, float]:
+    delta = float(primary[metric]) - float(baseline[metric])
     if delta > 0.02:
         return "demonstrated_on_controlled_set", delta
     if delta >= -0.02:
@@ -247,6 +241,7 @@ def _decision(
     passes_signal = (
         matrix["coverage"] >= 0.80
         and matrix["accuracy"] >= 0.65
+        and matrix["ranking_auc"] >= 0.65
         and matrix["p_vs_chance_one_sided"] < 0.05
     )
     stable = score_range <= 0.15
@@ -254,29 +249,34 @@ def _decision(
     if passes_signal and stable:
         controlled_viability = "pass"
         reasons.extend([
-            "directional signal exceeds the pre-registered chance threshold",
+            "directional signal exceeds the chance threshold",
+            "annotated links outrank unrelated ordered pairs",
             "accuracy is stable across tested dimensions",
         ])
-    elif matrix["accuracy"] >= 0.55 and matrix["coverage"] >= 0.70:
+    elif (
+        matrix["accuracy"] >= 0.55
+        and matrix["ranking_auc"] >= 0.55
+        and matrix["coverage"] >= 0.70
+    ):
         controlled_viability = "inconclusive"
-        reasons.append("a directional signal exists, but evidence is not strong enough")
+        reasons.append("a signal exists, but evidence is not strong enough")
         if not stable:
             reasons.append("results are sensitive to matrix dimension")
     else:
         controlled_viability = "fail"
-        reasons.append("the density layer does not recover directed relations reliably")
+        reasons.append("the density layer does not discriminate directed relations reliably")
 
-    parser_value, parser_delta = _compare_accuracy(matrix, direct)
-    geometry_value, trace_delta = _compare_accuracy(matrix, trace_only)
+    parser_value, parser_delta = _compare_metric(matrix, direct, "ranking_auc")
+    geometry_value, trace_delta = _compare_metric(matrix, trace_only, "ranking_auc")
     if geometry_value == "not_distinguishable_from_baseline":
-        reasons.append("direction is not distinguishable from a trace-mass-only rule")
+        reasons.append("all-pairs ranking is not distinguishable from trace mass alone")
 
     return {
         "controlled_viability": controlled_viability,
         "matrix_added_value_over_direct_edges": parser_value,
         "direction_beyond_trace_mass": geometry_value,
-        "accuracy_delta_vs_direct_edges": parser_delta,
-        "accuracy_delta_vs_trace_mass": trace_delta,
+        "ranking_auc_delta_vs_direct_edges": parser_delta,
+        "ranking_auc_delta_vs_trace_mass": trace_delta,
         "dimension_accuracy_range": score_range,
         "reasons": reasons,
     }
@@ -320,8 +320,17 @@ def run_benchmark(
         seed=seed + 3, use_resolution=False,
     )
 
+    ranking = evaluate_all_pairs_ranking(gold_set=gold_set, dim=primary_dim)
+    for model_name, model in (
+        ("fvsc_density_mass_preserving", mass_matrix),
+        ("fvsc_density_trace_normalized_control", normalized_control),
+        ("trace_mass_only", trace_only),
+        ("direct_parser_edges", direct),
+    ):
+        model.update(ranking[model_name])
+
     return {
-        "benchmark": "fvsc-controlled-directionality-v3",
+        "benchmark": "fvsc-controlled-directionality-v4",
         "primary_dimension": primary_dim,
         "n_sentences": len(gold_set),
         "n_directional_pairs": len(primary),
@@ -330,13 +339,14 @@ def run_benchmark(
             "fvsc_density_trace_normalized_control": normalized_control,
             "trace_mass_only": trace_only,
             "direct_parser_edges": direct,
-            "chance": {"accuracy": 0.5},
+            "chance": {"accuracy": 0.5, "ranking_auc": 0.5},
         },
         "dimension_accuracy": dimensional_scores,
         "decision": _decision(mass_matrix, direct, trace_only, dimensional_scores),
         "method_note": (
-            "v1 normalised both matrices and erased direction; v2 matched production; "
-            "v3 adds a trace-only ablation to test whether spectral geometry adds signal."
+            "v1 erased direction by normalising traces; v2 matched production; "
+            "v3 added trace-only ablation; v4 additionally ranks gold links "
+            "against every unrelated directed pair in each sentence."
         ),
         "limitations": [
             "small, hand-authored Russian controlled set",
@@ -346,6 +356,7 @@ def run_benchmark(
             "this does not validate personal-semantic interpretation",
             "a blinded held-out human study is required for external validity",
         ],
+        "ranking_details": ranking["details"],
         "observations": [
             {
                 "sentence": obs.sentence,
@@ -369,17 +380,20 @@ def _print_summary(report: dict) -> None:
     trace_only = models["trace_mass_only"]
     direct = models["direct_parser_edges"]
     decision = report["decision"]
-    print("FVSC controlled viability benchmark v3")
+    print("FVSC controlled viability benchmark v4")
     print(f"pairs: {report['n_directional_pairs']} | primary dim: {report['primary_dimension']}")
     print(
         "mass-preserving density: "
-        f"accuracy={mass['accuracy']:.3f} "
+        f"accuracy={mass['accuracy']:.3f} AUC={mass['ranking_auc']:.3f} "
         f"CI95=[{mass['ci95'][0]:.3f}, {mass['ci95'][1]:.3f}] "
         f"coverage={mass['coverage']:.3f} p={mass['p_vs_chance_one_sided']:.4g}"
     )
-    print(f"trace-normalized control: accuracy={normalized['accuracy']:.3f}")
-    print(f"trace-mass only: accuracy={trace_only['accuracy']:.3f}")
-    print(f"direct parser edges: accuracy={direct['accuracy']:.3f}")
+    print(
+        f"trace-normalized control: accuracy={normalized['accuracy']:.3f} "
+        f"AUC={normalized['ranking_auc']:.3f}"
+    )
+    print(f"trace-mass only: accuracy={trace_only['accuracy']:.3f} AUC={trace_only['ranking_auc']:.3f}")
+    print(f"direct parser edges: accuracy={direct['accuracy']:.3f} AUC={direct['ranking_auc']:.3f}")
     print(f"dimension accuracy: {report['dimension_accuracy']}")
     print(f"controlled viability: {decision['controlled_viability']}")
     print(f"direction beyond trace mass: {decision['direction_beyond_trace_mass']}")
