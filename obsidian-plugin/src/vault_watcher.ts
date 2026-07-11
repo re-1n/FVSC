@@ -6,15 +6,15 @@ import type { BackendController } from "./backend";
  * the semantic map stays in sync without manual rebuilds.
  *
  * Per-path debouncing: rapid edits to one note collapse into a single POST.
- * The legacy visualization map and the append-only pilot ledger are updated
- * independently so a pilot failure never blocks the established map workflow.
+ * Generated review notes are routed only to the feedback endpoint and are
+ * never ingested as semantic evidence.
  */
 
 const DEBOUNCE_MS = 1500;
 const MAX_FILE_SIZE = 5 * 1024 * 1024;   // 5 MB safety cap
+const REVIEW_PREFIX = "_fvsc_review/";
 const EXCLUDE_PREFIXES = [
   "_fvsc_concepts/",
-  "_fvsc_review/",
   ".obsidian/",
   ".trash/",
   ".fvsc/",
@@ -107,7 +107,8 @@ export class VaultWatcher {
     if (!this.active || this.paused) return;
     if (!(f instanceof TFile)) return;
     if (f.extension !== "md") return;
-    if (EXCLUDE_PREFIXES.some((p) => f.path.startsWith(p))) return;
+    const isReview = f.path.startsWith(REVIEW_PREFIX);
+    if (!isReview && EXCLUDE_PREFIXES.some((p) => f.path.startsWith(p))) return;
     if (f.stat?.size && f.stat.size > MAX_FILE_SIZE) return;
 
     const key = f.path;
@@ -143,15 +144,20 @@ export class VaultWatcher {
       }
     }
 
-    const payload = {
-      path: change.path,
-      action: change.action,
-      text,
-      old_path: change.oldPath,
-      observed_at: observedAt,
-    };
-
     try {
+      if (change.path.startsWith(REVIEW_PREFIX)) {
+        await this.sendReviewFeedback(change, text);
+        return;
+      }
+
+      const payload = {
+        path: change.path,
+        action: change.action,
+        text,
+        old_path: change.oldPath,
+        observed_at: observedAt,
+      };
+
       const r = await fetch(`${this.backend.baseUrl()}/viz/file_ingest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -182,6 +188,27 @@ export class VaultWatcher {
       console.warn(`[fvsc-watch] network error for ${change.path}:`, err);
     } finally {
       if (this.pending.size === 0) this.cb.onIdle();
+    }
+  }
+
+  private async sendReviewFeedback(change: PendingChange, text: string | undefined): Promise<void> {
+    if (change.action === "delete" || text === undefined) return;
+    const response = await fetch(`${this.backend.baseUrl()}/pilot/review-feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, source_path: change.path }),
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      console.warn(`[fvsc-review] ${change.path} → ${response.status}: ${body}`);
+      return;
+    }
+    const data = await response.json();
+    if (data.submitted_count || data.ambiguous?.length) {
+      console.log(
+        `[fvsc-review] submitted=${data.submitted_count} ` +
+        `duplicates=${data.duplicates?.length ?? 0} ambiguous=${data.ambiguous?.length ?? 0}`,
+      );
     }
   }
 }
