@@ -46,20 +46,12 @@ def _direct_edge_margin(si: dict, a: str, b: str) -> float:
     return ab - ba
 
 
-def _pairwise_auc(positive_scores: list[float], negative_scores: list[float]) -> tuple[float, int]:
-    """Tie-aware AUC as P(score_positive > score_negative)."""
-    outcomes: list[float] = []
-    for positive in positive_scores:
-        for negative in negative_scores:
-            if positive > negative + _EPS:
-                outcomes.append(1.0)
-            elif positive < negative - _EPS:
-                outcomes.append(0.0)
-            else:
-                outcomes.append(0.5)
-    if not outcomes:
-        return 0.5, 0
-    return float(np.mean(outcomes)), len(outcomes)
+def _comparison_outcome(positive: float, negative: float) -> float:
+    if positive > negative + _EPS:
+        return 1.0
+    if positive < negative - _EPS:
+        return 0.0
+    return 0.5
 
 
 def evaluate_all_pairs_ranking(
@@ -68,11 +60,15 @@ def evaluate_all_pairs_ranking(
     dim: int = 64,
     config: ParseConfig | None = None,
 ) -> dict[str, dict]:
-    """Rank annotated links against every other directed concept pair.
+    """Rank annotated links against unrelated directed pairs.
 
-    The evaluation is micro-averaged over all positive-negative comparisons.
-    Sentences with no positive pairs are excluded because AUC is undefined for
-    a one-class sample; they remain covered by the separate parser evaluation.
+    Two AUCs are reported:
+
+    * ``ranking_auc`` compares every gold pair with every negative pair;
+    * ``trace_matched_auc`` compares only pairs with the same rounded
+      ``Tr(rho_A)-Tr(rho_B)``.  In that subset a trace-only rule is forced to
+      tie at 0.5, so any residual signal must come from something beyond total
+      mass (or from another correlated feature).
     """
     config = config or ParseConfig(min_freq=1, window=5)
     model_names = (
@@ -81,7 +77,8 @@ def evaluate_all_pairs_ranking(
         "trace_mass_only",
         "direct_parser_edges",
     )
-    pairwise_outcomes: dict[str, list[float]] = {name: [] for name in model_names}
+    all_outcomes: dict[str, list[float]] = {name: [] for name in model_names}
+    matched_outcomes: dict[str, list[float]] = {name: [] for name in model_names}
     per_sentence: list[dict] = []
     total_positives = 0
     total_negatives = 0
@@ -92,59 +89,73 @@ def evaluate_all_pairs_ranking(
         si = text_to_semantic_input(sentence, config=config)
         _, rhos = parse_semantic_input(si, dim=dim)
         terms = sorted(rhos)
-        scores: dict[str, list[tuple[bool, float]]] = {name: [] for name in model_names}
+        records: list[dict] = []
 
         for a in terms:
             for b in terms:
                 if a == b:
                     continue
-                is_positive = _is_gold_pair(a, b, expected_pairs)
                 rho_a = rhos[a]
                 rho_b = rhos[b]
-                scores["fvsc_density_mass_preserving"].append(
-                    (is_positive, _direction_margin(rho_a, rho_b))
-                )
-                scores["fvsc_density_trace_normalized_control"].append(
-                    (is_positive, _direction_margin(_normalise(rho_a), _normalise(rho_b)))
-                )
-                scores["trace_mass_only"].append(
-                    (is_positive, float(np.trace(rho_a) - np.trace(rho_b)))
-                )
-                scores["direct_parser_edges"].append(
-                    (is_positive, _direct_edge_margin(si, a, b))
-                )
+                trace_score = float(np.trace(rho_a) - np.trace(rho_b))
+                records.append({
+                    "positive": _is_gold_pair(a, b, expected_pairs),
+                    "trace_bin": round(trace_score, 8),
+                    "scores": {
+                        "fvsc_density_mass_preserving": _direction_margin(rho_a, rho_b),
+                        "fvsc_density_trace_normalized_control": _direction_margin(
+                            _normalise(rho_a), _normalise(rho_b)
+                        ),
+                        "trace_mass_only": trace_score,
+                        "direct_parser_edges": _direct_edge_margin(si, a, b),
+                    },
+                })
 
-        positive_count = sum(is_positive for is_positive, _ in scores[model_names[0]])
-        negative_count = len(scores[model_names[0]]) - positive_count
-        total_positives += positive_count
-        total_negatives += negative_count
+        positives = [record for record in records if record["positive"]]
+        negatives = [record for record in records if not record["positive"]]
+        total_positives += len(positives)
+        total_negatives += len(negatives)
         sentence_result = {
             "sentence": sentence,
-            "positive_pairs": positive_count,
-            "negative_pairs": negative_count,
+            "positive_pairs": len(positives),
+            "negative_pairs": len(negatives),
             "auc": {},
+            "trace_matched_auc": {},
+            "trace_matched_comparisons": {},
         }
 
         for model_name in model_names:
-            positive_scores = [score for positive, score in scores[model_name] if positive]
-            negative_scores = [score for positive, score in scores[model_name] if not positive]
-            sentence_auc, _ = _pairwise_auc(positive_scores, negative_scores)
-            sentence_result["auc"][model_name] = sentence_auc
-            for positive in positive_scores:
-                for negative in negative_scores:
-                    if positive > negative + _EPS:
-                        pairwise_outcomes[model_name].append(1.0)
-                    elif positive < negative - _EPS:
-                        pairwise_outcomes[model_name].append(0.0)
-                    else:
-                        pairwise_outcomes[model_name].append(0.5)
+            sentence_all: list[float] = []
+            sentence_matched: list[float] = []
+            for positive in positives:
+                for negative in negatives:
+                    outcome = _comparison_outcome(
+                        positive["scores"][model_name],
+                        negative["scores"][model_name],
+                    )
+                    sentence_all.append(outcome)
+                    all_outcomes[model_name].append(outcome)
+                    if positive["trace_bin"] == negative["trace_bin"]:
+                        sentence_matched.append(outcome)
+                        matched_outcomes[model_name].append(outcome)
+            sentence_result["auc"][model_name] = (
+                float(np.mean(sentence_all)) if sentence_all else 0.5
+            )
+            sentence_result["trace_matched_auc"][model_name] = (
+                float(np.mean(sentence_matched)) if sentence_matched else 0.5
+            )
+            sentence_result["trace_matched_comparisons"][model_name] = len(sentence_matched)
         per_sentence.append(sentence_result)
 
     result: dict[str, dict] = {}
-    for model_name, outcomes in pairwise_outcomes.items():
+    for model_name in model_names:
+        outcomes = all_outcomes[model_name]
+        matched = matched_outcomes[model_name]
         result[model_name] = {
             "ranking_auc": float(np.mean(outcomes)) if outcomes else 0.5,
             "ranking_comparisons": len(outcomes),
+            "trace_matched_auc": float(np.mean(matched)) if matched else 0.5,
+            "trace_matched_comparisons": len(matched),
             "positive_pairs": total_positives,
             "negative_pairs": total_negatives,
         }
