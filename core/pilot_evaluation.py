@@ -2,8 +2,8 @@
 
 The evaluation trains only on earlier documents and asks whether semantic shapes
 rank directed relations found in later documents above unrelated directed pairs
-from those same documents.  It compares FVSC with direct-edge frequency,
-trace-mass and deterministic-random baselines.  This is a technical predictive
+from those same documents. It compares FVSC with direct-edge frequency,
+trace-mass and deterministic-random baselines. This is a technical predictive
 test; it does not replace blinded human relevance ratings.
 """
 
@@ -21,6 +21,7 @@ from .semantic_metrics import operator_inclusion
 
 
 _EPS = 1e-12
+RankedExample = tuple[bool, float, str]
 
 
 @dataclass(frozen=True)
@@ -76,17 +77,15 @@ def _pairwise_outcome(positive: float, negative: float) -> float:
     return 0.5
 
 
-def _average_precision(labels_and_scores: list[tuple[bool, float]]) -> float:
-    positives = sum(label for label, _score in labels_and_scores)
+def _average_precision(examples: Sequence[RankedExample]) -> float:
+    """Average precision with a label-independent deterministic tie-break."""
+    positives = sum(label for label, _score, _key in examples)
     if positives == 0:
         return 0.0
-    ranked = sorted(
-        enumerate(labels_and_scores),
-        key=lambda item: (-item[1][1], item[0]),
-    )
+    ranked = sorted(examples, key=lambda item: (-item[1], item[2]))
     hits = 0
     total = 0.0
-    for rank, (_index, (label, _score)) in enumerate(ranked, start=1):
+    for rank, (label, _score, _key) in enumerate(ranked, start=1):
         if label:
             hits += 1
             total += hits / rank
@@ -140,7 +139,7 @@ def run_heldout_evaluation(
 
     model_names = ("fvsc_shape", "direct_graph", "trace_mass", "random")
     pairwise: dict[str, list[float]] = {name: [] for name in model_names}
-    ranked_examples: dict[str, list[tuple[bool, float]]] = {name: [] for name in model_names}
+    ranked_examples: dict[str, list[RankedExample]] = {name: [] for name in model_names}
     positive_total = 0
     positive_known = 0
     negative_total = 0
@@ -207,10 +206,12 @@ def run_heldout_evaluation(
         positive_scores = [(pair, scores(pair)) for pair in positives]
         negative_scores = [(pair, scores(pair)) for pair in negatives]
         for model_name in model_names:
-            for _pair, score_map in positive_scores:
-                ranked_examples[model_name].append((True, score_map[model_name]))
-            for _pair, score_map in negative_scores:
-                ranked_examples[model_name].append((False, score_map[model_name]))
+            for pair, score_map in positive_scores:
+                key = f"{document.source_id}\0{pair[0]}\0{pair[1]}"
+                ranked_examples[model_name].append((True, score_map[model_name], key))
+            for pair, score_map in negative_scores:
+                key = f"{document.source_id}\0{pair[0]}\0{pair[1]}"
+                ranked_examples[model_name].append((False, score_map[model_name], key))
             for _positive_pair, positive_map in positive_scores:
                 for _negative_pair, negative_map in negative_scores:
                     pairwise[model_name].append(_pairwise_outcome(
