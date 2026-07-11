@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, Notice } from "obsidian";
+import { Plugin, WorkspaceLeaf, Notice, TFile, normalizePath } from "obsidian";
 import { DEFAULT_SETTINGS, FvscSettings, FvscSettingTab } from "./settings";
 import { BackendController, BackendStatus } from "./backend";
 import { AntourageView, ANTOURAGE_VIEW_TYPE } from "./view";
@@ -62,6 +62,18 @@ export default class FvscPlugin extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: "rebuild-pilot-ledger",
+      name: "Pilot: rebuild semantic ledger",
+      callback: async () => this.rebuildPilotLedger(),
+    });
+
+    this.addCommand({
+      id: "open-pilot-daily-review",
+      name: "Pilot: create daily semantic review",
+      callback: async () => this.createPilotDailyReview(),
+    });
+
     this.addRibbonIcon("git-fork", "Open Antourage", () => this.openAntourageView());
 
     this.addSettingTab(new FvscSettingTab(this.app, this));
@@ -88,17 +100,11 @@ export default class FvscPlugin extends Plugin {
       } else {
         // Ollama is independent of the backend — warm both in parallel so the
         // chat is ready by the time the user opens the Antourage view.
-        // Without this, mass-adoption-blocker: a fresh install with Ollama
-        // present-but-not-running shows "Чат не подключён" forever and the
-        // user has no idea what to do.
         void this.startOllamaIfAvailable();
         void this.backend.start().then(() => {
           if (this.backend.getStatus() === "up") {
             // Backend reports "up" the moment uvicorn's port opens, but
-            // /viz/status may still 500 for a beat while the router warms
-            // (lazy load of vault cache, conceptnet prior, etc.). Retry the
-            // first-time-build check up to ~10s so the modal reliably appears
-            // for new users instead of "через раз".
+            // /viz/status may still 500 for a beat while the router warms.
             void this.scheduleBootstrapCheck();
           }
         });
@@ -136,6 +142,121 @@ export default class FvscPlugin extends Plugin {
         }
       } catch { /* keep retrying */ }
     }
+  }
+
+  private async ensureBackendUp(): Promise<boolean> {
+    if (this.backend.getStatus() !== "up") {
+      await this.backend.start();
+    }
+    if (this.backend.getStatus() !== "up") {
+      new Notice("FVSC Pilot: backend is not available.");
+      return false;
+    }
+    return true;
+  }
+
+  private async rebuildPilotLedger(): Promise<void> {
+    if (!(await this.ensureBackendUp())) return;
+    new Notice("FVSC Pilot: rebuilding evidence ledger…");
+    try {
+      const response = await fetch(`${this.backend.baseUrl()}/pilot/rebuild`, { method: "POST" });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      const data = await response.json();
+      const errors = Array.isArray(data.errors) ? data.errors.length : 0;
+      new Notice(
+        `FVSC Pilot: indexed ${data.files_indexed}/${data.files_seen} notes, ` +
+        `${data.concept_count} concepts${errors ? `, errors: ${errors}` : ""}.`,
+        8000,
+      );
+    } catch (error) {
+      console.error("[fvsc-pilot] rebuild failed", error);
+      new Notice(`FVSC Pilot: rebuild failed — ${String(error)}`, 10000);
+    }
+  }
+
+  private async createPilotDailyReview(): Promise<void> {
+    if (!(await this.ensureBackendUp())) return;
+    try {
+      let status = await fetch(`${this.backend.baseUrl()}/pilot/status`);
+      if (!status.ok) throw new Error(await status.text());
+      let statusData = await status.json();
+      if (!statusData.state_exists || statusData.active_event_count === 0) {
+        await this.rebuildPilotLedger();
+        status = await fetch(`${this.backend.baseUrl()}/pilot/status`);
+        if (!status.ok) throw new Error(await status.text());
+        statusData = await status.json();
+      }
+
+      const response = await fetch(`${this.backend.baseUrl()}/pilot/daily-review?limit=10`);
+      if (!response.ok) throw new Error(await response.text());
+      const data = await response.json();
+      const markdown = this.renderPilotDailyReview(data);
+      const folder = normalizePath("_fvsc_review");
+      const path = normalizePath(`${folder}/FVSC Daily Review.md`);
+      if (!this.app.vault.getAbstractFileByPath(folder)) {
+        await this.app.vault.createFolder(folder);
+      }
+      const existing = this.app.vault.getAbstractFileByPath(path);
+      let file: TFile;
+      if (existing instanceof TFile) {
+        await this.app.vault.modify(existing, markdown);
+        file = existing;
+      } else {
+        file = await this.app.vault.create(path, markdown);
+      }
+      await this.app.workspace.getLeaf("tab").openFile(file);
+      new Notice("FVSC Pilot: daily review created.");
+    } catch (error) {
+      console.error("[fvsc-pilot] daily review failed", error);
+      new Notice(`FVSC Pilot: daily review failed — ${String(error)}`, 10000);
+    }
+  }
+
+  private renderPilotDailyReview(data: {
+    snapshot_id?: string;
+    concepts?: Array<{
+      term: string;
+      mass: number;
+      evidence_count: number;
+      polysemy_entropy: number;
+      sources: string[];
+      related: Array<{ term: string; score: number }>;
+    }>;
+    recent_sources?: Array<{ path: string; active_assertions: number }>;
+  }): string {
+    const lines: string[] = [
+      "# FVSC Pilot — Daily Review",
+      "",
+      `Generated: ${new Date().toISOString()}`,
+      `Snapshot: \`${String(data.snapshot_id ?? "unknown").slice(0, 16)}\``,
+      "",
+      "> Экспериментальный обзор. Связи являются гипотезами модели, а не утверждениями о вас.",
+      "",
+    ];
+    for (const concept of data.concepts ?? []) {
+      lines.push(`## ${concept.term}`);
+      lines.push(`- Evidence: ${concept.evidence_count}; mass: ${concept.mass.toFixed(3)}; entropy: ${concept.polysemy_entropy.toFixed(3)}`);
+      if (concept.sources?.length) {
+        lines.push(`- Sources: ${concept.sources.map((source) => `[[${source.replace(/\.md$/i, "")}]]`).join(", ")}`);
+      }
+      if (concept.related?.length) {
+        lines.push(`- Related: ${concept.related.map((item) => `${item.term} (${item.score.toFixed(3)})`).join(", ")}`);
+      }
+      lines.push("- [ ] Полезно / точно");
+      lines.push("- [ ] Неточно / случайно");
+      lines.push("");
+    }
+    if (data.recent_sources?.length) {
+      lines.push("## Recently active sources", "");
+      for (const source of data.recent_sources) {
+        lines.push(`- [[${source.path.replace(/\.md$/i, "")}]] — ${source.active_assertions} assertions`);
+      }
+      lines.push("");
+    }
+    lines.push("## Notes", "", "- ");
+    return lines.join("\n");
   }
 
   async onunload() {
