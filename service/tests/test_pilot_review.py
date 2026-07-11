@@ -9,14 +9,16 @@ from service.pilot_app import app
 from service.pilot_review_router import ReviewMark, parse_review_marks
 
 
-def _review(snapshot: str) -> str:
+def _review(snapshot: str, *, freedom_useful: bool = True) -> str:
+    freedom_positive = "x" if freedom_useful else " "
+    freedom_negative = " " if freedom_useful else "x"
     return f"""# FVSC Pilot — Daily Review
 
 Snapshot: `{snapshot}`
 
 ## свобода
-- [x] Полезно / точно
-- [ ] Неточно / случайно
+- [{freedom_positive}] Полезно / точно
+- [{freedom_negative}] Неточно / случайно
 
 ## доверие
 - [ ] Полезно / точно
@@ -45,7 +47,7 @@ def test_parse_review_marks_extracts_only_unambiguous_concept_ratings() -> None:
     assert ambiguous == ["выбор"]
 
 
-def test_review_feedback_is_persisted_and_idempotent(tmp_path: Path) -> None:
+def test_review_feedback_is_persisted_idempotent_and_revisable(tmp_path: Path) -> None:
     note = tmp_path / "daily.md"
     note.write_text(
         "Свобода включает выбор и ответственность. "
@@ -75,6 +77,7 @@ def test_review_feedback_is_persisted_and_idempotent(tmp_path: Path) -> None:
         assert first_data["submitted_count"] == 2
         assert first_data["ambiguous"] == ["выбор"]
         assert first_data["duplicates"] == []
+        assert first_data["revisions"] == []
         assert all(record["snapshot_id"] == snapshot for record in first_data["submitted"])
 
         second = client.post(
@@ -92,6 +95,26 @@ def test_review_feedback_is_persisted_and_idempotent(tmp_path: Path) -> None:
         assert summary_data["count"] == 2
         assert summary_data["by_query_type"]["daily_review_concept"]["count"] == 2
         assert summary_data["by_query_type"]["daily_review_concept"]["useful_rate"] == 0.5
+
+        revised = client.post(
+            "/pilot/review-feedback",
+            json={"text": _review(snapshot[:16], freedom_useful=False)},
+        )
+        assert revised.status_code == 200, revised.text
+        revised_data = revised.json()
+        assert revised_data["submitted_count"] == 1
+        assert revised_data["revisions"] == ["свобода"]
+        assert revised_data["duplicates"] == ["доверие"]
+        assert revised_data["feedback_history_count"] == 3
+        assert revised_data["feedback_count"] == 2
+        assert revised_data["submitted"][0]["supersedes_feedback_id"] is not None
+
+        readiness = client.get("/pilot/readiness")
+        assert readiness.status_code == 200
+        readiness_feedback = readiness.json()["feedback"]
+        assert readiness_feedback["count"] == 2
+        assert readiness_feedback["history_count"] == 3
+        assert readiness_feedback["useful_rate"] == 0.0
 
     state_file = tmp_path / ".fvsc" / "pilot-state.json"
     assert state_file.exists()
