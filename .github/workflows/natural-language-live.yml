@@ -44,6 +44,8 @@ jobs:
       FROM_DATE: ${{ inputs.from_date || '2025-01-01' }}
       TO_DATE: ${{ inputs.to_date || '2025-12-31' }}
       PAGES: ${{ inputs.pages || '3' }}
+      MAX_THREADS: "80"
+      PAIRS_PER_CLASS: "20"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -76,14 +78,16 @@ jobs:
             --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}-container-bakeoff.json" \
             --train-fraction 0.8 \
             --bootstrap-samples 2000 \
-            --max-positives-per-document 30 \
-            --max-negatives-per-document 30 \
+            --max-threads "$MAX_THREADS" \
+            --max-positives-per-document "$PAIRS_PER_CLASS" \
+            --max-negatives-per-document "$PAIRS_PER_CLASS" \
             | tee artifacts/public-language/container-bakeoff-summary.json
       - name: Write job summary
         shell: bash
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
           root = Path('artifacts/public-language')
@@ -97,12 +101,14 @@ jobs:
               '# FVSC explicit-container cached bakeoff',
               '',
               f"- Corpus SHA-256: `{report['corpus_sha256']}`",
-              f"- Records / threads: {report['records']} / {report['threads']}",
-              f"- Parseable threads: {parser['parseable_threads']}",
+              f"- Corpus records / threads: {report['records']} / {report['threads']}",
+              f"- Frozen chronological thread cap: {os.environ['MAX_THREADS']}",
+              f"- Parseable selected threads: {parser['parseable_threads']}",
               f"- Train / test documents: {comparison['train_documents']} / {comparison['test_documents']}",
               f"- Known-positive coverage: {comparison['known_positive_coverage']:.4f}",
               f"- Sampled positives / negatives: {comparison['sampled_positive_pairs']} / {comparison['sampled_negative_pairs']}",
               f"- Runtime seconds: {comparison.get('runtime_seconds', 0.0):.2f}",
+              f"- Semantic dimension: {comparison['resource_bounds']['semantic_dim']}",
               f"- Container materializer: `{comparison['container_snapshot']['version']}`",
               f"- Verdict: `{comparison['verdict']}`",
               '',
@@ -121,12 +127,12 @@ jobs:
               f"Paired document bootstrap CI95: {comparison['paired_document_bootstrap_ci95']}",
               f"Asymmetric positive-pair rate: {comparison['asymmetric_positive_pair_rate']:.4f}",
               '',
-              '> Parser-derived edges remain proxy labels. This run tests the implemented ContainerCore v1, not every possible container or density model.',
+              '> Preliminary resource-bounded real-language slice. Parser-derived edges remain proxy labels, and scale-up to all threads is a separate gate.',
           ])
           (root / 'container-bakeoff-summary.md').write_text(
               '\n'.join(rows) + '\n', encoding='utf-8'
           )
-          with open(Path(__import__('os').environ['GITHUB_STEP_SUMMARY']), 'a', encoding='utf-8') as handle:
+          with open(Path(os.environ['GITHUB_STEP_SUMMARY']), 'a', encoding='utf-8') as handle:
               handle.write('\n'.join(rows) + '\n')
           PY
       - name: Upload attributed corpus and aggregate reports
