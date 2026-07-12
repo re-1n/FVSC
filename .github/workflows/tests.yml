@@ -37,6 +37,7 @@ jobs:
           path: |
             artifacts/pytest.log
             artifacts/pytest.xml
+            core/contextual_ambiguity_benchmark.py
           if-no-files-found: warn
       - name: Run controlled viability benchmark
         run: python -m core.viability_benchmark --output artifacts/viability-report.json
