@@ -5,9 +5,11 @@ on:
     paths:
       - ".github/workflows/natural-language-live.yml"
       - "core/container_core.py"
-      - "core/container_benchmark.py"
+      - "core/container_query.py"
+      - "core/container_benchmark_cached.py"
       - "tests/test_container_core.py"
-      - "tests/test_container_benchmark.py"
+      - "tests/test_container_query.py"
+      - "tests/test_container_benchmark_cached.py"
   workflow_dispatch:
     inputs:
       site:
@@ -62,54 +64,18 @@ jobs:
             --minimum-score 1 \
             --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
             | tee artifacts/public-language/fetch-summary.json
-      - name: Run explicit container bakeoff
+      - name: Run cached explicit container bakeoff
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY' | tee artifacts/public-language/container-bakeoff-summary.json
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-
-          from core.container_benchmark import BENCHMARK_VERSION, run_container_bakeoff
-          from core.natural_language_benchmark import _thread_documents, load_corpus
-
-          root = Path("artifacts/public-language")
-          corpus_files = list(root.glob("*.jsonl"))
-          if len(corpus_files) != 1:
-              raise SystemExit(f"expected one corpus, found {len(corpus_files)}")
-          corpus_path = corpus_files[0]
-          records = load_corpus(corpus_path)
-          documents, parser_diagnostics = _thread_documents(records, max_threads=None)
-          evaluation = run_container_bakeoff(
-              documents,
-              train_fraction=0.8,
-              bootstrap_samples=2000,
-              max_positives_per_document=20,
-              max_negatives_per_document=20,
-          )
-          report = {
-              "benchmark": BENCHMARK_VERSION,
-              "corpus_sha256": hashlib.sha256(corpus_path.read_bytes()).hexdigest(),
-              "records": len(records),
-              "threads": len({(record.site, record.thread_id) for record in records}),
-              "parser_diagnostics": parser_diagnostics,
-              "evaluation": evaluation,
-              "sampling": {
-                  "positive_pairs_per_document": 20,
-                  "negative_pairs_per_document": 20,
-                  "deterministic": True,
-              },
-              "raw_text_in_report": False,
-          }
-          output = root / f"{os.environ['SITE']}-{os.environ['FROM_DATE']}-{os.environ['TO_DATE']}-container-bakeoff.json"
-          output.write_text(
-              json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False),
-              encoding="utf-8",
-          )
-          print(json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2))
-          PY
+          python -m core.container_benchmark_cached \
+            --input "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
+            --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}-container-bakeoff.json" \
+            --train-fraction 0.8 \
+            --bootstrap-samples 2000 \
+            --max-positives-per-document 30 \
+            --max-negatives-per-document 30 \
+            | tee artifacts/public-language/container-bakeoff-summary.json
       - name: Write job summary
         shell: bash
         run: |
@@ -125,14 +91,15 @@ jobs:
           parser = report['parser_diagnostics']
           comparison = report['evaluation']
           rows = [
-              '# FVSC explicit-container live bakeoff',
+              '# FVSC explicit-container cached bakeoff',
               '',
               f"- Corpus SHA-256: `{report['corpus_sha256']}`",
               f"- Records / threads: {report['records']} / {report['threads']}",
               f"- Parseable threads: {parser['parseable_threads']}",
               f"- Train / test documents: {comparison['train_documents']} / {comparison['test_documents']}",
               f"- Known-positive coverage: {comparison['known_positive_coverage']:.4f}",
-              f"- Sampled positives / negatives: {comparison['sampled_positive_pairs']} / {comparison['negative_pairs']}",
+              f"- Sampled positives / negatives: {comparison['sampled_positive_pairs']} / {comparison['sampled_negative_pairs']}",
+              f"- Runtime seconds: {comparison.get('runtime_seconds', 0.0):.2f}",
               f"- Verdict: `{comparison['verdict']}`",
               '',
               '| Model | AUC | Average precision | Pairwise comparisons |',
@@ -150,7 +117,7 @@ jobs:
               f"Paired document bootstrap CI95: {comparison['paired_document_bootstrap_ci95']}",
               f"Asymmetric positive-pair rate: {comparison['asymmetric_positive_pair_rate']:.4f}",
               '',
-              '> This is a preliminary deterministic sample. Parser-derived edges remain proxy labels.',
+              '> Parser-derived edges remain proxy labels. This run tests the implemented ContainerCore v1, not every possible container or density model.',
           ])
           (root / 'container-bakeoff-summary.md').write_text(
               '\n'.join(rows) + '\n', encoding='utf-8'
