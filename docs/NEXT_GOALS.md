@@ -76,14 +76,15 @@ Exit condition: no source-lifecycle defect requires deleting `.fvsc/pilot-state.
 
 Sparse written notes may leave the map without enough observations to test. Voice
 capture is therefore a justified parallel input track, but it must not bypass the
-existing evidence and review contracts. Follow both:
+existing evidence and review contracts. Follow:
 
-- [VOICE_INGEST_PLAN.md](./VOICE_INGEST_PLAN.md) for capture, transcription and evidence;
+- [VOICE_INGEST_PLAN.md](./VOICE_INGEST_PLAN.md) for the full capture roadmap;
+- [VOICE_R1_PILOT.md](./VOICE_R1_PILOT.md) for the implemented local pilot;
 - [VOICE_ANTOURAGE_PLAN.md](./VOICE_ANTOURAGE_PLAN.md) for real-time conversation.
 
-### V-R0 — contracts and lifecycle — implemented
+### V-R0 — contracts and lifecycle — implemented and CI-tested
 
-Current branch now contains:
+Current branch contains:
 
 - immutable audio, transcript and voice-candidate artifacts;
 - separate `conversation_only` and `save_owner_turns_for_review` modes;
@@ -92,37 +93,50 @@ Current branch now contains:
 - `declared_owner`, `verified_owner`, `uncertain`, `non_owner` and `overlap` decisions;
 - explicit single-active-session state machine;
 - idempotent start, stop and emergency stop;
-- capability-gated `/pilot/voice/*` lifecycle endpoints;
 - tests proving a `conversation_only` session does not mutate the semantic snapshot.
 
-The current API does **not** claim microphone, ASR, verifier inference, TTS or
-real-time dialogue capability yet.
+### V-R1 — audio import and voice memo — implemented, real-audio gate pending
 
-### V-R1 — audio import and voice memo button — next
+Implemented software scope:
+
+- bounded raw-body audio upload;
+- content hashing and local storage outside the vault;
+- stdlib WAV decoder for PCM 8/16/24/32-bit input;
+- optional PyAV decoder for compressed audio;
+- deterministic energy-VAD baseline;
+- optional local `faster-whisper` adapter;
+- persisted `awaiting_asr`, `failed`, `ready`, `no_speech` and `no_transcript` states;
+- repeatable transcription after installing or fixing ASR;
+- immutable raw and normalized transcript layers;
+- correction as linked revisions;
+- explicit promotion into `EvidenceLedger` with capture/transcript/session provenance;
+- provenance-preserving retraction;
+- `ephemeral`, `24h`, `7d` and `keep` raw-audio retention;
+- failed-ASR source preservation;
+- Obsidian import, owner voice-memo, review and emergency-stop controls;
+- end-to-end synthetic WAV tests through promotion and retraction.
+
+The Python backend intentionally reports `microphone_capture=false`: Obsidian owns the
+microphone and uploads a bounded WAV. It reports `voice_memo_upload=true`.
+
+Real-audio acceptance gate:
+
+1. install `requirements-voice.txt` in the plugin's Python environment;
+2. record or import at least ten actual owner voice memos;
+3. measure VAD misses, ASR errors and processing time;
+4. correct, promote or discard every candidate;
+5. restart Obsidian/backend and verify queue restoration;
+6. delete retained raw audio and verify transcript/evidence history;
+7. confirm no candidate enters the map before explicit promotion.
+
+Exit condition: ten real owner recordings pass this flow without state repair,
+untraceable assertions or source loss.
+
+### V-R2 — half-duplex Antourage voice — next after the R1 real-audio gate
 
 Deliverables:
 
-- bounded local audio-file upload;
-- source hashing and storage outside a synced vault;
-- replaceable decoder and deterministic WAV baseline;
-- replaceable VAD backend;
-- optional local ASR adapter with timestamps;
-- raw and normalized transcript layers;
-- transcript review queue;
-- explicit promotion into `EvidenceLedger`;
-- Obsidian import and record-voice-memo controls;
-- raw-audio retention and deletion policy;
-- end-to-end fixture test from audio to promoted and retracted evidence.
-
-Exit condition: at least ten real personal voice memos can be imported or recorded,
-transcribed, corrected, promoted and restored after restart without manual state
-repair or untraceable assertions.
-
-### V-R2 — half-duplex Antourage voice
-
-Deliverables:
-
-- Obsidian microphone permission and visible recording indicator;
+- replace transitional capture processing with `AudioWorklet`;
 - PCM WebSocket transport;
 - VAD-completed user turns;
 - partial and final transcripts;
@@ -170,7 +184,44 @@ create false owner turns in the target environment.
 - assistant responses never become owner evidence;
 - model and preprocessing versions recorded in provenance;
 - deleting retained audio does not delete transcript or evidence history;
+- failed ASR never deletes the only source;
 - recording state is always visible and emergency stop releases capture.
+
+## Parallel Goal B — public natural-language robustness benchmark
+
+The framework is implemented in `core/natural_language_benchmark.py`; protocol and
+source restrictions are in [NATURAL_LANGUAGE_BENCHMARK.md](./NATURAL_LANGUAGE_BENCHMARK.md).
+
+Source decision:
+
+- do not scrape or persist Reddit content under the current general Data API terms;
+- start with attributed Stack Exchange API records under their applicable CC BY-SA version;
+- keep downloaded corpora local under `data/public_corpora/`;
+- never connect public corpus records to the personal `EvidenceLedger`.
+
+Implemented:
+
+- versioned JSONL schema with author/source/license attribution;
+- Stack Exchange question/answer fetcher with API backoff handling;
+- code-block removal and quote markers;
+- grouping all posts from one thread before chronological split;
+- corpus hash, license distribution and attribution completeness;
+- parser diagnostics and existing held-out FVSC/direct-graph/trace-mass/random comparison;
+- deterministic fixture tests;
+- raw corpus and generated report paths excluded from Git.
+
+Next experiment:
+
+1. freeze one bounded date range before inspecting results;
+2. fetch 300–1,000 records from `workplace`;
+3. require at least 100 parseable threads;
+4. run the benchmark and archive only the aggregate report plus corpus hash;
+5. manually blind-label at least 100 parser relations;
+6. repeat separately on `interpersonal` and `worldbuilding`/`writers`;
+7. add TF-IDF, PPMI and frozen embedding baselines before any strong model claim.
+
+Exit condition: at least one corpus has adequate held-out coverage, a completed manual
+parser audit and a report that can be reproduced from an attributed local corpus.
 
 ## Goal 3 — collect human usefulness data
 
@@ -281,6 +332,10 @@ Pause the pilot and fix the system before collecting more semantic ratings if an
 - assistant speech enters owner evidence;
 - a `conversation_only` session changes the semantic snapshot;
 - the recording state is not visibly observable or the emergency stop fails;
+- a failed ASR invocation loses the only source audio;
+- public benchmark text enters the personal evidence ledger;
+- posts from one public thread cross train/test;
+- source/license attribution is missing from a public corpus;
 - the held-out split uses future notes for training;
 - CI becomes red at the branch head.
 
@@ -296,9 +351,13 @@ Pause the pilot and fix the system before collecting more semantic ratings if an
 - [ ] Submit the first usefulness ratings.
 - [x] Define immutable voice artifacts and promotion policy.
 - [x] Define owner-verifier and explicit voice-session lifecycle contracts.
-- [x] Add capability-gated voice lifecycle API and tests.
-- [ ] Implement bounded audio-file import and local storage.
-- [ ] Connect a local ASR adapter and transcript review queue.
-- [ ] Add the Obsidian voice-memo button only after capability detection passes.
-- [ ] Implement half-duplex Antourage voice before full-duplex/barge-in.
+- [x] Implement bounded audio import, local storage, VAD and optional ASR.
+- [x] Implement Obsidian voice-memo capture and transcript review.
+- [x] Preserve session/capture/transcript provenance through promotion and retraction.
+- [x] Implement retention and failed-ASR retry behaviour.
+- [ ] Install `requirements-voice.txt` and run ten real owner voice memos.
+- [x] Implement an attributed public natural-language benchmark adapter.
+- [ ] Fetch and freeze the first Stack Exchange corpus.
+- [ ] Complete the first blinded parser-relation audit.
+- [ ] Implement half-duplex Antourage voice only after the R1 real-audio gate.
 - [ ] Record installation/runtime defects in the PR or a dedicated issue.
