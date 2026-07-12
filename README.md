@@ -30,22 +30,27 @@ The implementation is **operationally ready for a controlled real-vault pilot**.
 It is not yet evidence that FVSC is practically useful or that density-matrix
 shape outperforms simpler graph or mass baselines.
 
-Voice R0 now provides immutable voice artifacts, conservative owner-speaker
-attribution rules, explicit session lifecycle and emergency-stop API contracts.
-Actual microphone capture, ASR, speaker-model inference and real-time dialogue
-remain capability-gated and are not presented as working features yet.
+Voice R1 provides bounded local audio import, explicit owner voice-memo sessions,
+WAV capture from Obsidian, deterministic decode/VAD, optional local faster-whisper
+ASR, transcript correction, explicit evidence promotion, provenance-preserving
+retraction and raw-audio retention. Real-time Antourage dialogue and calibrated
+owner-speaker verification remain R2/R3 work.
 
 - [Current project status](./docs/PROJECT_STATUS.md)
 - [Next goals and stop conditions](./docs/NEXT_GOALS.md)
 - [Daily pilot protocol](./docs/daily-pilot.md)
 - [Semantic runtime roadmap](./docs/semantic-runtime-roadmap.md)
 - [Staged voice-ingest integration plan](./docs/VOICE_INGEST_PLAN.md)
+- [Voice R1 pilot protocol](./docs/VOICE_R1_PILOT.md)
 - [Real-time voice Antourage plan](./docs/VOICE_ANTOURAGE_PLAN.md)
 
 ## Quick start
 
 ```bash
 pip install -r requirements.txt
+
+# Optional local voice stack: faster-whisper + PyAV
+pip install -r requirements-voice.txt
 
 # Start the legacy service
 uvicorn service.app:app --host 127.0.0.1 --port 8765
@@ -84,16 +89,20 @@ Python interpreter / FVSC repo path. The status bar shows `● FVSC: up` when
 the backend is ready. Edits to eligible `.md` files are debounced and sent to
 the legacy visualization map and the append-only pilot ledger.
 
-Pilot commands in the Obsidian command palette:
+Pilot and R1 voice commands in the Obsidian command palette:
 
 ```text
 FVSC Antourage: Pilot: rebuild semantic ledger
 FVSC Antourage: Pilot: create daily semantic review
+FVSC Antourage: Voice: import audio file
+FVSC Antourage: Voice: start/stop owner voice memo
+FVSC Antourage: Voice: open transcript review queue
+FVSC Antourage: Voice: emergency stop
 ```
 
 The rebuild also runs the chronological held-out evaluation and writes reports
 under `.fvsc/` and `_fvsc_review/`. Generated reports are excluded from semantic
-ingest.
+ingest. Raw voice audio is stored outside the vault by default.
 
 ## Service API
 
@@ -113,10 +122,17 @@ ingest.
 | `POST /pilot/review-feedback` | Persist checked daily-review ratings without re-ingesting the review. |
 | `POST /pilot/evaluate` | Run chronological held-out comparison against simple baselines. |
 | `GET  /pilot/readiness` | Report data sufficiency and practical-usefulness gates. |
-| `GET  /pilot/voice/status` | Report voice runtime capabilities and active explicit session. |
-| `POST /pilot/voice/sessions` | Start an idempotent voice-memo or Antourage-dialogue lifecycle record. |
+| `GET  /pilot/voice/status` | Report R1 capabilities, repository state and active explicit session. |
+| `POST /pilot/voice/import` | Import a bounded raw-body audio file or uploaded voice memo. |
+| `POST /pilot/voice/sessions` | Start an idempotent explicit voice-memo lifecycle record. |
 | `POST /pilot/voice/sessions/{id}/stop` | Stop a voice session idempotently. |
 | `POST /pilot/voice/emergency-stop` | Stop the currently active voice session. |
+| `POST /pilot/voice/captures/{id}/transcribe` | Retry retained audio after local ASR becomes available. |
+| `GET  /pilot/voice/candidates` | List current transcript-review candidates. |
+| `POST /pilot/voice/candidates/{id}/correct` | Create a corrected immutable transcript revision. |
+| `POST /pilot/voice/candidates/{id}/promote` | Explicitly promote reviewed owner speech into the ledger. |
+| `POST /pilot/voice/candidates/{id}/retract` | Retract previously promoted voice evidence. |
+| `DELETE /pilot/voice/captures/{id}/audio` | Delete raw audio without deleting transcript/evidence history. |
 | `POST /spaces/{name}/ingest` | Ingest text (plain or Markdown). |
 | `POST /spaces/{name}/retrieve` | Quantum retrieval: Tr(ρ_query · ρ_chunk). |
 | `GET  /spaces/{name}/concepts/{term}/report` | Full legacy concept report. |
@@ -136,6 +152,8 @@ ingest.
 | `core/pilot_persistence.py` | Versioned atomic JSON persistence and restoration |
 | `core/pilot_evaluation.py` | Chronological held-out evaluation and baseline comparison |
 | `core/voice_artifacts.py` | Immutable capture/transcript/candidate records and promotion gates |
+| `core/voice_ingest.py` | WAV/PyAV decode, energy VAD, optional local ASR and review repository primitives |
+| `core/voice_r1_repository.py` | R1 retention, ASR retry and immutable raw-audio lifecycle |
 | `core/voice_session.py` | Explicit voice-session state machine and emergency stop |
 | `core/speaker_verification.py` | Owner enrollment contract and conservative attribution decisions |
 | `core/thesaurus_prior.py` | ConceptNet/RuWordNet weak prior (bonus-only) |
@@ -147,7 +165,8 @@ ingest.
 | `core/llm/` | LLM client abstraction (Ollama backend, no new deps) |
 | `service/viz_router.py` | `/viz` page + SSE chat + provenance + live `/file_ingest` |
 | `service/pilot_app.py` | Daily-pilot API entry point |
-| `service/pilot_voice_router.py` | Capability-gated explicit voice lifecycle API |
+| `service/pilot_voice_router.py` | R1 import, review, promotion, retention and explicit session API |
+| `obsidian-plugin/src/voice.ts` | Local microphone WAV capture and transcript-review UI |
 | `obsidian-plugin/src/` | TS plugin: lifecycle, backend control, settings, view, vault watcher |
 
 ## Key properties
