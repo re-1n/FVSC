@@ -1,0 +1,132 @@
+name: public-natural-language-live
+
+on:
+  workflow_dispatch:
+    inputs:
+      site:
+        description: Stack Exchange API site parameter
+        required: true
+        default: workplace
+      from_date:
+        description: Inclusive YYYY-MM-DD start
+        required: true
+        default: "2025-01-01"
+      to_date:
+        description: Inclusive YYYY-MM-DD end
+        required: true
+        default: "2025-12-31"
+      pages:
+        description: Chronological question pages, 1-20
+        required: true
+        default: "3"
+
+permissions:
+  contents: read
+
+jobs:
+  public-language:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SITE: ${{ inputs.site || 'workplace' }}
+      FROM_DATE: ${{ inputs.from_date || '2025-01-01' }}
+      TO_DATE: ${{ inputs.to_date || '2025-12-31' }}
+      PAGES: ${{ inputs.pages || '3' }}
+      MAX_THREADS: "80"
+      PAIRS_PER_CLASS: "20"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install runtime dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+      - name: Fetch frozen attributed corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/public-language
+          python -m core.natural_language_benchmark fetch-stackexchange \
+            --site "$SITE" \
+            --from-date "$FROM_DATE" \
+            --to-date "$TO_DATE" \
+            --pages "$PAGES" \
+            --page-size 100 \
+            --minimum-score 1 \
+            --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
+            | tee artifacts/public-language/fetch-summary.json
+      - name: Run cached explicit container bakeoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m core.container_benchmark_fast_cli \
+            --input "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
+            --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}-container-bakeoff.json" \
+            --train-fraction 0.8 \
+            --bootstrap-samples 2000 \
+            --max-threads "$MAX_THREADS" \
+            --max-positives-per-document "$PAIRS_PER_CLASS" \
+            --max-negatives-per-document "$PAIRS_PER_CLASS" \
+            | tee artifacts/public-language/container-bakeoff-summary.json
+      - name: Write job summary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path('artifacts/public-language')
+          reports = list(root.glob('*-container-bakeoff.json'))
+          if len(reports) != 1:
+              raise SystemExit(f'expected one container report, found {len(reports)}')
+          report = json.loads(reports[0].read_text())
+          parser = report['parser_diagnostics']
+          comparison = report['evaluation']
+          rows = [
+              '# FVSC explicit-container cached bakeoff',
+              '',
+              f"- Corpus SHA-256: `{report['corpus_sha256']}`",
+              f"- Corpus records / threads: {report['records']} / {report['threads']}",
+              f"- Frozen chronological thread cap: {os.environ['MAX_THREADS']}",
+              f"- Parseable selected threads: {parser['parseable_threads']}",
+              f"- Train / test documents: {comparison['train_documents']} / {comparison['test_documents']}",
+              f"- Known-positive coverage: {comparison['known_positive_coverage']:.4f}",
+              f"- Sampled positives / negatives: {comparison['sampled_positive_pairs']} / {comparison['sampled_negative_pairs']}",
+              f"- Runtime seconds: {comparison.get('runtime_seconds', 0.0):.2f}",
+              f"- Semantic dimension: {comparison['resource_bounds']['semantic_dim']}",
+              f"- Container materializer: `{comparison['container_snapshot']['version']}`",
+              f"- Verdict: `{comparison['verdict']}`",
+              '',
+              '| Model | AUC | Average precision | Pairwise comparisons |',
+              '|---|---:|---:|---:|',
+          ]
+          for name, metrics in comparison['models'].items():
+              rows.append(
+                  f"| {name} | {metrics['auc']:.4f} | {metrics['average_precision']:.4f} | {metrics['pairwise_comparisons']} |"
+              )
+          rows.extend([
+              '',
+              f"Best container backend: `{comparison['best_container_backend']}`",
+              f"Best non-container backend: `{comparison['best_non_container_backend']}`",
+              f"Container AUC delta: {comparison['container_auc_delta_vs_best_non_container']:.6f}",
+              f"Paired document bootstrap CI95: {comparison['paired_document_bootstrap_ci95']}",
+              f"Asymmetric positive-pair rate: {comparison['asymmetric_positive_pair_rate']:.4f}",
+              '',
+              '> Preliminary resource-bounded real-language slice. Parser-derived edges remain proxy labels, and scale-up to all threads is a separate gate.',
+          ])
+          (root / 'container-bakeoff-summary.md').write_text(
+              '\n'.join(rows) + '\n', encoding='utf-8'
+          )
+          with open(Path(os.environ['GITHUB_STEP_SUMMARY']), 'a', encoding='utf-8') as handle:
+              handle.write('\n'.join(rows) + '\n')
+          PY
+      - name: Upload attributed corpus and aggregate reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fvsc-public-language-${{ env.SITE }}-${{ env.FROM_DATE }}-${{ env.TO_DATE }}
+          path: artifacts/public-language/
+          if-no-files-found: error

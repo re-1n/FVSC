@@ -1,0 +1,89 @@
+{
+  "benchmark": "fvsc-core-representation-workplace-2025-v1",
+  "best_non_density_backend": "conditional_graph",
+  "corpus": {
+    "evaluated_test_documents": 39,
+    "known_positive_coverage": 0.8854881613083314,
+    "pairwise_comparisons_per_model": 5392800,
+    "records": 1068,
+    "sha256": "fb914a374bbf5c44688325d6588d175b995592b73bf2b7b2cea724b7ac074ecb",
+    "test_documents": 39,
+    "threads": 194,
+    "train_documents": 155
+  },
+  "density_auc_delta_vs_best_backend": -0.04177115784008312,
+  "interpretation": {
+    "canonical_core": "append-only typed temporal evidence graph/hypergraph remains the provisional canonical store",
+    "density_status": "current deterministic density materializer is not selected as the primary relation-ranking backend",
+    "model_key_note": "sparse_context_inclusion is histogram-intersection context overlap in bakeoff v1; the key is retained for reproducibility",
+    "relation_ranking_backend": "conditional directed graph is the current leader on this corpus",
+    "unresolved_question": "density matrices still require a contextual polysemy/facet-selection benchmark"
+  },
+  "limitations": [
+    "parser-derived relations are proxy labels, not independent semantic truth",
+    "this task emphasizes directed relation prediction, not lexical ambiguity",
+    "the density backend still uses deterministic hash-role features",
+    "no learned embedding or language-model baseline is included in v1",
+    "personal usefulness requires real-vault ratings",
+    "the paired document bootstrap has only 39 test-thread clusters and includes zero despite a negative point estimate",
+    "the public corpus measures general prose, not the owner personal semantic map"
+  ],
+  "models": {
+    "conditional_graph": {
+      "auc": 0.6024907283785789,
+      "average_precision": 0.837668375817276,
+      "pairwise_comparisons": 5392800
+    },
+    "direct_graph": {
+      "auc": 0.5935497329773031,
+      "average_precision": 0.8281177130586116,
+      "pairwise_comparisons": 5392800
+    },
+    "fvsc_density_shape": {
+      "auc": 0.5607195705384957,
+      "average_precision": 0.7933558722088482,
+      "pairwise_comparisons": 5392800
+    },
+    "ppmi_graph": {
+      "auc": 0.5693078734609108,
+      "average_precision": 0.8154083005552785,
+      "pairwise_comparisons": 5392800
+    },
+    "random": {
+      "auc": 0.4936222370568165,
+      "average_precision": 0.7748573634290779,
+      "pairwise_comparisons": 5392800
+    },
+    "sparse_context_inclusion": {
+      "auc": 0.5917415813677496,
+      "average_precision": 0.7941099718346321,
+      "pairwise_comparisons": 5392800
+    },
+    "trace_mass": {
+      "auc": 0.34835577065717255,
+      "average_precision": 0.7200574373055159,
+      "pairwise_comparisons": 5392800
+    }
+  },
+  "paired_document_bootstrap_ci95": [
+    -0.09947249393604646,
+    0.013899821813061567
+  ],
+  "parser_diagnostics": {
+    "median_thread_characters": 5823.0,
+    "parseable_threads": 194,
+    "parser_relations": 159973,
+    "quote_marked_threads": 146,
+    "skipped_short": 0,
+    "skipped_unparseable": 0,
+    "threads_seen": 194
+  },
+  "provenance": {
+    "artifact_digest": "sha256:4a3de1c214978894c75f17e867f852b50524c3881ffc20d4545fe2ee01f8814f",
+    "artifact_id": 8259041180,
+    "github_actions_run": 29189404314,
+    "head_sha": "c4140a6013ec51413a7bc0d0b22104b7bbff6c95"
+  },
+  "source_benchmark": "fvsc-representation-bakeoff-v1",
+  "verdict": "inconclusive"
+}

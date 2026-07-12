@@ -58,7 +58,7 @@ export class BackendController {
     const args = [
       "-X", "utf8",
       "-m", "uvicorn",
-      "service.app:app",
+      "service.pilot_app:app",
       "--host", "127.0.0.1",
       "--port", String(s.port),
     ];

@@ -1,0 +1,97 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements-dev.txt
+      - name: Run unit tests
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          python -m pytest -q --junitxml=artifacts/pytest.xml 2>&1 | tee artifacts/pytest.log
+      - name: Upload unit-test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fvsc-unit-test-diagnostics
+          path: |
+            artifacts/pytest.log
+            artifacts/pytest.xml
+            core/contextual_ambiguity_benchmark.py
+          if-no-files-found: warn
+      - name: Run controlled viability benchmark
+        run: python -m core.viability_benchmark --output artifacts/viability-report.json
+      - name: Upload viability report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fvsc-viability-report
+          path: artifacts/viability-report.json
+          if-no-files-found: warn
+
+  obsidian-plugin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: obsidian-plugin/package-lock.json
+      - name: Install plugin dependencies
+        working-directory: obsidian-plugin
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ../artifacts
+          npm ci --no-audit --no-fund 2>&1 | tee ../artifacts/npm-install.log
+      - name: Typecheck plugin
+        working-directory: obsidian-plugin
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee ../artifacts/typecheck.log
+      - name: Build plugin
+        working-directory: obsidian-plugin
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee ../artifacts/plugin-build.log
+          test -s main.js
+      - name: Upload installable plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: fvsc-obsidian-plugin
+          path: |
+            obsidian-plugin/main.js
+            obsidian-plugin/manifest.json
+            obsidian-plugin/styles.css
+          if-no-files-found: error
+      - name: Upload plugin diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fvsc-plugin-diagnostics
+          path: artifacts/*.log
+          if-no-files-found: warn

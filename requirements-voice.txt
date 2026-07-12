@@ -1,0 +1,5 @@
+# Optional local-only voice stack. Not installed by the default CI profile because
+# model downloads and hardware backends are environment-specific.
+-r requirements.txt
+faster-whisper>=1.1,<2
+av>=12,<15

@@ -5,12 +5,15 @@ Usage:
         python -m uvicorn service.app:app --host 127.0.0.1 --port 8765
 
     Then run tests:
-        python -m pytest service/tests/test_smoke.py -v
+        python -m pytest service/tests/test_smoke.py -v -m integration
 """
 
 from __future__ import annotations
 
 import httpx
+import pytest
+
+pytestmark = pytest.mark.integration
 
 BASE = "http://127.0.0.1:8765"
 

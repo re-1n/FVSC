@@ -6,16 +6,17 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit",
     "install-to-vault": "install-to-vault.cmd"
   },
   "keywords": ["obsidian", "fvsc", "semantic"],
   "author": "Rein",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^20.11.0",
-    "builtin-modules": "^3.3.0",
-    "esbuild": "^0.20.0",
-    "obsidian": "latest",
-    "typescript": "^5.4.0"
+    "@types/node": "20.11.0",
+    "builtin-modules": "3.3.0",
+    "esbuild": "0.20.0",
+    "obsidian": "1.5.7",
+    "typescript": "5.4.5"
   }
 }

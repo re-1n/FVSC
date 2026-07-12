@@ -10,22 +10,21 @@ Usage:
 
 Environment variables (used if --vault is not provided):
     FVSC_VAULT_PATH — path to Obsidian vault
-    FVSC_CONCEPTNET_PATH — path to conceptnet_ru.json (optional, will warn if missing)
+    FVSC_CONCEPTNET_PATH — path to conceptnet_ru.json (optional, runs without prior if missing)
 
 What it does:
     1. Walks vault, strips Markdown, builds corpus.
-    2. Loads ConceptNet RU thesaurus prior.
+    2. Optionally loads a ConceptNet RU thesaurus prior.
     3. Extracts semantic_input → SemanticSpace (dim=64).
     4. Recursive deepening (3 iters).
     5. Writes top-N concept notes to <vault>/_fvsc_concepts/*.md
     6. (Optional) Renders interactive HTML map to <vault>/vault_map.html
-    7. Prints perf summary.
+    7. Atomically persists a versioned local cache.
 """
 from __future__ import annotations
 
 import argparse
 import os
-import pickle
 import sys
 import time
 from pathlib import Path
@@ -42,10 +41,11 @@ from .density_core import SemanticSpace
 from .text_parser_agnostic import text_to_semantic_input, ParseConfig
 from .thesaurus_prior import ThesaurusPrior
 from .exocortex_ingest import _RU_STOPWORDS
-from .vault_ingest import collect_vault, collect_vault_per_file, _TG_STRUCTURAL
+from .vault_ingest import collect_vault_per_file, _TG_STRUCTURAL
 from .export_to_vault import export_space_to_vault
 from .visualize_space import render_html
 from .provenance import build_provenance_and_silent
+from .vault_cache import save_vault_cache
 
 
 def _get_default_vault() -> Optional[Path]:
@@ -59,8 +59,7 @@ def _get_default_conceptnet() -> Optional[Path]:
     conceptnet_path = os.environ.get("FVSC_CONCEPTNET_PATH")
     if conceptnet_path:
         return Path(conceptnet_path)
-    
-    # Try to find conceptnet_ru.json in FVSC/data relative to this file
+
     fvsc_root = Path(__file__).resolve().parent.parent
     default_path = fvsc_root / "data" / "conceptnet_ru.json"
     return default_path if default_path.exists() else None
@@ -74,15 +73,15 @@ CACHE_NAME = "_fvsc_cache.pkl"
 ProgressCallback = Callable[[str, float, str], None]
 
 STAGE_WEIGHTS: dict[str, tuple[float, float, str]] = {
-    "collect":    (0,   2,   "Читаю файлы vault'а"),
-    "prior":      (2,   3,   "Загружаю тезаурус"),
-    "parse":      (3,   6,   "Извлекаю концепты"),
-    "provenance": (6,   8,   "Привязываю концепты к заметкам"),
-    "materialize":(8,   45,  "Строю смысловое пространство"),
-    "deepen":     (45,  55,  "Углубляю связи"),
-    "export":     (55,  87,  "Сохраняю заметки концептов"),
-    "render":     (87,  97,  "Рендерю карту"),
-    "save":       (97,  100, "Сохраняю кэш"),
+    "collect":     (0,   2,   "Читаю файлы vault'а"),
+    "prior":       (2,   3,   "Загружаю тезаурус"),
+    "parse":       (3,   6,   "Извлекаю концепты"),
+    "provenance":  (6,   8,   "Привязываю концепты к заметкам"),
+    "materialize": (8,  45,   "Строю смысловое пространство"),
+    "deepen":      (45, 55,   "Углубляю связи"),
+    "export":      (55, 87,   "Сохраняю заметки концептов"),
+    "render":      (87, 97,   "Рендерю карту"),
+    "save":        (97, 100,  "Сохраняю кэш"),
 }
 
 
@@ -98,7 +97,7 @@ def _emit(cb: Optional[ProgressCallback], stage: str, percent: float, message: s
 
 def run(
     vault_dir: Path,
-    conceptnet_path: Path,
+    conceptnet_path: Optional[Path] = None,
     top_n: int = 150,
     render_html_map: bool = True,
     dim: int = 64,
@@ -106,18 +105,21 @@ def run(
 ):
     perf = {}
     cb = progress_callback
+    vault_dir = Path(vault_dir).expanduser().resolve()
+    if conceptnet_path is not None:
+        conceptnet_path = Path(conceptnet_path).expanduser().resolve()
 
     def _start(stage: str) -> None:
-        s, _e, msg = STAGE_WEIGHTS[stage]
-        _emit(cb, stage, s, f"Стадия: {msg}")
+        start, _end_percent, message = STAGE_WEIGHTS[stage]
+        _emit(cb, stage, start, f"Стадия: {message}")
 
     def _end(stage: str, elapsed: float) -> None:
-        _s, e, msg = STAGE_WEIGHTS[stage]
-        _emit(cb, stage, e, f"Готово: {msg} ({elapsed:.1f}с)")
+        _start_percent, end, message = STAGE_WEIGHTS[stage]
+        _emit(cb, stage, end, f"Готово: {message} ({elapsed:.1f}с)")
 
     print(f"Vault: {vault_dir}")
-    if not vault_dir.exists():
-        raise SystemExit(f"Vault not found: {vault_dir}")
+    if not vault_dir.is_dir():
+        raise FileNotFoundError(f"Vault not found: {vault_dir}")
 
     _start("collect")
     t0 = time.perf_counter()
@@ -131,13 +133,14 @@ def run(
     _start("prior")
     t0 = time.perf_counter()
     prior = None
-    if conceptnet_path.exists():
+    if conceptnet_path is not None and conceptnet_path.is_file():
         prior = ThesaurusPrior.from_conceptnet(str(conceptnet_path))
         perf["load_prior"] = time.perf_counter() - t0
         print(f"  loaded thesaurus prior ({len(prior):,} pairs) in {perf['load_prior']:.1f}s")
     else:
         perf["load_prior"] = time.perf_counter() - t0
-        print(f"  [warn] ConceptNet not found at {conceptnet_path} — running without prior")
+        location = str(conceptnet_path) if conceptnet_path is not None else "<not configured>"
+        print(f"  [warn] ConceptNet not found at {location} — running without prior")
     _end("prior", perf["load_prior"])
 
     cfg = ParseConfig(
@@ -161,10 +164,12 @@ def run(
     t0 = time.perf_counter()
     provenance, silent_pool = build_provenance_and_silent(si, files_by_path, cfg)
     perf["provenance"] = time.perf_counter() - t0
-    n_files_attributed = sum(1 for v in provenance.values() if any(
-        src != "[vault]" for src in v.get("self", {})
-    ))
-    silent_hapax = sum(1 for v in silent_pool.values() if v["freq"] == 1)
+    n_files_attributed = sum(
+        1
+        for value in provenance.values()
+        if any(source != "[vault]" for source in value.get("self", {}))
+    )
+    silent_hapax = sum(1 for value in silent_pool.values() if value["freq"] == 1)
     print(
         f"  provenance: {n_files_attributed}/{len(provenance)} concepts attributed | "
         f"silent_pool: {len(silent_pool):,} tokens ({silent_hapax:,} said once) "
@@ -193,7 +198,9 @@ def run(
     _start("export")
     t0 = time.perf_counter()
     stats = export_space_to_vault(
-        space, si, vault_dir,
+        space,
+        si,
+        vault_dir,
         folder_name="_fvsc_concepts",
         top_n=top_n,
         n_files=n_files,
@@ -212,8 +219,10 @@ def run(
         t0 = time.perf_counter()
         out_html = vault_dir / "vault_map.html"
         data = render_html(
-            space, si, out_html,
-            title="Rein vault — карта смыслов",
+            space,
+            si,
+            out_html,
+            title=f"{vault_dir.name} — карта смыслов",
             subtitle=f"{n_files} файлов · {len(corpus):,} символов · top-100 концептов",
             top_n=100,
             edge_threshold=0.50,
@@ -224,59 +233,62 @@ def run(
         print(f"  saved: {out_html}")
         _end("render", perf["render_html"])
 
-    # ── persist the cache so /viz can lazy-load it on first request
     print()
     print("Saving cache…")
     _start("save")
     t0 = time.perf_counter()
     cache_path = vault_dir / CACHE_NAME
-    try:
-        with open(cache_path, "wb") as f:
-            pickle.dump(
-                {"space": space, "si": si, "n_files": n_files, "corpus_chars": len(corpus)},
-                f, protocol=pickle.HIGHEST_PROTOCOL,
-            )
-        perf["save_cache"] = time.perf_counter() - t0
-        print(f"  saved {cache_path.name} ({cache_path.stat().st_size / 1024 / 1024:.1f} MB) in {perf['save_cache']:.1f}s")
-    except Exception as e:
-        perf["save_cache"] = time.perf_counter() - t0
-        print(f"  [error] cache save failed: {e}")
+    save_vault_cache(
+        cache_path,
+        {
+            "space": space,
+            "si": si,
+            "n_files": n_files,
+            "corpus_chars": len(corpus),
+        },
+    )
+    perf["save_cache"] = time.perf_counter() - t0
+    print(
+        f"  saved {cache_path.name} "
+        f"({cache_path.stat().st_size / 1024 / 1024:.1f} MB) "
+        f"in {perf['save_cache']:.1f}s"
+    )
     _end("save", perf["save_cache"])
 
     print()
     print("─── perf summary ───")
     total = sum(perf.values())
-    for k, v in perf.items():
-        pct = 100 * v / total if total else 0
-        print(f"  {k:20s} {v:7.2f}s  ({pct:4.1f}%)")
+    for key, value in perf.items():
+        pct = 100 * value / total if total else 0
+        print(f"  {key:20s} {value:7.2f}s  ({pct:4.1f}%)")
     print(f"  {'TOTAL':20s} {total:7.2f}s")
 
     return space, si, stats
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Sync Obsidian vault into FVSC concept notes.")
-    
+    parser = argparse.ArgumentParser(description="Sync Obsidian vault into FVSC concept notes.")
+
     default_vault = _get_default_vault()
     default_conceptnet = _get_default_conceptnet()
-    
-    ap.add_argument(
+
+    parser.add_argument(
         "--vault",
         type=Path,
         default=default_vault,
         required=default_vault is None,
-        help="Path to Obsidian vault (or set FVSC_VAULT_PATH env var)"
+        help="Path to Obsidian vault (or set FVSC_VAULT_PATH env var)",
     )
-    ap.add_argument(
+    parser.add_argument(
         "--conceptnet",
         type=Path,
         default=default_conceptnet,
-        help="Path to conceptnet_ru.json (or set FVSC_CONCEPTNET_PATH env var)"
+        help="Path to conceptnet_ru.json (or set FVSC_CONCEPTNET_PATH env var)",
     )
-    ap.add_argument("--top", type=int, default=150, help="Top N concepts to export as notes")
-    ap.add_argument("--no-html", action="store_true", help="Skip HTML map rendering")
-    ap.add_argument("--dim", type=int, default=64)
-    args = ap.parse_args()
+    parser.add_argument("--top", type=int, default=150, help="Top N concepts to export as notes")
+    parser.add_argument("--no-html", action="store_true", help="Skip HTML map rendering")
+    parser.add_argument("--dim", type=int, default=64)
+    args = parser.parse_args()
 
     run(
         vault_dir=args.vault,

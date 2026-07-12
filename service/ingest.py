@@ -29,6 +29,20 @@ def _chunkify(texts: List[str], source_id: str) -> List[Chunk]:
     return chunks
 
 
+def _purge_existing_source(bundle: SpaceBundle, source_id: str) -> int:
+    """Remove all previously indexed chunks and semantic mass for a source."""
+    old_chunk_ids = [
+        chunk_id
+        for chunk_id, chunk in bundle.chunks.items()
+        if chunk.source_id == source_id
+    ]
+    purged = 0
+    for chunk_id in old_chunk_ids:
+        purged += bundle.space.purge_source(chunk_id)
+        del bundle.chunks[chunk_id]
+    return purged
+
+
 # ── core ingest ───────────────────────────────────────────────────
 
 def ingest_text(
@@ -38,37 +52,32 @@ def ingest_text(
     fmt: str = "plain",
     config: Optional[ParseConfig] = None,
 ) -> Tuple[SpaceBundle, int, int]:
-    """Ingest raw text into a SpaceBundle. Mutates and returns it.
+    """Replace one source's indexed representation in a SpaceBundle.
 
-    Returns (bundle, chunks_added, concepts_before).
+    Re-ingesting the same ``source_id`` first purges all previous chunks and
+    their density components. This keeps retrieval and concept provenance in
+    sync when a document shrinks, changes structure, or becomes empty.
 
-    fmt="md":    Uses mistune AST to extract structured chunks from Markdown.
-                 Tables become row-sentences that preserve column relationships.
-                 Headings prepend section context to subsequent paragraphs.
-                 Code blocks, HTML, and formatting syntax are stripped.
-
-    fmt="plain": Basic cleaning + paragraph-level splitting. No structural
-                 extraction. Suitable for all non-Markdown text.
+    Returns ``(bundle, chunks_added, concepts_before)``. ``chunks_added`` counts
+    only chunks that produced a non-empty semantic input.
     """
+    concepts_before = len(bundle.space.concepts)
+    _purge_existing_source(bundle, source_id)
+
     if fmt == "md":
-        # Structured extraction via AST — table rows, heading context, etc.
         chunk_texts = parse_markdown_to_chunks(text)
     else:
-        # Plain text: clean noise, split into paragraphs
         cleaned = _clean_for_fvsc(text)
         chunk_texts = _split_paragraphs(cleaned)
 
     chunks = _chunkify(chunk_texts, source_id)
-    if not chunks:
-        return bundle, 0, len(bundle.space.concepts)
-
-    concepts_before = len(bundle.space.concepts)
-
+    added = 0
     for chunk in chunks:
-        si = text_to_semantic_input(chunk.text, config=config)
-        if not si:
+        semantic_input = text_to_semantic_input(chunk.text, config=config)
+        if not semantic_input:
             continue
-        bundle.space.load_from_semantic_input(si, source_text=chunk.chunk_id)
+        bundle.space.load_from_semantic_input(semantic_input, source_text=chunk.chunk_id)
         bundle.chunks[chunk.chunk_id] = chunk
+        added += 1
 
-    return bundle, len(chunks), concepts_before
+    return bundle, added, concepts_before

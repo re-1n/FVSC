@@ -1,0 +1,84 @@
+{
+  "benchmark": "fvsc-public-thread-heldout-v1",
+  "run": {
+    "github_actions_run_id": 29186278184,
+    "head_sha": "64a839118b461014f80a7cea7b771debebcfe7a6",
+    "artifact_id": 8258133344,
+    "artifact_sha256": "cdefbe791ef520a52bceef845b184b450e24ea026e51d9cd2c64c359379053e3"
+  },
+  "corpus": {
+    "source": "Stack Exchange API",
+    "site": "workplace",
+    "from_date": "2025-01-01",
+    "to_date": "2025-12-31",
+    "selection": "questions with score >= 1 from the first three chronological API pages, plus their answers",
+    "schema": "fvsc-natural-language-jsonl-v1",
+    "records": 1068,
+    "threads": 194,
+    "parseable_threads": 194,
+    "attribution_complete_rate": 1.0,
+    "licenses": {
+      "CC BY-SA 4.0": 1068
+    },
+    "corpus_sha256": "fb914a374bbf5c44688325d6588d175b995592b73bf2b7b2cea724b7ac074ecb",
+    "raw_corpus_committed": false,
+    "usage_purpose": "evaluation_only_no_llm_training"
+  },
+  "parser": {
+    "relations": 159973,
+    "quote_marked_threads": 146,
+    "median_thread_characters": 5823.0,
+    "skipped_short": 0,
+    "skipped_unparseable": 0
+  },
+  "split": {
+    "grouping_unit": "question thread",
+    "chronological": true,
+    "train_fraction": 0.8,
+    "train_documents": 155,
+    "test_documents": 39,
+    "evaluated_test_documents": 39,
+    "known_positive_coverage": 0.8854881613083314,
+    "positive_pairs_total": 30451,
+    "positive_pairs_known": 26964,
+    "negative_pairs": 7800
+  },
+  "models": {
+    "fvsc_shape": {
+      "auc": 0.5607195705384957,
+      "average_precision": 0.7933558722088482,
+      "pairwise_comparisons": 5392800
+    },
+    "direct_graph": {
+      "auc": 0.5935497329773031,
+      "average_precision": 0.8281177130586116,
+      "pairwise_comparisons": 5392800
+    },
+    "trace_mass": {
+      "auc": 0.34835577065717255,
+      "average_precision": 0.7200574373055159,
+      "pairwise_comparisons": 5392800
+    },
+    "random": {
+      "auc": 0.4936222370568165,
+      "average_precision": 0.7748573634290779,
+      "pairwise_comparisons": 5392800
+    }
+  },
+  "best_baseline": "direct_graph",
+  "fvsc_auc_delta_vs_best_baseline": -0.03283016243880732,
+  "paired_bootstrap_ci95": [
+    -0.03320595748034417,
+    -0.032440520230677936
+  ],
+  "verdict": "no_demonstrated_added_value",
+  "interpretation": "FVSC shape is above deterministic random on this parser-labelled task but significantly below the direct parser-edge baseline. This run does not support added value from the current density-matrix shape representation on natural public prose.",
+  "limitations": [
+    "parser-derived directed relations are proxy labels, not independent human annotations",
+    "average precision is inflated by class imbalance and should not be compared to a 0.5 baseline",
+    "the deterministic pilot encoder is a baseline rather than a learned contextual encoder",
+    "the corpus tests technical robustness, not personal usefulness",
+    "a blinded manual audit of at least 100 parser relations is still required",
+    "TF-IDF, PPMI and frozen embedding baselines have not yet been added"
+  ]
+}

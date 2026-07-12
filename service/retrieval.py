@@ -1,19 +1,19 @@
-"""Quantum retrieval: query → ρ_query → Tr(ρ_query · ρ_chunk) → ranked chunks.
+"""Density-matrix retrieval over ingested chunks.
 
-Uses the core FVSC operation — trace inner product between density matrices —
-not keyword matching. The query becomes a density matrix, each chunk becomes
-a density matrix (reconstructed from its contributions to the SemanticSpace),
-and the score is the quantum semantic overlap: Tr(ρ_query·ρ_chunk).
+A query is projected into the user's existing semantic space. Every chunk with
+active components is then scored by normalized trace overlap; candidate
+selection does not require an exact query-token occurrence in that chunk.
 """
 
 from __future__ import annotations
 
-import numpy as np
+import time
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict
 
-from core.density_core import trace_inner_product
-from core.text_parser_agnostic import text_to_semantic_input, ParseConfig
+import numpy as np
+
+from core.text_parser_agnostic import ParseConfig, text_to_semantic_input
 
 from .store import SpaceBundle
 
@@ -24,101 +24,88 @@ def retrieve_by_query(
     top_k: int = 5,
     config: ParseConfig | None = None,
 ) -> list[dict]:
-    """Quantum retrieval: Tr(ρ_query · ρ_chunk) for every chunk.
+    """Rank chunks by overlap with a query density matrix.
 
-    1. Parse query into concepts, build ρ_query from their basis vectors.
-    2. For each candidate chunk, reconstruct ρ_chunk from the components
-       that were contributed by that chunk (tracked via source_text).
-    3. Score = Tr(ρ_query_norm · ρ_chunk_norm).
-    4. Return top-k chunks with scores and matched concepts.
+    Query terms that already exist in the map contribute their normalized
+    personal density matrices. Unknown terms are ignored rather than mapped to
+    arbitrary random basis vectors. Chunk scores include component decay and
+    consolidation activation counts.
     """
     space = bundle.space
-    if not space.concepts or not bundle.chunks:
+    if not space.concepts or not bundle.chunks or top_k < 1:
         return []
 
-    si = text_to_semantic_input(query, config=config)
-    if not si:
+    semantic_input = text_to_semantic_input(query, config=config)
+    if not semantic_input:
         return []
 
-    # ── Build ρ_query ──────────────────────────────────────────
-    # Use the space's basis generator for consistent vector identities
-    q_dim = space.dim
-    rho_query = np.zeros((q_dim, q_dim))
-    q_weight_sum = 0.0
-    q_matched: Dict[str, float] = {}  # query concept → weight in ρ_query
+    rho_query = np.zeros((space.dim, space.dim))
+    query_mass = 0.0
+    query_terms: Dict[str, float] = {}
 
-    for q_concept, q_spec in si.items():
-        q_vec = space.get_term_vector(q_concept)
-        q_weight = q_spec.get("weight", 1.0)
-        rho_query += q_weight * np.outer(q_vec, q_vec)
-        q_weight_sum += q_weight
-        q_matched[q_concept] = q_weight
+    def add_query_term(term: str, weight: float) -> None:
+        nonlocal query_mass
+        concept = space.concepts.get(term)
+        rho = concept.rho_deep_norm if concept is not None else None
+        if rho is None or weight <= 0:
+            return
+        rho_query[:] += weight * rho
+        query_mass += weight
+        query_terms[term] = query_terms.get(term, 0.0) + weight
 
-        # Also include query's contained children with their weights
-        for child, child_weight in q_spec.get("contains", {}).items():
-            child_vec = space.get_term_vector(child)
-            rho_query += child_weight * np.outer(child_vec, child_vec)
-            q_weight_sum += child_weight
+    for term, spec in semantic_input.items():
+        add_query_term(term, float(spec.get("weight", 1.0)))
+        for child, child_weight in spec.get("contains", {}).items():
+            add_query_term(child, float(child_weight))
 
-    if q_weight_sum < 1e-12:
+    if query_mass < 1e-12:
         return []
-    rho_query /= q_weight_sum  # normalize
+    rho_query /= query_mass
 
-    # ── Collect candidate chunks ───────────────────────────────
-    # For each query concept, find which chunks contributed components
-    candidate_chunks: set[str] = set()
-    for q_concept in q_matched:
-        conc = space.concepts.get(q_concept)
-        if conc is None:
-            continue
-        for comp in conc.components:
-            if not comp.archived and comp.judgment.source_text in bundle.chunks:
-                candidate_chunks.add(comp.judgment.source_text)
+    # A normalized chunk density is Σ w|v><v| / Σw. Therefore its trace
+    # overlap with rho_query can be accumulated component-by-component as
+    # Σ w(vᵀ rho_query v) / Σw, avoiding a dense matrix per chunk.
+    now = time.time()
+    score_numerator: dict[str, float] = defaultdict(float)
+    chunk_mass: dict[str, float] = defaultdict(float)
+    term_contribution: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
 
-    if not candidate_chunks:
-        return []
-
-    # ── Build per-chunk ρ and score ────────────────────────────
-    # Reconstruct ρ_chunk from only components contributed by that chunk
-    hits = []
-    for chunk_id in candidate_chunks:
-        rho_chunk = np.zeros((q_dim, q_dim))
-        ch_weight_sum = 0.0
-
-        for concept in space.concepts.values():
-            for comp in concept.components:
-                if comp.archived:
-                    continue
-                if comp.judgment.source_text != chunk_id:
-                    continue
-                rho_chunk += comp.weight * np.outer(comp.vector, comp.vector)
-                ch_weight_sum += comp.weight
-
-        if ch_weight_sum < 1e-12:
-            continue
-        rho_chunk /= ch_weight_sum
-
-        score = trace_inner_product(rho_query, rho_chunk)
-
-        ch = bundle.chunks[chunk_id]
-        # Which query concepts matched this chunk?
-        matched = []
-        for qc in q_matched:
-            conc = space.concepts.get(qc)
-            if conc is None:
+    for term, concept in space.concepts.items():
+        for component in concept.components:
+            chunk_id = component.judgment.source_text
+            if component.archived or chunk_id not in bundle.chunks:
                 continue
-            for comp in conc.components:
-                if comp.judgment.source_text == chunk_id:
-                    matched.append(qc)
-                    break
+            weight = concept._decayed_weight(component, now)
+            if weight <= 0:
+                continue
+            vector = component.vector
+            overlap = float(vector @ rho_query @ vector)
+            contribution = weight * max(0.0, overlap)
+            score_numerator[chunk_id] += contribution
+            chunk_mass[chunk_id] += weight
+            term_contribution[chunk_id][term] += contribution
 
+    hits = []
+    for chunk_id, mass in chunk_mass.items():
+        if mass < 1e-12:
+            continue
+        score = score_numerator[chunk_id] / mass
+        chunk = bundle.chunks[chunk_id]
+        matched = [
+            term
+            for term, contribution in sorted(
+                term_contribution[chunk_id].items(),
+                key=lambda item: (-item[1], item[0]),
+            )
+            if contribution > 0
+        ][:5]
         hits.append({
             "chunk_id": chunk_id,
-            "source_id": ch.source_id,
-            "text": ch.text,
+            "source_id": chunk.source_id,
+            "text": chunk.text,
             "score": round(float(score), 4),
             "matched_concepts": matched,
         })
 
-    hits.sort(key=lambda h: -h["score"])
+    hits.sort(key=lambda hit: (-hit["score"], hit["chunk_id"]))
     return hits[:top_k]
