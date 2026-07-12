@@ -213,3 +213,50 @@
   border-radius: 4px;
   color: var(--text-normal);
 }
+
+/* ── Voice transcript review ────────────────────────────── */
+.fvsc-voice-review-modal {
+  width: min(760px, 90vw);
+}
+
+.fvsc-voice-candidate {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+}
+
+.fvsc-voice-candidate h3 {
+  margin: 0 0 6px;
+}
+
+.fvsc-voice-meta {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.fvsc-voice-candidate pre {
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.fvsc-voice-transcript-editor {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  margin: 10px 0;
+  padding: 8px;
+  color: var(--text-normal);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+}
+
+.fvsc-voice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
