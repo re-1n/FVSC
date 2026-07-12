@@ -2,9 +2,9 @@
 
 # FVSC — Fractal-Vector Semantic Core
 
-Experimental personal semantic mapping with auditable evidence, provenance, local voice capture and density-matrix representations.
+Experimental personal semantic mapping with auditable evidence, provenance, local voice capture and explicit asymmetric semantic containers.
 
-The current system records what words and relations appear to mean in a specific evidence history. Density matrices are an experimental semantic backend, not a validated claim of superiority.
+The current system records what words and relations appear to mean in a specific evidence history. The append-only evidence ledger is canonical. Graphs, recursive containers and density matrices are replaceable derived representations rather than assumed truths.
 
 ## Architecture
 
@@ -12,37 +12,42 @@ The current system records what words and relations appear to mean in a specific
 Raw text or reviewed owner speech
   → language-agnostic parser
   → immutable EvidenceEvent ledger
-  → versioned SemanticState snapshots
-  → density-shape, graph and mass baselines
+  → explicit asymmetric containers and graph baselines
+  → replaceable local state backend, including density matrices
   → Obsidian pilot, review and evaluation
 ```
 
 ## Current development status
 
-The branch `fix/security-and-integrity-hardening` contains a working local Obsidian pilot with an append-only evidence ledger, immutable semantic states, live vault synchronization, daily review feedback, Voice R1 and chronological held-out evaluation.
+The branch `fix/security-and-integrity-hardening` contains a working local Obsidian pilot, an append-only evidence ledger, immutable semantic states, Voice R1, chronological held-out evaluation and the first explicit `ContainerCore v1` implementation.
 
-The implementation is **operationally ready for controlled real-vault and real-audio pilots**. Engineering readiness is demonstrated; personal usefulness and density-matrix superiority are not.
+The implementation is **operationally ready for controlled real-vault and real-audio pilots**. Engineering readiness is demonstrated. Personal usefulness and superiority of any semantic backend are not.
 
 Voice R1 provides bounded local audio import, explicit owner voice-memo sessions, WAV capture from Obsidian, deterministic decode/VAD, optional local `faster-whisper` ASR, transcript correction, explicit evidence promotion, provenance-preserving retraction and raw-audio retention. Real-time Antourage dialogue and calibrated owner-speaker verification remain R2/R3 work.
 
-### Latest verified checkpoint
+ContainerCore represents `A <- B` and `B <- A` as independent evidence-backed embeddings, supports bounded recursive activation, context-preserving path queries and exact evidence/path explanations, and keeps density matrices as optional local container state.
+
+### Latest verified code checkpoint
 
 ```text
-commit: 7d0045be11b2d88aaa2dc6732e4e7f3298018cb9
-GitHub Actions: 29186483448
+commit:                e05e923f2f13ac3d8f11a0c75a205629c1d8f7f6
+standard test run:      29193677444
+container live run:     29193677480
 ```
 
 Passed at that checkpoint:
 
-- 51 Python tests;
+- 145 Python tests;
 - 12 integration/live tests intentionally deselected by the unit profile;
 - end-to-end temporary-vault workflow;
-- voice R1 import, VAD, correction, promotion, retraction, retention and ASR-failure recovery;
-- public-thread benchmark schema/grouping/determinism checks;
+- Voice R1 import, VAD, correction, promotion, retraction, retention and ASR-failure recovery;
+- explicit container contracts, asymmetric embeddings and retraction handling;
+- context-sensitive cached paths, cycle protection and provenance explanations;
+- deterministic graph/container/density ablation checks;
 - controlled viability benchmark;
 - `npm ci`, TypeScript typecheck, production build and plugin packaging.
 
-### First result on live public prose
+### Density-only result on the complete public corpus
 
 Frozen Stack Exchange Workplace 2025 corpus:
 
@@ -61,14 +66,48 @@ FVSC delta versus the direct graph: `-0.032830`, paired bootstrap CI95 `[-0.0332
 
 Registered verdict: **`no_demonstrated_added_value`**.
 
-The current matrix shape is above deterministic random, but reliably worse than the simpler direct graph on this proxy-labelled task. This does not disprove density matrices in general; it means the present materializer and metric have not justified their added complexity.
+The current density-only materializer is above deterministic random but reliably worse than the direct graph on this proxy-labelled task.
+
+### Explicit ContainerCore result
+
+The first completed container ablation used a deterministic chronological 80-thread slice from the same frozen corpus:
+
+- train/test: 64 / 16 threads;
+- known-positive coverage: `0.7821`;
+- 320 sampled positive and 320 sampled negative pairs;
+- 6,400 pairwise comparisons per backend;
+- semantic dimension: 16;
+- recursion depth: 2;
+- runtime: 39.71 seconds.
+
+| Backend | ROC AUC | Average precision |
+|---|---:|---:|
+| Direct graph | **0.5716** | 0.5867 |
+| Conditional graph | 0.5702 | 0.5709 |
+| Container structure | 0.5637 | 0.5872 |
+| Container projected density | 0.5631 | **0.5875** |
+| Container hybrid | 0.5631 | 0.5869 |
+| Density without containers | 0.5567 | 0.5558 |
+| PPMI graph | 0.5509 | 0.5503 |
+| Random | 0.5364 | 0.5148 |
+
+Best container delta versus the best non-container backend: `-0.007891`.
+
+Paired document-bootstrap CI95: `[-0.04890625, 0.02907617]`.
+
+Registered verdict: **`container_model_competitive`**.
+
+The explicit structure is competitive but not superior. The interval crosses zero. Projected density did not improve ROC AUC over structure-only containers, so the current matrix component has not earned additional complexity. This is a bounded preliminary test with proxy labels, not a validation of the full personal-semantics hypothesis.
 
 - [Current project status](./docs/PROJECT_STATUS.md)
+- [ContainerCore formal model](./docs/CONTAINER_CORE.md)
+- [ContainerCore implementation plan and checkpoint](./docs/CONTAINER_CORE_IMPLEMENTATION_PLAN.md)
+- [First ContainerCore real-language result](./benchmarks/results/container-core-workplace-2025-80threads-v1.md)
 - [Repository cleanup and branch policy](./docs/REPOSITORY_HYGIENE.md)
 - [Next goals and stop conditions](./docs/NEXT_GOALS.md)
 - [Daily pilot protocol](./docs/daily-pilot.md)
 - [Public-language benchmark protocol](./docs/NATURAL_LANGUAGE_BENCHMARK.md)
-- [First public-language result](./benchmarks/results/public-language-workplace-2025-r1.md)
+- [First density-only public-language result](./benchmarks/results/public-language-workplace-2025-r1.md)
 - [Semantic runtime roadmap](./docs/semantic-runtime-roadmap.md)
 - [Staged voice-ingest integration plan](./docs/VOICE_INGEST_PLAN.md)
 - [Voice R1 pilot protocol](./docs/VOICE_R1_PILOT.md)
@@ -175,6 +214,10 @@ The rebuild also runs chronological held-out evaluation and writes reports under
 | `core/pilot_persistence.py` | Versioned atomic JSON persistence |
 | `core/pilot_evaluation.py` | Chronological held-out evaluation and baselines |
 | `core/natural_language_benchmark.py` | Attributed public-corpus fetch and evaluation |
+| `core/container_core.py` | Explicit asymmetric containers and recursive projections |
+| `core/container_query.py` | Cached context paths and evidence-backed explanations |
+| `core/container_materializer_fast.py` | Signed-permutation projection baseline |
+| `core/container_benchmark_cached.py` | Graph/container/density ablation |
 | `core/voice_artifacts.py` | Immutable capture/transcript/candidate records and gates |
 | `core/voice_ingest.py` | Decode, VAD, optional local ASR and review primitives |
 | `core/voice_r1_repository.py` | Retention, ASR retry and raw-audio lifecycle |
@@ -186,13 +229,14 @@ The rebuild also runs chronological held-out evaluation and writes reports under
 
 ## Current evidence policy
 
-Project claims are separated into three levels:
+Project claims are separated into four levels:
 
 1. **Engineering correctness:** demonstrated by the registered test and build suite.
-2. **Predictive semantic value:** not demonstrated; current FVSC shape loses to the direct graph on the first public corpus.
-3. **Personal practical usefulness:** not yet measured; requires real-vault ratings and real voice use.
+2. **Density-only predictive value:** not demonstrated; the current density shape loses reliably to the direct graph on the complete public corpus.
+3. **Explicit container predictive value:** competitive but not superior on the first bounded real-language slice.
+4. **Personal practical usefulness:** not yet measured; requires real-vault ratings and real voice use.
 
-The project can continue even if density matrices are eventually demoted. The evidence ledger, provenance, voice pipeline, Obsidian integration and operator architecture are representation-independent assets.
+The project can continue if density matrices are demoted. The evidence ledger, explicit container topology, provenance, voice pipeline, Obsidian integration and operator architecture are representation-independent assets.
 
 ## Author
 
