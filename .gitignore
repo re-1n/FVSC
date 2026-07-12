@@ -35,6 +35,10 @@ data/conceptnet-assertions-5.7.0.csv.gz
 data/*.xml
 data/ruwordnet.tar.gz
 
+# Public natural-language corpora remain local; keep only fetchers, schemas and reports.
+data/public_corpora/
+artifacts/natural-language-*.json
+
 # Session data (personal dialogue logs)
 data/sessions/
 
