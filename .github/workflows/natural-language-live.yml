@@ -31,7 +31,7 @@ permissions:
 jobs:
   public-language:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     env:
       SITE: ${{ inputs.site || 'workplace' }}
       FROM_DATE: ${{ inputs.from_date || '2025-01-01' }}
@@ -60,16 +60,6 @@ jobs:
             --minimum-score 1 \
             --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
             | tee artifacts/public-language/fetch-summary.json
-      - name: Evaluate existing FVSC benchmark
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m core.natural_language_benchmark evaluate \
-            --input "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
-            --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}-report.json" \
-            --train-fraction 0.8 \
-            --bootstrap-samples 2000 \
-            | tee artifacts/public-language/evaluation-summary.json
       - name: Run semantic representation bakeoff
         shell: bash
         run: |
@@ -88,23 +78,21 @@ jobs:
           from pathlib import Path
 
           root = Path('artifacts/public-language')
-          reports = list(root.glob('*-report.json'))
+          fetch_summaries = list(root.glob('fetch-summary.json'))
           bakeoffs = list(root.glob('*-representation-bakeoff.json'))
-          if len(reports) != 1 or len(bakeoffs) != 1:
+          if len(fetch_summaries) != 1 or len(bakeoffs) != 1:
               raise SystemExit(
-                  f'expected one standard report and one bakeoff, found {len(reports)} / {len(bakeoffs)}'
+                  f'expected one fetch summary and one bakeoff, found {len(fetch_summaries)} / {len(bakeoffs)}'
               )
-          report = json.loads(reports[0].read_text())
+          corpus = json.loads(fetch_summaries[0].read_text())
           bakeoff = json.loads(bakeoffs[0].read_text())
-          corpus = report['corpus']
-          parser = report['parser_diagnostics']
-          evaluation = report['evaluation']
+          parser = bakeoff['parser_diagnostics']
           comparison = bakeoff['evaluation']
           rows = [
               '# FVSC public-language representation bakeoff',
               '',
-              f"- Corpus SHA-256: `{corpus['sha256']}`",
-              f"- Records / threads: {corpus['records']} / {corpus['threads']}",
+              f"- Corpus SHA-256: `{bakeoff['corpus_sha256']}`",
+              f"- Records / threads: {bakeoff['records']} / {bakeoff['threads']}",
               f"- Parseable threads: {parser['parseable_threads']}",
               f"- Train / test documents: {comparison['train_documents']} / {comparison['test_documents']}",
               f"- Known-positive coverage: {comparison['known_positive_coverage']:.4f}",
@@ -122,8 +110,6 @@ jobs:
               f"Best non-density backend: `{comparison['best_non_density_backend']}`",
               f"Density AUC delta: {comparison['density_auc_delta_vs_best_backend']:.6f}",
               f"Paired document bootstrap CI95: {comparison['paired_document_bootstrap_ci95']}",
-              '',
-              f"Previous registered verdict: `{evaluation['verdict']}`",
               '',
               '> This benchmark tests directed relation ranking. It does not test the density-matrix advantage hypothesis for contextual polysemy.',
           ])
