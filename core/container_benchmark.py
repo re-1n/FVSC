@@ -13,7 +13,7 @@ The canonical append-only evidence ledger is not under test and remains unchange
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import json
 from pathlib import Path
@@ -66,6 +66,12 @@ class ContainerRepresentationSuite:
     runtime: Any
     containers: ContainerSnapshot
     known_terms: frozenset[str]
+    _score_cache: dict[tuple[str, str], dict[str, float]] = field(
+        default_factory=dict, repr=False, compare=False
+    )
+    _activation_cache: dict[str, Any] = field(
+        default_factory=dict, repr=False, compare=False
+    )
 
     MODEL_NAMES = (
         "direct_graph",
@@ -93,13 +99,30 @@ class ContainerRepresentationSuite:
         )
 
     def scores(self, parent: str, child: str) -> dict[str, float]:
+        key = (str(parent), str(child))
+        cached = self._score_cache.get(key)
+        if cached is not None:
+            return dict(cached)
         parent_concept = self.runtime.get(parent)
         child_concept = self.runtime.get(child)
         if parent_concept is None or child_concept is None:
             raise KeyError("pair contains a term absent from the fitted representations")
-        structure = self.containers.structure_score(parent, child, max_depth=3)
-        container_density = self.containers.density_score(parent, child, max_depth=3)
-        return {
+        projection = self.containers.project(parent, child, max_depth=3)
+        structure = projection.path_strength
+        activation = self._activation_cache.get(parent)
+        if activation is None:
+            activation = self.containers.activate(parent, max_depth=3)
+            self._activation_cache[parent] = activation
+        if projection.state.is_empty or activation.state.is_empty:
+            container_density = 0.0
+        else:
+            container_density = float(np.clip(
+                projection.path_strength
+                * operator_inclusion(projection.state, activation.state),
+                0.0,
+                1.0,
+            ))
+        result = {
             "direct_graph": self.graph.direct(parent, child),
             "conditional_graph": self.graph.conditional(parent, child),
             "ppmi_graph": self.graph.ppmi(parent, child),
@@ -109,6 +132,8 @@ class ContainerRepresentationSuite:
             "container_hybrid": float(np.clip(0.5 * structure + 0.5 * container_density, 0.0, 1.0)),
             "random": _stable_random_score(parent, child),
         }
+        self._score_cache[key] = result
+        return dict(result)
 
 
 @dataclass(frozen=True)
