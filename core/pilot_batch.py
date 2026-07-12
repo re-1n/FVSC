@@ -24,7 +24,12 @@ def build_runtime_from_sources(
     *,
     encoder: EvidenceEncoder | None = None,
 ) -> PilotRuntime:
-    """Build one ledger and materialize once, independent of input ordering."""
+    """Build one ledger and materialize once, independent of input ordering.
+
+    The assertion payload intentionally matches ``PilotRuntime.replace_source`` with
+    its default confidence multiplier.  Batch rebuild and sequential ingest must
+    therefore produce identical active event IDs and semantic state digests.
+    """
     events: list[EvidenceEvent] = []
     for source in sorted(sources, key=lambda item: item.source_id):
         source_id = str(source.source_id).strip()
@@ -39,6 +44,7 @@ def build_runtime_from_sources(
                     source_id=source_id,
                     source_revision=revision,
                     observed_at=source.observed_at,
+                    recorded_at=source.observed_at,
                     extractor="fvsc-semantic-input",
                     extractor_version=RUNTIME_VERSION,
                     subject=subject,
@@ -49,6 +55,7 @@ def build_runtime_from_sources(
                     context={
                         "relation_weight": relation_weight,
                         "subject_weight": subject_weight,
+                        "confidence_multiplier": 1.0,
                     },
                     provenance={"source_id": source_id},
                 )
