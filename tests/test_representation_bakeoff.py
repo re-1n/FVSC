@@ -48,7 +48,8 @@ def test_sparse_graph_scores_are_bounded_and_directional() -> None:
     ]
     graph = SparseGraphState.fit(documents)
 
-    assert graph.direct("system", "evidence") == 5.0
+    # Pilot semantic-input rows are bounded to [0, 1] before every backend sees them.
+    assert graph.direct("system", "evidence") == 2.0
     assert 0.0 < graph.conditional("system", "evidence") < 1.0
     assert graph.conditional("system", "evidence") != graph.conditional(
         "evidence", "system"
