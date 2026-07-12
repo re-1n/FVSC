@@ -6,13 +6,15 @@ _Last updated: 2026-07-12_
 
 The repository contains a valid experimental checkpoint, but its development history is not suitable for direct integration as-is.
 
+Cleanup assessment baseline:
+
 - default branch: `main`;
 - active development branch: `fix/security-and-integrity-hardening`;
 - open draft PR: `#1`;
-- branch delta: 166 commits ahead of `main`, 0 behind;
-- changed files in PR: 101;
+- branch delta at assessment start: 166 commits ahead of `main`, 0 behind;
+- changed files at assessment start: 101;
 - latest validated code checkpoint: `7d0045be11b2d88aaa2dc6732e4e7f3298018cb9`;
-- latest full CI run: `29186483448` — successful.
+- latest full code CI run: `29186483448` — successful.
 
 The current branch is therefore a useful research and pilot checkpoint, but not a clean release branch.
 
@@ -22,6 +24,16 @@ The current branch is therefore a useful research and pilot checkpoint, but not 
 
 - `main` — stable base and merge target;
 - `fix/security-and-integrity-hardening` — contains the only open PR and the validated R1 implementation.
+
+### Delete now
+
+- `repo-hygiene-plan` — temporary redundant pointer created during the cleanup assessment. It has zero unique commits relative to `fix/security-and-integrity-hardening` and is three commits behind it. Deleting it loses no work.
+
+Delete with:
+
+```bash
+git push origin --delete repo-hygiene-plan
+```
 
 ### Do not delete yet
 
@@ -82,7 +94,7 @@ Before merging, reconstruct the accepted work as approximately five logical comm
 4. local voice R1;
 5. public-language benchmark, documentation and CI.
 
-The raw 166-commit development history should remain available through the draft PR or an archival tag, but it should not become the permanent `main` history.
+The raw development history should remain available through the draft PR or an archival tag, but it should not become the permanent `main` history.
 
 ### Phase C — normalize the source tree
 
