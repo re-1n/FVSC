@@ -72,47 +72,105 @@ Verify:
 
 Exit condition: no source-lifecycle defect requires deleting `.fvsc/pilot-state.json`.
 
-## Parallel Goal V0 — obtain reviewed voice evidence
+## Parallel Goal V — voice evidence and Antourage dialogue
 
 Sparse written notes may leave the map without enough observations to test. Voice
 capture is therefore a justified parallel input track, but it must not bypass the
-existing evidence and review contracts.
+existing evidence and review contracts. Follow both:
 
-Follow [VOICE_INGEST_PLAN.md](./VOICE_INGEST_PLAN.md). The first milestone is
-**audio-file import**, not always-on recording.
+- [VOICE_INGEST_PLAN.md](./VOICE_INGEST_PLAN.md) for capture, transcription and evidence;
+- [VOICE_ANTOURAGE_PLAN.md](./VOICE_ANTOURAGE_PLAN.md) for real-time conversation.
+
+### V-R0 — contracts and lifecycle — implemented
+
+Current branch now contains:
+
+- immutable audio, transcript and voice-candidate artifacts;
+- separate `conversation_only` and `save_owner_turns_for_review` modes;
+- conservative manual/automatic promotion decisions;
+- owner-speaker profile and verifier protocols;
+- `declared_owner`, `verified_owner`, `uncertain`, `non_owner` and `overlap` decisions;
+- explicit single-active-session state machine;
+- idempotent start, stop and emergency stop;
+- capability-gated `/pilot/voice/*` lifecycle endpoints;
+- tests proving a `conversation_only` session does not mutate the semantic snapshot.
+
+The current API does **not** claim microphone, ASR, verifier inference, TTS or
+real-time dialogue capability yet.
+
+### V-R1 — audio import and voice memo button — next
 
 Deliverables:
 
-- immutable audio, speech-segment and transcript artifact schemas;
-- local audio-file import and source hashing;
+- bounded local audio-file upload;
+- source hashing and storage outside a synced vault;
+- replaceable decoder and deterministic WAV baseline;
 - replaceable VAD backend;
-- local ASR backend with word or segment timestamps;
+- optional local ASR adapter with timestamps;
 - raw and normalized transcript layers;
 - transcript review queue;
-- explicit promotion of reviewed candidates into `EvidenceLedger`;
+- explicit promotion into `EvidenceLedger`;
+- Obsidian import and record-voice-memo controls;
 - raw-audio retention and deletion policy;
-- end-to-end test from audio fixture to promoted and retracted evidence.
+- end-to-end fixture test from audio to promoted and retracted evidence.
 
-Required safeguards:
-
-- no automatic evidence creation before review;
-- no network transcription by default;
-- no raw audio inside a synced vault by default;
-- no unknown or non-owner speaker promoted as personal evidence;
-- model and preprocessing versions recorded in provenance;
-- deleting retained audio does not delete transcript or evidence history.
-
-Exit condition: at least ten real personal voice memos can be imported,
+Exit condition: at least ten real personal voice memos can be imported or recorded,
 transcribed, corrected, promoted and restored after restart without manual state
-repair or untraceable semantic assertions.
+repair or untraceable assertions.
 
-Only after this gate:
+### V-R2 — half-duplex Antourage voice
 
-1. add explicit microphone start/stop sessions;
-2. measure ASR and VAD quality on at least 30 annotated minutes;
-3. add optional speaker separation;
-4. consider bounded background sessions with a persistent visible indicator and
-   emergency stop.
+Deliverables:
+
+- Obsidian microphone permission and visible recording indicator;
+- PCM WebSocket transport;
+- VAD-completed user turns;
+- partial and final transcripts;
+- transport-independent chat generator shared with `/viz/ask`;
+- streamed Antourage text response;
+- response cancellation and emergency stop;
+- explicit setting to save only user turns for later review.
+
+Exit condition: twenty five-turn sessions complete without lost or duplicated turns,
+`conversation_only` never changes the ledger, and end-of-speech latency is measured.
+
+### V-R3 — owner voice detection
+
+Deliverables:
+
+- explicit local enrollment with several prompted phrases;
+- quality checks and versioned speaker profile;
+- replaceable verifier backend;
+- uncertainty band, rejection threshold and overlap gate;
+- labelled owner/non-owner pilot set;
+- speaker decision attached to every candidate.
+
+Exit condition: zero known non-owner utterances are promoted in the labelled pilot
+set. Automatic promotion remains disabled until this gate has enough negative examples.
+
+### V-R4 — spoken answers and barge-in
+
+Deliverables:
+
+- optional local TTS;
+- sentence-level playback;
+- mute and cancel controls;
+- initially pause capture during playback;
+- later acoustic-echo testing and full barge-in.
+
+Exit condition: interruption promptly stops audio and generation, and echo does not
+create false owner turns in the target environment.
+
+### Voice safeguards
+
+- no automatic evidence creation before review in the initial pilot;
+- no network transcription or TTS by default;
+- no raw audio inside a synced vault by default;
+- no unknown or non-owner speaker promoted automatically;
+- assistant responses never become owner evidence;
+- model and preprocessing versions recorded in provenance;
+- deleting retained audio does not delete transcript or evidence history;
+- recording state is always visible and emergency stop releases capture.
 
 ## Goal 3 — collect human usefulness data
 
@@ -220,6 +278,8 @@ Pause the pilot and fix the system before collecting more semantic ratings if an
 - private vault or voice data is exposed outside the local machine unexpectedly;
 - raw audio persists beyond its configured retention period;
 - unknown or non-owner speech is promoted into the owner's map automatically;
+- assistant speech enters owner evidence;
+- a `conversation_only` session changes the semantic snapshot;
 - the recording state is not visibly observable or the emergency stop fails;
 - the held-out split uses future notes for training;
 - CI becomes red at the branch head.
@@ -234,6 +294,11 @@ Pause the pilot and fix the system before collecting more semantic ratings if an
 - [ ] Modify one ordinary note and confirm live ingest.
 - [ ] Generate the first daily review.
 - [ ] Submit the first usefulness ratings.
-- [ ] Begin V0 by defining immutable audio and transcript artifacts.
-- [ ] Add local audio-file import before implementing microphone capture.
+- [x] Define immutable voice artifacts and promotion policy.
+- [x] Define owner-verifier and explicit voice-session lifecycle contracts.
+- [x] Add capability-gated voice lifecycle API and tests.
+- [ ] Implement bounded audio-file import and local storage.
+- [ ] Connect a local ASR adapter and transcript review queue.
+- [ ] Add the Obsidian voice-memo button only after capability detection passes.
+- [ ] Implement half-duplex Antourage voice before full-duplex/barge-in.
 - [ ] Record installation/runtime defects in the PR or a dedicated issue.
