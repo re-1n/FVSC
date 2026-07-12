@@ -54,11 +54,8 @@ class RetractVoiceCandidateRequest(BaseModel):
 
 
 def configure_voice_repository(
-    *,
-    root: Path | str | None = None,
-    asr_backend: ASRBackend | None = None,
+    *, root: Path | str | None = None, asr_backend: ASRBackend | None = None,
 ) -> None:
-    """Test/application hook for selecting a local voice data directory/backend."""
     global _repository, _repository_vault, _repository_root, _repository_asr
     _repository = None
     _repository_vault = None
@@ -71,9 +68,7 @@ def _voice_repository() -> R1VoiceRepository:
     vault = pilot_router_module._vault_path()
     if _repository is None or _repository_vault != vault:
         _repository = R1VoiceRepository(
-            _repository_root,
-            vault_path=vault,
-            asr_backend=_repository_asr,
+            _repository_root, vault_path=vault, asr_backend=_repository_asr,
         )
         _repository_vault = vault
     return _repository
@@ -87,8 +82,6 @@ def _capabilities(repository: R1VoiceRepository) -> dict[str, bool]:
     return {
         "session_lifecycle": True,
         "audio_import": True,
-        # The Python backend does not open the microphone. Obsidian captures a
-        # bounded WAV and uploads it through the same import contract.
         "microphone_capture": False,
         "voice_memo_upload": True,
         "local_asr": repository.asr_available,
@@ -115,22 +108,35 @@ def _raise_ingest_error(exc: VoiceIngestError) -> None:
     raise HTTPException(status_code=code, detail=message) from exc
 
 
+def _resolve_memo_session(session_id: str | None, mode: str):
+    session = _manager.get(session_id) if session_id else None
+    if session is None and session_id is None and mode == "voice_memo":
+        active = _manager.active
+        if active is not None and active.config.mode == "voice_memo" and not active.terminal:
+            session = active
+    if session_id is not None and session is None:
+        raise HTTPException(status_code=404, detail="voice session not found")
+    if session is not None:
+        if session.terminal:
+            raise HTTPException(status_code=409, detail="voice session is already terminal")
+        if session.config.mode != "voice_memo" or mode != "voice_memo":
+            raise HTTPException(status_code=409, detail="session is not a voice-memo session")
+    return session
+
+
 @router.get("/status")
 async def voice_status():
     repository = _voice_repository()
-    repo_status = repository.status()
-    warning = None
-    if not repository.asr_available:
-        warning = (
-            "Audio import and WAV capture are available, but local ASR is not installed. "
-            "Install requirements-voice.txt before expecting automatic transcripts."
-        )
+    warning = None if repository.asr_available else (
+        "Audio import and WAV capture are available, but local ASR is not installed. "
+        "Install requirements-voice.txt before expecting automatic transcripts."
+    )
     return {
         "runtime_version": "voice-r1",
         "active_session": _session_payload(_manager.active),
         "session_count": len(_manager.list_sessions()),
         "capabilities": _capabilities(repository),
-        "repository": repo_status,
+        "repository": repository.status(),
         "warning": warning,
     }
 
@@ -149,10 +155,7 @@ async def start_voice_session(req: StartVoiceSessionRequest):
             session = _manager.start(request_id=req.request_id, config=config)
         except RuntimeError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return {
-        "session": _session_payload(session),
-        "capabilities": _capabilities(_voice_repository()),
-    }
+    return {"session": _session_payload(session), "capabilities": _capabilities(_voice_repository())}
 
 
 @router.get("/sessions/{session_id}")
@@ -177,10 +180,7 @@ async def stop_voice_session(session_id: str, req: StopVoiceSessionRequest):
 async def emergency_stop_voice():
     async with _lock:
         session = _manager.emergency_stop()
-    return {
-        "stopped": session is not None,
-        "session": _session_payload(session),
-    }
+    return {"stopped": session is not None, "session": _session_payload(session)}
 
 
 @router.post("/import", status_code=status.HTTP_201_CREATED)
@@ -202,16 +202,9 @@ async def import_voice_audio(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="invalid Content-Length") from exc
 
-    if session_id is not None:
-        session = _manager.get(session_id)
-        if session is None:
-            raise HTTPException(status_code=404, detail="voice session not found")
-        if session.terminal:
-            raise HTTPException(status_code=409, detail="voice session is already terminal")
-        if session.config.mode != "voice_memo" or mode != "voice_memo":
-            raise HTTPException(status_code=409, detail="session is not a voice-memo session")
-        # The server-side session is authoritative. A client cannot change the
-        # attribution/evidence policy only for the upload request.
+    session = _resolve_memo_session(session_id, mode)
+    if session is not None:
+        session_id = session.session_id
         declared_owner_only = session.config.declared_owner_only
         evidence_mode = session.config.evidence_mode
         retention_class = session.config.retention_class
@@ -221,7 +214,7 @@ async def import_voice_audio(
     repository = _voice_repository()
     async with _lock:
         try:
-            result = await asyncio.to_thread(
+            return await asyncio.to_thread(
                 repository.import_audio,
                 body,
                 filename=filename,
@@ -235,7 +228,6 @@ async def import_voice_audio(
             )
         except VoiceIngestError as exc:
             _raise_ingest_error(exc)
-    return result
 
 
 @router.get("/captures/{capture_id}")
@@ -251,11 +243,7 @@ async def transcribe_voice_capture(capture_id: str, language: str | None = None)
     repository = _voice_repository()
     async with _lock:
         try:
-            return await asyncio.to_thread(
-                repository.transcribe_capture,
-                capture_id,
-                language=language,
-            )
+            return await asyncio.to_thread(repository.transcribe_capture, capture_id, language=language)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except VoiceIngestError as exc:
@@ -301,10 +289,7 @@ async def discard_voice_candidate(candidate_id: str):
         try:
             current = repository.candidate_payload(candidate_id)
             if current["candidate"]["promotion_state"] != "pending_review":
-                raise HTTPException(
-                    status_code=409,
-                    detail="promoted evidence must be retracted, not discarded",
-                )
+                raise HTTPException(status_code=409, detail="promoted evidence must be retracted, not discarded")
             discarded = repository.discard_candidate(candidate_id)
             repository.enforce_retention()
             return discarded
@@ -325,25 +310,16 @@ async def promote_voice_candidate(candidate_id: str, req: PromoteVoiceCandidateR
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
         approved = VoiceEvidenceCandidate(**approved_payload["candidate"])
-        decision = decide_promotion(
-            approved,
-            automatic_promotion_enabled=req.automatic_promotion_enabled,
-        )
+        decision = decide_promotion(approved, automatic_promotion_enabled=req.automatic_promotion_enabled)
         if not decision.permitted or decision.evidence_weight_multiplier <= 0.0:
-            raise HTTPException(
-                status_code=409,
-                detail={"status": decision.status, "reasons": decision.reasons},
-            )
+            raise HTTPException(status_code=409, detail={"status": decision.status, "reasons": decision.reasons})
 
         transcript = approved_payload["transcript"]
         capture_record = approved_payload["capture"]
         capture = capture_record["artifact"]
         semantic_input = pilot_router_module._parse_text(transcript["text_normalized"])
         if not semantic_input:
-            raise HTTPException(
-                status_code=422,
-                detail="reviewed transcript did not produce semantic relations",
-            )
+            raise HTTPException(status_code=422, detail="reviewed transcript did not produce semantic relations")
 
         source_id = f"voice/{capture['capture_id']}/{transcript['transcript_id']}"
         provenance = {
@@ -366,7 +342,6 @@ async def promote_voice_candidate(candidate_id: str, req: PromoteVoiceCandidateR
             "promotion_status": decision.status,
             "promotion_reasons": list(decision.reasons),
         }
-
         async with pilot_router_module._lock:
             runtime, feedback, vault = pilot_router_module._ensure_loaded()
             update = runtime.replace_source(
@@ -382,10 +357,7 @@ async def promote_voice_candidate(candidate_id: str, req: PromoteVoiceCandidateR
             )
             pilot_router_module._save(runtime, feedback, vault)
 
-        promoted = repository.mark_promoted(
-            approved.candidate_id,
-            source_id=source_id,
-        )
+        promoted = repository.mark_promoted(approved.candidate_id, source_id=source_id)
         retention_deleted = repository.enforce_retention()
         return {
             "candidate": promoted,
@@ -413,11 +385,7 @@ async def retract_voice_candidate(candidate_id: str, req: RetractVoiceCandidateR
             pilot_router_module._save(runtime, feedback, vault)
         discarded = repository.discard_candidate(candidate_id)
         repository.enforce_retention()
-        return {
-            "candidate": discarded,
-            "source_update": asdict(update),
-            "reason": req.reason,
-        }
+        return {"candidate": discarded, "source_update": asdict(update), "reason": req.reason}
 
 
 @router.delete("/captures/{capture_id}/audio")
