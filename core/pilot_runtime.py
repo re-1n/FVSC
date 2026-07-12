@@ -5,7 +5,6 @@ its previously active evidence, appends the new assertions, and materializes a
 fresh snapshot.  Query scores operate on normalized semantic shapes; evidence
 mass is returned only as confidence metadata.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -84,6 +83,13 @@ def _statement_rows(semantic_input: Mapping[str, Mapping[str, Any]]) -> list[tup
     return rows
 
 
+def _merge_json(base: Mapping[str, Any], extra: Mapping[str, Any] | None) -> dict[str, Any]:
+    merged = dict(base)
+    if extra:
+        merged.update(dict(extra))
+    return merged
+
+
 class PilotRuntime:
     """Mutable coordinator around an append-only ledger and immutable snapshots."""
 
@@ -120,14 +126,30 @@ class PilotRuntime:
         source_revision: str,
         observed_at: float,
         recorded_at: float | None = None,
+        extractor: str = "fvsc-semantic-input",
+        extractor_version: str = RUNTIME_VERSION,
+        event_context: Mapping[str, Any] | None = None,
+        event_provenance: Mapping[str, Any] | None = None,
+        confidence_multiplier: float = 1.0,
     ) -> SourceUpdateResult:
-        """Replace the active semantic evidence produced by one source revision."""
+        """Replace active semantic evidence produced by one source revision.
+
+        ``event_context`` and ``event_provenance`` allow typed sources such as
+        reviewed voice transcripts to preserve their derivation without creating a
+        second ledger implementation.  Existing note ingest uses the defaults and
+        therefore remains byte-for-byte equivalent at the event-contract level.
+        """
         source = str(source_id).strip()
         revision = str(source_revision).strip()
+        extractor_clean = str(extractor).strip()
+        extractor_version_clean = str(extractor_version).strip()
         if not source:
             raise ValueError("source_id must not be empty")
         if not revision:
             raise ValueError("source_revision must not be empty")
+        if not extractor_clean or not extractor_version_clean:
+            raise ValueError("extractor and extractor_version must not be empty")
+        multiplier = _bounded(confidence_multiplier, default=1.0)
 
         active = self.ledger.active_for_source(source)
         if active and all(event.source_revision == revision for event in active):
@@ -151,8 +173,8 @@ class PilotRuntime:
                 extractor="fvsc-pilot-source-lifecycle",
                 extractor_version=RUNTIME_VERSION,
                 target_event_id=event.event_id,
-                context={"reason": "source_replaced"},
-                provenance={"source_id": source},
+                context=_merge_json({"reason": "source_replaced"}, event_context),
+                provenance=_merge_json({"source_id": source}, event_provenance),
             )
             for event in sorted(active, key=lambda item: item.event_id)
         ]
@@ -165,18 +187,22 @@ class PilotRuntime:
                     source_revision=revision,
                     observed_at=observed_at,
                     recorded_at=recorded_at,
-                    extractor="fvsc-semantic-input",
-                    extractor_version=RUNTIME_VERSION,
+                    extractor=extractor_clean,
+                    extractor_version=extractor_version_clean,
                     subject=subject,
                     relation="contains",
                     object=object_,
                     intensity=relation_weight,
-                    confidence=subject_weight,
-                    context={
-                        "relation_weight": relation_weight,
-                        "subject_weight": subject_weight,
-                    },
-                    provenance={"source_id": source},
+                    confidence=_bounded(subject_weight * multiplier, default=0.0),
+                    context=_merge_json(
+                        {
+                            "relation_weight": relation_weight,
+                            "subject_weight": subject_weight,
+                            "confidence_multiplier": multiplier,
+                        },
+                        event_context,
+                    ),
+                    provenance=_merge_json({"source_id": source}, event_provenance),
                 )
             )
 
