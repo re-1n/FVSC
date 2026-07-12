@@ -1,0 +1,95 @@
+name: public-natural-language-live
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/natural-language-live.yml"
+      - "core/natural_language_benchmark.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  workplace-2025:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install runtime dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+      - name: Fetch frozen attributed corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/public-language
+          python -m core.natural_language_benchmark fetch-stackexchange \
+            --site workplace \
+            --from-date 2025-01-01 \
+            --to-date 2025-12-31 \
+            --pages 3 \
+            --page-size 100 \
+            --minimum-score 1 \
+            --output artifacts/public-language/workplace-2025.jsonl \
+            | tee artifacts/public-language/fetch-summary.json
+      - name: Evaluate frozen corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m core.natural_language_benchmark evaluate \
+            --input artifacts/public-language/workplace-2025.jsonl \
+            --output artifacts/public-language/workplace-2025-report.json \
+            --train-fraction 0.8 \
+            --bootstrap-samples 2000 \
+            | tee artifacts/public-language/evaluation-summary.json
+      - name: Write job summary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('artifacts/public-language/workplace-2025-report.json').read_text())
+          corpus = report['corpus']
+          parser = report['parser_diagnostics']
+          evaluation = report['evaluation']
+          rows = [
+              '# FVSC public-language live benchmark',
+              '',
+              f"- Corpus SHA-256: `{corpus['sha256']}`",
+              f"- Records / threads: {corpus['records']} / {corpus['threads']}",
+              f"- Parseable threads: {parser['parseable_threads']}",
+              f"- Train / test documents: {evaluation['train_documents']} / {evaluation['test_documents']}",
+              f"- Known-positive coverage: {evaluation['known_positive_coverage']:.4f}",
+              f"- Verdict: `{evaluation['verdict']}`",
+              '',
+              '| Model | AUC | Average precision | Pairwise comparisons |',
+              '|---|---:|---:|---:|',
+          ]
+          for name, metrics in evaluation['models'].items():
+              rows.append(
+                  f"| {name} | {metrics['auc']:.4f} | {metrics['average_precision']:.4f} | {metrics['pairwise_comparisons']} |"
+              )
+          rows.extend([
+              '',
+              f"Best baseline: `{evaluation['best_baseline']}`",
+              f"FVSC AUC delta: {evaluation['fvsc_auc_delta_vs_best_baseline']:.4f}",
+              f"Paired bootstrap CI95: {evaluation['paired_bootstrap_ci95']}",
+              '',
+              '> Parser-derived edges are proxy labels. This run is not evidence of personal usefulness and requires a blinded relation audit.',
+          ])
+          Path('artifacts/public-language/summary.md').write_text('\n'.join(rows) + '\n', encoding='utf-8')
+          with open(Path(__import__('os').environ['GITHUB_STEP_SUMMARY']), 'a', encoding='utf-8') as handle:
+              handle.write('\n'.join(rows) + '\n')
+          PY
+      - name: Upload attributed corpus and aggregate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fvsc-public-language-workplace-2025
+          path: artifacts/public-language/
+          if-no-files-found: error
