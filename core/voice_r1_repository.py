@@ -1,18 +1,25 @@
 """Operational R1 repository extensions for retention and ASR retries.
 
 The base ``VoiceRepository`` owns deterministic decoding, VAD and candidate
-revision mechanics.  This subclass adds lifecycle behaviour that depends on wall
+revision mechanics. This subclass adds lifecycle behaviour that depends on wall
 clock time while keeping immutable artifact payloads unchanged.
 """
 from __future__ import annotations
 
+from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path
 import time
 from typing import Any
 
-from .voice_ingest import ASRBackend, VoiceIngestError, VoiceRepository
+from .voice_artifacts import TranscriptArtifact, VoiceEvidenceCandidate
+from .voice_ingest import (
+    ASRBackend,
+    VoiceIngestError,
+    VoiceRepository,
+    _normalize_transcript,
+)
 
 
 _RETENTION_SECONDS = {
@@ -166,6 +173,7 @@ class R1VoiceRepository(VoiceRepository):
         *,
         language: str | None = None,
     ) -> dict[str, Any]:
+        """Create derived transcripts without changing the source capture ID."""
         if not self.asr_available:
             raise VoiceIngestError(
                 "local ASR is not installed; install requirements-voice.txt"
@@ -180,26 +188,96 @@ class R1VoiceRepository(VoiceRepository):
         if not storage_ref:
             raise VoiceIngestError("capture has no retained audio reference")
         path = (self.root / storage_ref).resolve()
+        try:
+            path.relative_to(self.root)
+        except ValueError as exc:
+            raise VoiceIngestError("stored audio path escaped the voice directory") from exc
         if not path.exists():
             raise VoiceIngestError("retained audio file is missing")
+
         metadata = json.loads(artifact.get("metadata_json", "{}"))
-        result = super().import_audio(
-            path.read_bytes(),
-            filename=metadata.get("filename") or path.name,
-            mode=artifact["mode"],
-            declared_owner_only=artifact["declared_owner_only"],
-            evidence_mode=artifact["evidence_mode"],
-            retention_class=artifact["retention_class"],
-            language=language or metadata.get("language_requested"),
-            observed_at=artifact["started_at"],
-        )
-        refreshed = self._data["captures"][capture_id]
-        refreshed["session_id"] = record.get("session_id")
-        refreshed["audio_present"] = True
-        refreshed["error"] = None
+        requested_language = language or metadata.get("language_requested")
+        decoder = self._decoder_for(path)
+        decoded = decoder.decode(path)
+        regions = self.vad.detect(decoded)
+        if not regions:
+            record["status"] = "no_speech"
+            record["error"] = None
+            self._save()
+            self.enforce_retention()
+            return {
+                "capture": self.get_capture(capture_id),
+                "candidates": [],
+                "asr_available": True,
+            }
+
+        try:
+            results = self.asr_backend.transcribe(
+                path,
+                language=requested_language,
+                regions=regions,
+            )
+        except Exception as exc:
+            record["status"] = "failed"
+            record["error"] = f"{type(exc).__name__}: {exc}"
+            record["audio_present"] = True
+            self._save()
+            raise VoiceIngestError(f"ASR retry failed: {exc}") from exc
+
+        candidates: list[dict[str, Any]] = []
+        for index, result in enumerate(results):
+            normalized = _normalize_transcript(result.text)
+            if not normalized:
+                continue
+            transcript = TranscriptArtifact.create(
+                capture_id=capture_id,
+                utterance_id=f"{capture_id[:16]}-{index:04d}",
+                start_seconds=result.start_seconds,
+                end_seconds=result.end_seconds,
+                text_raw=result.text,
+                text_normalized=normalized,
+                asr_backend=self.asr_backend.backend_id,
+                model_id=self.asr_backend.model_id,
+                speaker_attribution=(
+                    "declared_owner" if artifact["declared_owner_only"] else "uncertain"
+                ),
+                confidence=result.confidence,
+                speaker_confidence=None,
+                corrected=False,
+                metadata={
+                    "language": result.language,
+                    "retry_language_requested": requested_language,
+                },
+            )
+            candidate = VoiceEvidenceCandidate.create(
+                transcript_id=transcript.transcript_id,
+                capture_mode=artifact["mode"],
+                evidence_mode=artifact["evidence_mode"],
+                speaker_attribution=transcript.speaker_attribution,
+                transcript_confidence=transcript.confidence,
+                speaker_confidence=transcript.speaker_confidence,
+            )
+            self._data["transcripts"][transcript.transcript_id] = asdict(transcript)
+            self._data["candidates"][candidate.candidate_id] = {
+                "artifact": asdict(candidate),
+                "created_at": time.time(),
+                "superseded_by": None,
+                "source_id": None,
+            }
+            candidates.append(self.candidate_payload(candidate.candidate_id))
+
+        record["status"] = "ready" if candidates else "no_transcript"
+        record["error"] = None
+        record["audio_present"] = True
+        record["last_transcribed_at"] = time.time()
+        record["last_asr_backend"] = self.asr_backend.backend_id
+        record["last_asr_model"] = self.asr_backend.model_id
         self._save()
-        result["capture"] = self.get_capture(capture_id)
-        return result
+        return {
+            "capture": self.get_capture(capture_id),
+            "candidates": candidates,
+            "asr_available": True,
+        }
 
     def status(self) -> dict[str, Any]:
         self.enforce_retention()
