@@ -29,6 +29,15 @@ class FakeASR:
         ]
 
 
+class FailingASR:
+    backend_id = "failing-local-asr-v1"
+    model_id = "fixture-failure-v1"
+    available = True
+
+    def transcribe(self, path: Path, *, language: str | None, regions):
+        raise RuntimeError("fixture model failure")
+
+
 def _wav_fixture() -> bytes:
     sample_rate = 16_000
     silence = np.zeros(sample_rate // 2, dtype=np.float32)
@@ -120,3 +129,35 @@ def test_ephemeral_audio_waits_for_review_then_is_deleted(tmp_path: Path) -> Non
     repository.discard_candidate(candidate_id)
     assert repository.enforce_retention(now=10_001.0) == [capture_id]
     assert not (root / storage_ref).exists()
+
+
+def test_failed_asr_capture_is_persisted_and_not_ephemerally_deleted(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    root = tmp_path / "voice-data"
+    vault.mkdir()
+    repository = R1VoiceRepository(root, vault_path=vault, asr_backend=FailingASR())
+
+    result = repository.import_audio(
+        _wav_fixture(),
+        filename="failed.wav",
+        mode="voice_memo",
+        retention_class="ephemeral",
+        evidence_mode="save_owner_turns_for_review",
+        observed_at=300.0,
+        session_id="failed-owner-session",
+    )
+    capture = result["capture"]
+    capture_id = capture["artifact"]["capture_id"]
+    storage_ref = capture["artifact"]["storage_ref"]
+    assert result["retriable"] is True
+    assert capture["status"] == "failed"
+    assert "fixture model failure" in capture["error"]
+    assert capture["session_id"] == "failed-owner-session"
+    assert (root / storage_ref).exists()
+    assert repository.enforce_retention(now=1_000_000.0) == []
+
+    restored = R1VoiceRepository(root, vault_path=vault, asr_backend=FakeASR())
+    retried = restored.transcribe_capture(capture_id, language="ru")
+    assert retried["capture"]["status"] == "ready"
+    assert retried["capture"]["error"] is None
+    assert retried["candidates"]
