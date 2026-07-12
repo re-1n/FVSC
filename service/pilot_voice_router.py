@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import asdict
 from pathlib import Path
+import time
 from typing import Any, Literal
 import uuid
 
@@ -11,7 +12,8 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from core.voice_artifacts import VoiceEvidenceCandidate, decide_promotion
-from core.voice_ingest import ASRBackend, VoiceIngestError, VoiceRepository
+from core.voice_ingest import ASRBackend, MAX_AUDIO_BYTES, VoiceIngestError
+from core.voice_r1_repository import R1VoiceRepository
 from core.voice_session import VoiceSessionConfig, VoiceSessionManager
 
 from . import pilot_router as pilot_router_module
@@ -19,7 +21,7 @@ from . import pilot_router as pilot_router_module
 
 router = APIRouter(prefix="/pilot/voice", tags=["pilot-voice"])
 _manager = VoiceSessionManager()
-_repository: VoiceRepository | None = None
+_repository: R1VoiceRepository | None = None
 _repository_vault: Path | None = None
 _repository_root: Path | None = None
 _repository_asr: ASRBackend | None = None
@@ -64,11 +66,11 @@ def configure_voice_repository(
     _repository_asr = asr_backend
 
 
-def _voice_repository() -> VoiceRepository:
+def _voice_repository() -> R1VoiceRepository:
     global _repository, _repository_vault
     vault = pilot_router_module._vault_path()
     if _repository is None or _repository_vault != vault:
-        _repository = VoiceRepository(
+        _repository = R1VoiceRepository(
             _repository_root,
             vault_path=vault,
             asr_backend=_repository_asr,
@@ -81,18 +83,21 @@ def _session_payload(session) -> dict[str, Any] | None:
     return None if session is None else asdict(session)
 
 
-def _capabilities(repository: VoiceRepository) -> dict[str, bool]:
+def _capabilities(repository: R1VoiceRepository) -> dict[str, bool]:
     return {
         "session_lifecycle": True,
         "audio_import": True,
-        # Browser/Obsidian capture uploads a bounded WAV through the import API.
-        "microphone_capture": True,
+        # The Python backend does not open the microphone. Obsidian captures a
+        # bounded WAV and uploads it through the same import contract.
+        "microphone_capture": False,
+        "voice_memo_upload": True,
         "local_asr": repository.asr_available,
         "speaker_verification": False,
         "realtime_dialogue": False,
         "local_tts": False,
         "transcript_review": True,
         "explicit_evidence_promotion": True,
+        "retention_enforcement": True,
     }
 
 
@@ -103,6 +108,8 @@ def _raise_ingest_error(exc: VoiceIngestError) -> None:
         code = 413
     elif "extension" in lowered or "decoder" in lowered or "wav" in lowered:
         code = 415
+    elif "not installed" in lowered:
+        code = 503
     else:
         code = 422
     raise HTTPException(status_code=code, detail=message) from exc
@@ -184,7 +191,31 @@ async def import_voice_audio(
     evidence_mode: Literal["conversation_only", "save_owner_turns_for_review"] = "save_owner_turns_for_review",
     retention_class: Literal["ephemeral", "24h", "7d", "keep"] = "24h",
     language: str | None = None,
+    session_id: str | None = None,
+    observed_at: float | None = None,
 ):
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_AUDIO_BYTES:
+                raise HTTPException(status_code=413, detail="audio body exceeds R1 size limit")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="invalid Content-Length") from exc
+
+    if session_id is not None:
+        session = _manager.get(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="voice session not found")
+        if session.terminal:
+            raise HTTPException(status_code=409, detail="voice session is already terminal")
+        if session.config.mode != "voice_memo" or mode != "voice_memo":
+            raise HTTPException(status_code=409, detail="session is not a voice-memo session")
+        # The server-side session is authoritative. A client cannot change the
+        # attribution/evidence policy only for the upload request.
+        declared_owner_only = session.config.declared_owner_only
+        evidence_mode = session.config.evidence_mode
+        retention_class = session.config.retention_class
+
     filename = request.headers.get("x-fvsc-filename", "").strip()
     body = await request.body()
     repository = _voice_repository()
@@ -199,10 +230,36 @@ async def import_voice_audio(
                 evidence_mode=evidence_mode,
                 retention_class=retention_class,
                 language=language,
+                observed_at=observed_at,
+                session_id=session_id,
             )
         except VoiceIngestError as exc:
             _raise_ingest_error(exc)
     return result
+
+
+@router.get("/captures/{capture_id}")
+async def get_voice_capture(capture_id: str):
+    try:
+        return _voice_repository().get_capture(capture_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/captures/{capture_id}/transcribe")
+async def transcribe_voice_capture(capture_id: str, language: str | None = None):
+    repository = _voice_repository()
+    async with _lock:
+        try:
+            return await asyncio.to_thread(
+                repository.transcribe_capture,
+                capture_id,
+                language=language,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except VoiceIngestError as exc:
+            _raise_ingest_error(exc)
 
 
 @router.get("/candidates")
@@ -242,7 +299,15 @@ async def discard_voice_candidate(candidate_id: str):
     repository = _voice_repository()
     async with _lock:
         try:
-            return repository.discard_candidate(candidate_id)
+            current = repository.candidate_payload(candidate_id)
+            if current["candidate"]["promotion_state"] != "pending_review":
+                raise HTTPException(
+                    status_code=409,
+                    detail="promoted evidence must be retracted, not discarded",
+                )
+            discarded = repository.discard_candidate(candidate_id)
+            repository.enforce_retention()
+            return discarded
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -252,6 +317,9 @@ async def promote_voice_candidate(candidate_id: str, req: PromoteVoiceCandidateR
     repository = _voice_repository()
     async with _lock:
         try:
+            current = repository.candidate_payload(candidate_id)
+            if current["candidate"]["promotion_state"] != "pending_review":
+                raise HTTPException(status_code=409, detail="candidate is not pending review")
             approved_payload = repository.approve_candidate(candidate_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -283,6 +351,7 @@ async def promote_voice_candidate(candidate_id: str, req: PromoteVoiceCandidateR
             "capture_id": capture["capture_id"],
             "transcript_id": transcript["transcript_id"],
             "candidate_id": approved.candidate_id,
+            "session_id": capture_record.get("session_id"),
             "capture_mode": capture["mode"],
             "speaker_attribution": transcript["speaker_attribution"],
             "asr_backend": transcript["asr_backend"],
@@ -317,11 +386,13 @@ async def promote_voice_candidate(candidate_id: str, req: PromoteVoiceCandidateR
             approved.candidate_id,
             source_id=source_id,
         )
+        retention_deleted = repository.enforce_retention()
         return {
             "candidate": promoted,
             "decision": asdict(decision),
             "source_update": asdict(update),
             "snapshot_id": update.snapshot_id,
+            "retention_deleted_capture_ids": retention_deleted,
         }
 
 
@@ -338,9 +409,10 @@ async def retract_voice_candidate(candidate_id: str, req: RetractVoiceCandidateR
             raise HTTPException(status_code=409, detail="candidate has no promoted evidence")
         async with pilot_router_module._lock:
             runtime, feedback, vault = pilot_router_module._ensure_loaded()
-            update = runtime.delete_source(source_id=source_id, observed_at=__import__("time").time())
+            update = runtime.delete_source(source_id=source_id, observed_at=time.time())
             pilot_router_module._save(runtime, feedback, vault)
         discarded = repository.discard_candidate(candidate_id)
+        repository.enforce_retention()
         return {
             "candidate": discarded,
             "source_update": asdict(update),
