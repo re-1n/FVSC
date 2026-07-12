@@ -22,6 +22,7 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 
 from .container_core import ContainerSnapshot, materialize_container_ledger
+from .container_traversal import BoundedContainerTraversal
 from .pilot_batch import build_runtime_from_sources
 from .pilot_evaluation import HeldoutDocument, chronological_split
 from .pilot_runtime import _statement_rows
@@ -85,6 +86,7 @@ class ContainerRepresentationSuite:
     runtime: Any
     containers: ContainerSnapshot
     known_terms: frozenset[str]
+    traversal: BoundedContainerTraversal
     _score_cache: dict[tuple[str, str], dict[str, float]] = field(
         default_factory=dict, repr=False, compare=False
     )
@@ -115,6 +117,7 @@ class ContainerRepresentationSuite:
             runtime=runtime,
             containers=containers,
             known_terms=frozenset(graph.known_terms & runtime_terms & container_terms),
+            traversal=BoundedContainerTraversal(containers),
         )
 
     def scores(self, parent: str, child: str) -> dict[str, float]:
@@ -126,13 +129,13 @@ class ContainerRepresentationSuite:
         child_concept = self.runtime.get(child)
         if parent_concept is None or child_concept is None:
             raise KeyError("pair contains a term absent from the fitted representations")
-        projection = self.containers.project(
+        projection = self.traversal.project(
             parent, child, max_depth=CONTAINER_MAX_DEPTH
         )
         structure = projection.path_strength
         activation = self._activation_cache.get(parent)
         if activation is None:
-            activation = self.containers.activate(
+            activation = self.traversal.activate(
                 parent, max_depth=CONTAINER_MAX_DEPTH
             )
             self._activation_cache[parent] = activation
@@ -288,7 +291,7 @@ def run_container_bakeoff(
         document_wins: dict[str, float] = {}
 
         for pair, score_map in positive_scores:
-            reverse = suite.containers.structure_score(
+            reverse = suite.traversal.structure_score(
                 pair[1], pair[0], max_depth=CONTAINER_MAX_DEPTH
             )
             asymmetric_positive_pairs += int(abs(score_map["container_structure"] - reverse) > _EPS)
@@ -389,6 +392,7 @@ def run_container_bakeoff(
             "version": suite.containers.version,
             "containers": suite.containers.container_count,
             "embeddings": suite.containers.embedding_count,
+            "traversal_edges": suite.traversal.edge_count,
             "snapshot_id": suite.containers.snapshot_id,
         },
         "verdict": verdict,
@@ -405,6 +409,7 @@ def run_container_bakeoff(
         "limitations": [
             "parser-derived relations remain proxy labels until blinded manual audit",
             "positive and negative pairs are deterministically capped per test document",
+            "raw evidence embeddings are aggregated by parent, child and role for traversal",
             "v1 embedding operators are deterministic rather than learned",
             "negative-polarity embeddings are preserved but do not create positive containment mass",
             "the relation-ranking task does not exhaust contextual polysemy or order effects",
