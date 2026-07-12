@@ -7,6 +7,7 @@ from .pilot_evaluation_router import router as pilot_evaluation_router
 from .pilot_readiness_router import router as pilot_readiness_router
 from .pilot_review_router import router as pilot_review_router
 from .pilot_router import router as pilot_router
+from .pilot_voice_router import router as pilot_voice_router
 
 
 def _has_route(path: str) -> bool:
@@ -26,3 +27,5 @@ if not _has_route("/pilot/review-feedback"):
     app.include_router(pilot_review_router)
 if not _has_route("/pilot/readiness"):
     app.include_router(pilot_readiness_router)
+if not _has_route("/pilot/voice/status"):
+    app.include_router(pilot_voice_router)
