@@ -30,11 +30,17 @@ The implementation is **operationally ready for a controlled real-vault pilot**.
 It is not yet evidence that FVSC is practically useful or that density-matrix
 shape outperforms simpler graph or mass baselines.
 
+Voice R0 now provides immutable voice artifacts, conservative owner-speaker
+attribution rules, explicit session lifecycle and emergency-stop API contracts.
+Actual microphone capture, ASR, speaker-model inference and real-time dialogue
+remain capability-gated and are not presented as working features yet.
+
 - [Current project status](./docs/PROJECT_STATUS.md)
 - [Next goals and stop conditions](./docs/NEXT_GOALS.md)
 - [Daily pilot protocol](./docs/daily-pilot.md)
 - [Semantic runtime roadmap](./docs/semantic-runtime-roadmap.md)
 - [Staged voice-ingest integration plan](./docs/VOICE_INGEST_PLAN.md)
+- [Real-time voice Antourage plan](./docs/VOICE_ANTOURAGE_PLAN.md)
 
 ## Quick start
 
@@ -107,6 +113,10 @@ ingest.
 | `POST /pilot/review-feedback` | Persist checked daily-review ratings without re-ingesting the review. |
 | `POST /pilot/evaluate` | Run chronological held-out comparison against simple baselines. |
 | `GET  /pilot/readiness` | Report data sufficiency and practical-usefulness gates. |
+| `GET  /pilot/voice/status` | Report voice runtime capabilities and active explicit session. |
+| `POST /pilot/voice/sessions` | Start an idempotent voice-memo or Antourage-dialogue lifecycle record. |
+| `POST /pilot/voice/sessions/{id}/stop` | Stop a voice session idempotently. |
+| `POST /pilot/voice/emergency-stop` | Stop the currently active voice session. |
 | `POST /spaces/{name}/ingest` | Ingest text (plain or Markdown). |
 | `POST /spaces/{name}/retrieve` | Quantum retrieval: Tr(ρ_query · ρ_chunk). |
 | `GET  /spaces/{name}/concepts/{term}/report` | Full legacy concept report. |
@@ -125,6 +135,9 @@ ingest.
 | `core/pilot_runtime.py` | Source replacement, snapshot materialization, related concepts and trace |
 | `core/pilot_persistence.py` | Versioned atomic JSON persistence and restoration |
 | `core/pilot_evaluation.py` | Chronological held-out evaluation and baseline comparison |
+| `core/voice_artifacts.py` | Immutable capture/transcript/candidate records and promotion gates |
+| `core/voice_session.py` | Explicit voice-session state machine and emergency stop |
+| `core/speaker_verification.py` | Owner enrollment contract and conservative attribution decisions |
 | `core/thesaurus_prior.py` | ConceptNet/RuWordNet weak prior (bonus-only) |
 | `core/provenance.py` | Per-file source attribution + silent_pool builder |
 | `core/feedback.py` | Interactive FeedbackEngine |
@@ -134,6 +147,7 @@ ingest.
 | `core/llm/` | LLM client abstraction (Ollama backend, no new deps) |
 | `service/viz_router.py` | `/viz` page + SSE chat + provenance + live `/file_ingest` |
 | `service/pilot_app.py` | Daily-pilot API entry point |
+| `service/pilot_voice_router.py` | Capability-gated explicit voice lifecycle API |
 | `obsidian-plugin/src/` | TS plugin: lifecycle, backend control, settings, view, vault watcher |
 
 ## Key properties
