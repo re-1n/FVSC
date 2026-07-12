@@ -6,9 +6,12 @@ on:
       - ".github/workflows/natural-language-live.yml"
       - "core/container_core.py"
       - "core/container_query.py"
+      - "core/container_materializer_fast.py"
       - "core/container_benchmark_cached.py"
+      - "core/container_benchmark_fast_cli.py"
       - "tests/test_container_core.py"
       - "tests/test_container_query.py"
+      - "tests/test_container_materializer_fast.py"
       - "tests/test_container_benchmark_cached.py"
   workflow_dispatch:
     inputs:
@@ -68,7 +71,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m core.container_benchmark_cached \
+          python -m core.container_benchmark_fast_cli \
             --input "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
             --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}-container-bakeoff.json" \
             --train-fraction 0.8 \
@@ -100,6 +103,7 @@ jobs:
               f"- Known-positive coverage: {comparison['known_positive_coverage']:.4f}",
               f"- Sampled positives / negatives: {comparison['sampled_positive_pairs']} / {comparison['sampled_negative_pairs']}",
               f"- Runtime seconds: {comparison.get('runtime_seconds', 0.0):.2f}",
+              f"- Container materializer: `{comparison['container_snapshot']['version']}`",
               f"- Verdict: `{comparison['verdict']}`",
               '',
               '| Model | AUC | Average precision | Pairwise comparisons |',
