@@ -1,17 +1,30 @@
 name: public-natural-language-live
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/natural-language-live.yml"
-      - "core/natural_language_benchmark.py"
   workflow_dispatch:
+    inputs:
+      site:
+        description: Stack Exchange API site parameter
+        required: true
+        default: workplace
+      from_date:
+        description: Inclusive YYYY-MM-DD start
+        required: true
+        default: "2025-01-01"
+      to_date:
+        description: Inclusive YYYY-MM-DD end
+        required: true
+        default: "2025-12-31"
+      pages:
+        description: Chronological question pages, 1-20
+        required: true
+        default: "3"
 
 permissions:
   contents: read
 
 jobs:
-  workplace-2025:
+  public-language:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -25,25 +38,34 @@ jobs:
         run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
       - name: Fetch frozen attributed corpus
         shell: bash
+        env:
+          SITE: ${{ inputs.site }}
+          FROM_DATE: ${{ inputs.from_date }}
+          TO_DATE: ${{ inputs.to_date }}
+          PAGES: ${{ inputs.pages }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/public-language
           python -m core.natural_language_benchmark fetch-stackexchange \
-            --site workplace \
-            --from-date 2025-01-01 \
-            --to-date 2025-12-31 \
-            --pages 3 \
+            --site "$SITE" \
+            --from-date "$FROM_DATE" \
+            --to-date "$TO_DATE" \
+            --pages "$PAGES" \
             --page-size 100 \
             --minimum-score 1 \
-            --output artifacts/public-language/workplace-2025.jsonl \
+            --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
             | tee artifacts/public-language/fetch-summary.json
       - name: Evaluate frozen corpus
         shell: bash
+        env:
+          SITE: ${{ inputs.site }}
+          FROM_DATE: ${{ inputs.from_date }}
+          TO_DATE: ${{ inputs.to_date }}
         run: |
           set -euo pipefail
           python -m core.natural_language_benchmark evaluate \
-            --input artifacts/public-language/workplace-2025.jsonl \
-            --output artifacts/public-language/workplace-2025-report.json \
+            --input "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
+            --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}-report.json" \
             --train-fraction 0.8 \
             --bootstrap-samples 2000 \
             | tee artifacts/public-language/evaluation-summary.json
@@ -53,7 +75,10 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          report = json.loads(Path('artifacts/public-language/workplace-2025-report.json').read_text())
+          reports = list(Path('artifacts/public-language').glob('*-report.json'))
+          if len(reports) != 1:
+              raise SystemExit(f'expected one report, found {len(reports)}')
+          report = json.loads(reports[0].read_text())
           corpus = report['corpus']
           parser = report['parser_diagnostics']
           evaluation = report['evaluation']
@@ -90,6 +115,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fvsc-public-language-workplace-2025
+          name: fvsc-public-language-${{ inputs.site }}-${{ inputs.from_date }}-${{ inputs.to_date }}
           path: artifacts/public-language/
           if-no-files-found: error
