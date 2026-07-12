@@ -50,12 +50,12 @@ def test_sparse_graph_scores_are_bounded_and_directional() -> None:
 
     assert graph.direct("system", "evidence") == 5.0
     assert 0.0 < graph.conditional("system", "evidence") < 1.0
+    assert graph.conditional("system", "evidence") != graph.conditional(
+        "evidence", "system"
+    )
     assert graph.ppmi("system", "evidence") > 0.0
     assert graph.ppmi("source", "system") == 0.0
     assert 0.0 <= graph.context_inclusion("system", "evidence") <= 1.0
-    assert graph.context_inclusion("system", "evidence") != graph.context_inclusion(
-        "evidence", "system"
-    )
 
 
 def test_representation_suite_returns_all_registered_scores() -> None:
