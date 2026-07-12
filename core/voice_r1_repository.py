@@ -6,6 +6,7 @@ clock time while keeping immutable artifact payloads unchanged.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import time
@@ -46,7 +47,36 @@ class R1VoiceRepository(VoiceRepository):
         session_id: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        result = super().import_audio(data, **kwargs)
+        source_hash = hashlib.sha256(bytes(data)).hexdigest()
+        try:
+            result = super().import_audio(data, **kwargs)
+        except Exception as exc:
+            # The base importer creates the capture record only after successful
+            # decoding and VAD. If ASR or derived-artifact creation then fails, keep
+            # that source indexed and retryable instead of leaving an orphaned file.
+            capture_id = next(
+                (
+                    item_id
+                    for item_id, item in self._data["captures"].items()
+                    if item.get("artifact", {}).get("source_hash") == source_hash
+                ),
+                None,
+            )
+            if capture_id is None:
+                raise
+            record = self._data["captures"][capture_id]
+            record["status"] = "failed"
+            record["error"] = f"{type(exc).__name__}: {exc}"
+            record["session_id"] = str(session_id).strip() if session_id else None
+            record["audio_present"] = record.get("audio_deleted_at") is None
+            self._save()
+            return {
+                "capture": self.get_capture(capture_id),
+                "candidates": [],
+                "asr_available": self.asr_available,
+                "retriable": True,
+            }
+
         capture_id = result["capture"]["artifact"]["capture_id"]
         record = self._data["captures"][capture_id]
         record["session_id"] = str(session_id).strip() if session_id else None
@@ -76,7 +106,9 @@ class R1VoiceRepository(VoiceRepository):
                 candidate["artifact"].get("promotion_state") in {"promoted", "discarded"}
                 for candidate in candidates
             )
-        return record.get("status") in {"no_speech", "no_transcript", "failed"}
+        # A failed or empty ASR result must retain the only source for retry and
+        # diagnostics. Pure silence may be safely discarded without review.
+        return record.get("status") == "no_speech"
 
     def enforce_retention(self, *, now: float | None = None) -> list[str]:
         current = float(time.time() if now is None else now)
@@ -117,7 +149,7 @@ class R1VoiceRepository(VoiceRepository):
                 path.unlink()
             except FileNotFoundError:
                 pass
-        # The content-addressed artifact remains byte-for-byte intact.  Deletion is
+        # The content-addressed artifact remains byte-for-byte intact. Deletion is
         # a lifecycle fact on the surrounding record, not a mutation of source data.
         record["audio_deleted_at"] = float(deleted_at)
         record["audio_present"] = False
@@ -164,6 +196,7 @@ class R1VoiceRepository(VoiceRepository):
         refreshed = self._data["captures"][capture_id]
         refreshed["session_id"] = record.get("session_id")
         refreshed["audio_present"] = True
+        refreshed["error"] = None
         self._save()
         result["capture"] = self.get_capture(capture_id)
         return result
@@ -175,6 +208,10 @@ class R1VoiceRepository(VoiceRepository):
             {
                 "audio_present_count": sum(
                     record.get("audio_deleted_at") is None
+                    for record in self._data["captures"].values()
+                ),
+                "failed_capture_count": sum(
+                    record.get("status") == "failed"
                     for record in self._data["captures"].values()
                 ),
                 "retention_enforced": True,
