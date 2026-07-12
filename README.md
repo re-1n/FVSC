@@ -34,6 +34,7 @@ shape outperforms simpler graph or mass baselines.
 - [Next goals and stop conditions](./docs/NEXT_GOALS.md)
 - [Daily pilot protocol](./docs/daily-pilot.md)
 - [Semantic runtime roadmap](./docs/semantic-runtime-roadmap.md)
+- [Staged voice-ingest integration plan](./docs/VOICE_INGEST_PLAN.md)
 
 ## Quick start
 
