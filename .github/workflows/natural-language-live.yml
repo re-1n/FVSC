@@ -33,7 +33,7 @@ permissions:
 jobs:
   public-language:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     env:
       SITE: ${{ inputs.site || 'workplace' }}
       FROM_DATE: ${{ inputs.from_date || '2025-01-01' }}
@@ -62,26 +62,54 @@ jobs:
             --minimum-score 1 \
             --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
             | tee artifacts/public-language/fetch-summary.json
-      - name: Run semantic representation bakeoff
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m core.representation_bakeoff \
-            --input "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
-            --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}-representation-bakeoff.json" \
-            --train-fraction 0.8 \
-            --bootstrap-samples 2000 \
-            | tee artifacts/public-language/representation-bakeoff-summary.json
       - name: Run explicit container bakeoff
         shell: bash
         run: |
           set -euo pipefail
-          python -m core.container_benchmark \
-            --input "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
-            --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}-container-bakeoff.json" \
-            --train-fraction 0.8 \
-            --bootstrap-samples 2000 \
-            | tee artifacts/public-language/container-bakeoff-summary.json
+          python - <<'PY' | tee artifacts/public-language/container-bakeoff-summary.json
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          from core.container_benchmark import BENCHMARK_VERSION, run_container_bakeoff
+          from core.natural_language_benchmark import _thread_documents, load_corpus
+
+          root = Path("artifacts/public-language")
+          corpus_files = list(root.glob("*.jsonl"))
+          if len(corpus_files) != 1:
+              raise SystemExit(f"expected one corpus, found {len(corpus_files)}")
+          corpus_path = corpus_files[0]
+          records = load_corpus(corpus_path)
+          documents, parser_diagnostics = _thread_documents(records, max_threads=None)
+          evaluation = run_container_bakeoff(
+              documents,
+              train_fraction=0.8,
+              bootstrap_samples=2000,
+              max_positives_per_document=20,
+              max_negatives_per_document=20,
+          )
+          report = {
+              "benchmark": BENCHMARK_VERSION,
+              "corpus_sha256": hashlib.sha256(corpus_path.read_bytes()).hexdigest(),
+              "records": len(records),
+              "threads": len({(record.site, record.thread_id) for record in records}),
+              "parser_diagnostics": parser_diagnostics,
+              "evaluation": evaluation,
+              "sampling": {
+                  "positive_pairs_per_document": 20,
+                  "negative_pairs_per_document": 20,
+                  "deterministic": True,
+              },
+              "raw_text_in_report": False,
+          }
+          output = root / f"{os.environ['SITE']}-{os.environ['FROM_DATE']}-{os.environ['TO_DATE']}-container-bakeoff.json"
+          output.write_text(
+              json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False),
+              encoding="utf-8",
+          )
+          print(json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2))
+          PY
       - name: Write job summary
         shell: bash
         run: |
@@ -90,27 +118,22 @@ jobs:
           from pathlib import Path
 
           root = Path('artifacts/public-language')
-          representation_files = list(root.glob('*-representation-bakeoff.json'))
-          container_files = list(root.glob('*-container-bakeoff.json'))
-          if len(representation_files) != 1 or len(container_files) != 1:
-              raise SystemExit(
-                  'expected one representation and one container report; '
-                  f'found {len(representation_files)} / {len(container_files)}'
-              )
-          representation = json.loads(representation_files[0].read_text())
-          container = json.loads(container_files[0].read_text())
-          parser = container['parser_diagnostics']
-          comparison = container['evaluation']
+          reports = list(root.glob('*-container-bakeoff.json'))
+          if len(reports) != 1:
+              raise SystemExit(f'expected one container report, found {len(reports)}')
+          report = json.loads(reports[0].read_text())
+          parser = report['parser_diagnostics']
+          comparison = report['evaluation']
           rows = [
               '# FVSC explicit-container live bakeoff',
               '',
-              f"- Corpus SHA-256: `{container['corpus_sha256']}`",
-              f"- Records / threads: {container['records']} / {container['threads']}",
+              f"- Corpus SHA-256: `{report['corpus_sha256']}`",
+              f"- Records / threads: {report['records']} / {report['threads']}",
               f"- Parseable threads: {parser['parseable_threads']}",
               f"- Train / test documents: {comparison['train_documents']} / {comparison['test_documents']}",
               f"- Known-positive coverage: {comparison['known_positive_coverage']:.4f}",
-              f"- Container verdict: `{comparison['verdict']}`",
-              f"- Previous representation verdict: `{representation['evaluation']['verdict']}`",
+              f"- Sampled positives / negatives: {comparison['sampled_positive_pairs']} / {comparison['negative_pairs']}",
+              f"- Verdict: `{comparison['verdict']}`",
               '',
               '| Model | AUC | Average precision | Pairwise comparisons |',
               '|---|---:|---:|---:|',
@@ -127,7 +150,7 @@ jobs:
               f"Paired document bootstrap CI95: {comparison['paired_document_bootstrap_ci95']}",
               f"Asymmetric positive-pair rate: {comparison['asymmetric_positive_pair_rate']:.4f}",
               '',
-              '> This run tests the explicit ContainerCore v1 implementation. Parser-derived edges remain proxy labels.',
+              '> This is a preliminary deterministic sample. Parser-derived edges remain proxy labels.',
           ])
           (root / 'container-bakeoff-summary.md').write_text(
               '\n'.join(rows) + '\n', encoding='utf-8'
