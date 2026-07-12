@@ -72,6 +72,48 @@ Verify:
 
 Exit condition: no source-lifecycle defect requires deleting `.fvsc/pilot-state.json`.
 
+## Parallel Goal V0 — obtain reviewed voice evidence
+
+Sparse written notes may leave the map without enough observations to test. Voice
+capture is therefore a justified parallel input track, but it must not bypass the
+existing evidence and review contracts.
+
+Follow [VOICE_INGEST_PLAN.md](./VOICE_INGEST_PLAN.md). The first milestone is
+**audio-file import**, not always-on recording.
+
+Deliverables:
+
+- immutable audio, speech-segment and transcript artifact schemas;
+- local audio-file import and source hashing;
+- replaceable VAD backend;
+- local ASR backend with word or segment timestamps;
+- raw and normalized transcript layers;
+- transcript review queue;
+- explicit promotion of reviewed candidates into `EvidenceLedger`;
+- raw-audio retention and deletion policy;
+- end-to-end test from audio fixture to promoted and retracted evidence.
+
+Required safeguards:
+
+- no automatic evidence creation before review;
+- no network transcription by default;
+- no raw audio inside a synced vault by default;
+- no unknown or non-owner speaker promoted as personal evidence;
+- model and preprocessing versions recorded in provenance;
+- deleting retained audio does not delete transcript or evidence history.
+
+Exit condition: at least ten real personal voice memos can be imported,
+transcribed, corrected, promoted and restored after restart without manual state
+repair or untraceable semantic assertions.
+
+Only after this gate:
+
+1. add explicit microphone start/stop sessions;
+2. measure ASR and VAD quality on at least 30 annotated minutes;
+3. add optional speaker separation;
+4. consider bounded background sessions with a persistent visible indicator and
+   emergency stop.
+
 ## Goal 3 — collect human usefulness data
 
 For 7–14 days:
@@ -129,7 +171,10 @@ After the first real sample, classify low-rated outputs into:
 - stale-source or provenance error;
 - review-selection bias;
 - UI or wording problem;
-- genuinely surprising but useful relation.
+- genuinely surprising but useful relation;
+- ASR transcription error;
+- voice activity segmentation error;
+- speaker attribution or reported-speech error.
 
 Produce a small anonymized defect corpus before changing the encoder.
 
@@ -143,9 +188,10 @@ Priority order after the pilot:
 2. installation and recovery UX;
 3. large-vault performance and cancellation;
 4. parser precision and relation direction;
-5. contextual encoding;
-6. blinded comparison UI;
-7. additional semantic operators.
+5. voice transcription and speaker-attribution defects;
+6. contextual encoding;
+7. blinded comparison UI;
+8. additional semantic operators.
 
 Do not begin cross-person alignment, persona simulation or scenario generation while Goals 1–5 remain incomplete.
 
@@ -171,7 +217,10 @@ Pause the pilot and fix the system before collecting more semantic ratings if an
 - deleting or renaming one note corrupts unrelated evidence;
 - state cannot be restored after restart;
 - the plugin requires repeated manual repair to start;
-- private vault data is exposed outside the local machine unexpectedly;
+- private vault or voice data is exposed outside the local machine unexpectedly;
+- raw audio persists beyond its configured retention period;
+- unknown or non-owner speech is promoted into the owner's map automatically;
+- the recording state is not visibly observable or the emergency stop fails;
 - the held-out split uses future notes for training;
 - CI becomes red at the branch head.
 
@@ -185,4 +234,6 @@ Pause the pilot and fix the system before collecting more semantic ratings if an
 - [ ] Modify one ordinary note and confirm live ingest.
 - [ ] Generate the first daily review.
 - [ ] Submit the first usefulness ratings.
+- [ ] Begin V0 by defining immutable audio and transcript artifacts.
+- [ ] Add local audio-file import before implementing microphone capture.
 - [ ] Record installation/runtime defects in the PR or a dedicated issue.
