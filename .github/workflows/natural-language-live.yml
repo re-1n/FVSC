@@ -1,6 +1,11 @@
 name: public-natural-language-live
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/natural-language-live.yml"
+      - "core/representation_bakeoff.py"
+      - "tests/test_representation_bakeoff.py"
   workflow_dispatch:
     inputs:
       site:
@@ -26,7 +31,12 @@ permissions:
 jobs:
   public-language:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    env:
+      SITE: ${{ inputs.site || 'workplace' }}
+      FROM_DATE: ${{ inputs.from_date || '2025-01-01' }}
+      TO_DATE: ${{ inputs.to_date || '2025-12-31' }}
+      PAGES: ${{ inputs.pages || '3' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,11 +48,6 @@ jobs:
         run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
       - name: Fetch frozen attributed corpus
         shell: bash
-        env:
-          SITE: ${{ inputs.site }}
-          FROM_DATE: ${{ inputs.from_date }}
-          TO_DATE: ${{ inputs.to_date }}
-          PAGES: ${{ inputs.pages }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/public-language
@@ -55,12 +60,8 @@ jobs:
             --minimum-score 1 \
             --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
             | tee artifacts/public-language/fetch-summary.json
-      - name: Evaluate frozen corpus
+      - name: Evaluate existing FVSC benchmark
         shell: bash
-        env:
-          SITE: ${{ inputs.site }}
-          FROM_DATE: ${{ inputs.from_date }}
-          TO_DATE: ${{ inputs.to_date }}
         run: |
           set -euo pipefail
           python -m core.natural_language_benchmark evaluate \
@@ -69,52 +70,73 @@ jobs:
             --train-fraction 0.8 \
             --bootstrap-samples 2000 \
             | tee artifacts/public-language/evaluation-summary.json
+      - name: Run semantic representation bakeoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m core.representation_bakeoff \
+            --input "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}.jsonl" \
+            --output "artifacts/public-language/${SITE}-${FROM_DATE}-${TO_DATE}-representation-bakeoff.json" \
+            --train-fraction 0.8 \
+            --bootstrap-samples 2000 \
+            | tee artifacts/public-language/representation-bakeoff-summary.json
       - name: Write job summary
         shell: bash
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          reports = list(Path('artifacts/public-language').glob('*-report.json'))
-          if len(reports) != 1:
-              raise SystemExit(f'expected one report, found {len(reports)}')
+
+          root = Path('artifacts/public-language')
+          reports = list(root.glob('*-report.json'))
+          bakeoffs = list(root.glob('*-representation-bakeoff.json'))
+          if len(reports) != 1 or len(bakeoffs) != 1:
+              raise SystemExit(
+                  f'expected one standard report and one bakeoff, found {len(reports)} / {len(bakeoffs)}'
+              )
           report = json.loads(reports[0].read_text())
+          bakeoff = json.loads(bakeoffs[0].read_text())
           corpus = report['corpus']
           parser = report['parser_diagnostics']
           evaluation = report['evaluation']
+          comparison = bakeoff['evaluation']
           rows = [
-              '# FVSC public-language live benchmark',
+              '# FVSC public-language representation bakeoff',
               '',
               f"- Corpus SHA-256: `{corpus['sha256']}`",
               f"- Records / threads: {corpus['records']} / {corpus['threads']}",
               f"- Parseable threads: {parser['parseable_threads']}",
-              f"- Train / test documents: {evaluation['train_documents']} / {evaluation['test_documents']}",
-              f"- Known-positive coverage: {evaluation['known_positive_coverage']:.4f}",
-              f"- Verdict: `{evaluation['verdict']}`",
+              f"- Train / test documents: {comparison['train_documents']} / {comparison['test_documents']}",
+              f"- Known-positive coverage: {comparison['known_positive_coverage']:.4f}",
+              f"- Verdict: `{comparison['verdict']}`",
               '',
               '| Model | AUC | Average precision | Pairwise comparisons |',
               '|---|---:|---:|---:|',
           ]
-          for name, metrics in evaluation['models'].items():
+          for name, metrics in comparison['models'].items():
               rows.append(
                   f"| {name} | {metrics['auc']:.4f} | {metrics['average_precision']:.4f} | {metrics['pairwise_comparisons']} |"
               )
           rows.extend([
               '',
-              f"Best baseline: `{evaluation['best_baseline']}`",
-              f"FVSC AUC delta: {evaluation['fvsc_auc_delta_vs_best_baseline']:.4f}",
-              f"Paired bootstrap CI95: {evaluation['paired_bootstrap_ci95']}",
+              f"Best non-density backend: `{comparison['best_non_density_backend']}`",
+              f"Density AUC delta: {comparison['density_auc_delta_vs_best_backend']:.6f}",
+              f"Paired document bootstrap CI95: {comparison['paired_document_bootstrap_ci95']}",
               '',
-              '> Parser-derived edges are proxy labels. This run is not evidence of personal usefulness and requires a blinded relation audit.',
+              f"Previous registered verdict: `{evaluation['verdict']}`",
+              '',
+              '> This benchmark tests directed relation ranking. It does not test the density-matrix advantage hypothesis for contextual polysemy.',
           ])
-          Path('artifacts/public-language/summary.md').write_text('\n'.join(rows) + '\n', encoding='utf-8')
+          (root / 'representation-bakeoff-summary.md').write_text(
+              '\n'.join(rows) + '\n', encoding='utf-8'
+          )
           with open(Path(__import__('os').environ['GITHUB_STEP_SUMMARY']), 'a', encoding='utf-8') as handle:
               handle.write('\n'.join(rows) + '\n')
           PY
-      - name: Upload attributed corpus and aggregate report
+      - name: Upload attributed corpus and aggregate reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fvsc-public-language-${{ inputs.site }}-${{ inputs.from_date }}-${{ inputs.to_date }}
+          name: fvsc-public-language-${{ env.SITE }}-${{ env.FROM_DATE }}-${{ env.TO_DATE }}
           path: artifacts/public-language/
           if-no-files-found: error
