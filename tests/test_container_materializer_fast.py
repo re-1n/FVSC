@@ -57,7 +57,7 @@ def test_fast_materializer_preserves_explicit_container_contracts() -> None:
     )
 
 
-def test_fast_materialization_is_order_independent() -> None:
+def test_fast_materialization_is_semantically_order_independent() -> None:
     events = [
         _event(1, "project", "contains", "architecture", "design"),
         _event(2, "architecture", "contains", "provenance", "design"),
@@ -66,9 +66,15 @@ def test_fast_materialization_is_order_independent() -> None:
     first = materialize_fast_container_ledger(EvidenceLedger(events))
     second = materialize_fast_container_ledger(EvidenceLedger(list(reversed(events))))
 
-    assert first.snapshot_id == second.snapshot_id
+    # Append-only ledger identity is history-order sensitive, while the active semantic
+    # projection is deterministic for the same assertion set.
+    assert first.ledger_digest != second.ledger_digest
+    assert first.snapshot_id != second.snapshot_id
     assert [item.embedding_id for item in first.embeddings] == [
         item.embedding_id for item in second.embeddings
+    ]
+    assert [item.container_id for item in first.containers] == [
+        item.container_id for item in second.containers
     ]
     for container in first.containers:
         other = second.get(container.container_id)
