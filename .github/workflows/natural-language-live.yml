@@ -1,18 +1,6 @@
 name: public-natural-language-live
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/natural-language-live.yml"
-      - "core/container_core.py"
-      - "core/container_query.py"
-      - "core/container_materializer_fast.py"
-      - "core/container_benchmark_cached.py"
-      - "core/container_benchmark_fast_cli.py"
-      - "tests/test_container_core.py"
-      - "tests/test_container_query.py"
-      - "tests/test_container_materializer_fast.py"
-      - "tests/test_container_benchmark_cached.py"
   workflow_dispatch:
     inputs:
       site:
