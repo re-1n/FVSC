@@ -6,6 +6,7 @@ import { VaultWatcher } from "./vault_watcher";
 import { BootstrapModal } from "./bootstrap";
 import { autoFillSettings } from "./paths";
 import { tryAutoStartOllama } from "./ollama";
+import { VoiceController } from "./voice";
 
 export default class FvscPlugin extends Plugin {
   settings!: FvscSettings;
@@ -14,6 +15,8 @@ export default class FvscPlugin extends Plugin {
   watcher: VaultWatcher | null = null;
   private statusEl: HTMLElement | null = null;
   private syncIndicator = "";
+  private voiceIndicator = "";
+  private voice: VoiceController | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -34,6 +37,15 @@ export default class FvscPlugin extends Plugin {
     );
 
     this.statusEl = this.addStatusBarItem();
+    this.voice = new VoiceController({
+      app: this.app,
+      baseUrl: () => this.backend.baseUrl(),
+      ensureBackend: () => this.ensureBackendUp(),
+      onRecordingState: (recording, detail) => {
+        this.voiceIndicator = recording ? `voice recording${detail ? `: ${detail}` : ""}` : "";
+        this.renderStatus(this.backend.getStatus());
+      },
+    });
     this.renderStatus("stopped");
 
     this.registerView(
@@ -74,7 +86,32 @@ export default class FvscPlugin extends Plugin {
       callback: async () => this.createPilotDailyReview(),
     });
 
+    this.addCommand({
+      id: "voice-import-audio",
+      name: "Voice: import audio file",
+      callback: async () => this.voice?.importAudio(),
+    });
+
+    this.addCommand({
+      id: "voice-toggle-memo",
+      name: "Voice: start/stop owner voice memo",
+      callback: async () => this.voice?.toggleVoiceMemo(),
+    });
+
+    this.addCommand({
+      id: "voice-open-review",
+      name: "Voice: open transcript review queue",
+      callback: () => this.voice?.openReviewQueue(),
+    });
+
+    this.addCommand({
+      id: "voice-emergency-stop",
+      name: "Voice: emergency stop",
+      callback: async () => this.voice?.emergencyStop(),
+    });
+
     this.addRibbonIcon("git-fork", "Open Antourage", () => this.openAntourageView());
+    this.addRibbonIcon("mic", "Start/stop FVSC voice memo", () => void this.voice?.toggleVoiceMemo());
 
     this.addSettingTab(new FvscSettingTab(this.app, this));
 
@@ -260,6 +297,7 @@ export default class FvscPlugin extends Plugin {
   }
 
   async onunload() {
+    await this.voice?.dispose();
     if (this.watcher) {
       try { await this.watcher.flush(); } catch { /* ignore */ }
       this.watcher.stop();
@@ -338,7 +376,8 @@ export default class FvscPlugin extends Plugin {
     const dot = this.statusEl.createSpan({ cls: "fvsc-status-dot" });
     dot.style.color = color[s];
     dot.setText("●");
-    const suffix = this.syncIndicator ? `  ${this.syncIndicator}` : "";
+    const indicators = [this.syncIndicator, this.voiceIndicator].filter(Boolean);
+    const suffix = indicators.length ? `  ${indicators.join(" · ")}` : "";
     this.statusEl.createSpan({ text: ` ${label[s]}${suffix}` });
     if (detail) {
       this.statusEl.setAttribute("aria-label", detail);
