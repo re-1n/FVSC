@@ -30,6 +30,7 @@ from .semantic_metrics import operator_inclusion
 
 
 BENCHMARK_VERSION = "fvsc-explicit-container-bakeoff-v1"
+CONTAINER_MAX_DEPTH = 2
 _EPS = 1e-12
 RankedExample = tuple[bool, float, str]
 
@@ -44,6 +45,24 @@ def _edge_rows(document: HeldoutDocument) -> list[tuple[str, str, float]]:
 def _stable_random_score(parent: str, child: str) -> float:
     digest = hashlib.sha256(f"{parent}\0{child}".encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "little") / float(2**64 - 1)
+
+
+def _stable_sample_pairs(
+    pairs: Sequence[tuple[str, str]],
+    *,
+    source_id: str,
+    kind: str,
+    limit: int,
+) -> list[tuple[str, str]]:
+    if limit < 1:
+        raise ValueError("pair sample limit must be positive")
+    unique = set(pairs)
+    return sorted(
+        unique,
+        key=lambda pair: hashlib.sha256(
+            f"{source_id}\0{kind}\0{pair[0]}\0{pair[1]}".encode("utf-8")
+        ).digest(),
+    )[:limit]
 
 
 def _average_precision(examples: Sequence[RankedExample]) -> float:
@@ -107,11 +126,15 @@ class ContainerRepresentationSuite:
         child_concept = self.runtime.get(child)
         if parent_concept is None or child_concept is None:
             raise KeyError("pair contains a term absent from the fitted representations")
-        projection = self.containers.project(parent, child, max_depth=3)
+        projection = self.containers.project(
+            parent, child, max_depth=CONTAINER_MAX_DEPTH
+        )
         structure = projection.path_strength
         activation = self._activation_cache.get(parent)
         if activation is None:
-            activation = self.containers.activate(parent, max_depth=3)
+            activation = self.containers.activate(
+                parent, max_depth=CONTAINER_MAX_DEPTH
+            )
             self._activation_cache[parent] = activation
         if projection.state.is_empty or activation.state.is_empty:
             container_density = 0.0
@@ -177,11 +200,14 @@ def run_container_bakeoff(
     train_fraction: float = 0.8,
     bootstrap_samples: int = 1000,
     seed: int = 20260712,
-    max_negatives_per_document: int = 200,
+    max_positives_per_document: int = 100,
+    max_negatives_per_document: int = 100,
 ) -> dict[str, Any]:
     """Compare explicit containers and density ablations on one frozen split."""
     if bootstrap_samples < 100:
         raise ValueError("bootstrap_samples must be at least 100")
+    if max_positives_per_document < 1:
+        raise ValueError("max_positives_per_document must be positive")
     if max_negatives_per_document < 1:
         raise ValueError("max_negatives_per_document must be positive")
 
@@ -194,6 +220,7 @@ def run_container_bakeoff(
     document_outcomes: list[_DocumentOutcome] = []
     positive_total = 0
     positive_known = 0
+    sampled_positive_total = 0
     negative_total = 0
     asymmetric_positive_pairs = 0
     evaluated_positive_pairs = 0
@@ -202,12 +229,19 @@ def run_container_bakeoff(
     for document in test:
         all_edges = _edge_rows(document)
         positive_total += len(all_edges)
-        positives = [
+        known_positives = [
             (parent, child)
             for parent, child, _weight in all_edges
             if parent in suite.known_terms and child in suite.known_terms
         ]
-        positive_known += len(positives)
+        positive_known += len(known_positives)
+        positives = _stable_sample_pairs(
+            known_positives,
+            source_id=document.source_id,
+            kind="positive",
+            limit=max_positives_per_document,
+        )
+        sampled_positive_total += len(positives)
         if not positives:
             details.append({
                 "source_id": document.source_id,
@@ -224,19 +258,25 @@ def run_container_bakeoff(
             for term in (parent, child)
             if term in suite.known_terms
         })
-        positive_set = set(positives)
-        negatives = [
+        positive_set = set(known_positives)
+        negative_candidates = [
             (parent, child)
             for parent in terms
             for child in terms
             if parent != child and (parent, child) not in positive_set
-        ][:max_negatives_per_document]
+        ]
+        negatives = _stable_sample_pairs(
+            negative_candidates,
+            source_id=document.source_id,
+            kind="negative",
+            limit=max_negatives_per_document,
+        )
         negative_total += len(negatives)
         if not negatives:
             details.append({
                 "source_id": document.source_id,
                 "positives": len(all_edges),
-                "known_positives": len(positives),
+                "known_positives": len(known_positives),
                 "negatives": 0,
                 "skipped": "no_candidate_negatives",
             })
@@ -248,7 +288,9 @@ def run_container_bakeoff(
         document_wins: dict[str, float] = {}
 
         for pair, score_map in positive_scores:
-            reverse = suite.containers.structure_score(pair[1], pair[0], max_depth=3)
+            reverse = suite.containers.structure_score(
+                pair[1], pair[0], max_depth=CONTAINER_MAX_DEPTH
+            )
             asymmetric_positive_pairs += int(abs(score_map["container_structure"] - reverse) > _EPS)
             evaluated_positive_pairs += 1
 
@@ -273,7 +315,8 @@ def run_container_bakeoff(
         details.append({
             "source_id": document.source_id,
             "positives": len(all_edges),
-            "known_positives": len(positives),
+            "known_positives": len(known_positives),
+            "sampled_positives": len(positives),
             "negatives": len(negatives),
             "skipped": None,
         })
@@ -330,6 +373,7 @@ def run_container_bakeoff(
         "train_cutoff": train[-1].observed_at if train else None,
         "positive_pairs_total": positive_total,
         "positive_pairs_known": positive_known,
+        "sampled_positive_pairs": sampled_positive_total,
         "known_positive_coverage": coverage,
         "negative_pairs": negative_total,
         "models": metrics,
@@ -351,12 +395,16 @@ def run_container_bakeoff(
         "details": details,
         "decision_scope": {
             "canonical_store": "not tested; append-only evidence ledger is retained",
-            "container_structure": "explicit directed embeddings with bounded recursive paths",
+            "container_structure": (
+                "explicit directed embeddings with bounded recursive paths "
+                f"through depth {CONTAINER_MAX_DEPTH}"
+            ),
             "density_without_containers": "current deterministic FVSC materializer",
             "density_with_containers": "child state projected through evidence-backed embedding operators",
         },
         "limitations": [
             "parser-derived relations remain proxy labels until blinded manual audit",
+            "positive and negative pairs are deterministically capped per test document",
             "v1 embedding operators are deterministic rather than learned",
             "negative-polarity embeddings are preserved but do not create positive containment mass",
             "the relation-ranking task does not exhaust contextual polysemy or order effects",
