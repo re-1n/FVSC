@@ -6,7 +6,8 @@ import wave
 
 import numpy as np
 
-from core.voice_ingest import ASRResult, VoiceRepository
+from core.voice_ingest import ASRResult
+from core.voice_r1_repository import R1VoiceRepository
 
 
 class FakeASR:
@@ -48,7 +49,7 @@ def test_voice_repository_import_correct_restart_and_delete_audio(tmp_path: Path
     vault = tmp_path / "vault"
     root = tmp_path / "voice-data"
     vault.mkdir()
-    repository = VoiceRepository(root, vault_path=vault, asr_backend=FakeASR())
+    repository = R1VoiceRepository(root, vault_path=vault, asr_backend=FakeASR())
 
     imported = repository.import_audio(
         _wav_fixture(),
@@ -58,9 +59,11 @@ def test_voice_repository_import_correct_restart_and_delete_audio(tmp_path: Path
         evidence_mode="save_owner_turns_for_review",
         language="ru",
         observed_at=100.0,
+        session_id="explicit-owner-session",
     )
     capture = imported["capture"]
     assert capture["status"] == "ready"
+    assert capture["session_id"] == "explicit-owner-session"
     assert capture["artifact"]["metadata_json"]
     assert len(imported["candidates"]) == 1
     candidate = imported["candidates"][0]
@@ -78,15 +81,42 @@ def test_voice_repository_import_correct_restart_and_delete_audio(tmp_path: Path
     assert "осознанный" in corrected["transcript"]["text_normalized"]
     assert repository.candidate_payload(original_id)["superseded_by"] == corrected_id
 
-    restored = VoiceRepository(root, vault_path=vault, asr_backend=FakeASR())
+    restored = R1VoiceRepository(root, vault_path=vault, asr_backend=FakeASR())
     pending = restored.list_candidates()
     assert [item["candidate"]["candidate_id"] for item in pending] == [corrected_id]
 
     capture_id = capture["artifact"]["capture_id"]
     storage_ref = capture["artifact"]["storage_ref"]
+    immutable_artifact = dict(capture["artifact"])
     assert (root / storage_ref).exists()
     deleted = restored.delete_audio(capture_id)
     assert deleted["audio_deleted_at"] is not None
+    assert deleted["audio_present"] is False
+    assert deleted["artifact"] == immutable_artifact
     assert not (root / storage_ref).exists()
     # Transcript/candidate history survives raw-audio deletion.
     assert restored.candidate_payload(corrected_id)["transcript"]["text_normalized"]
+
+
+def test_ephemeral_audio_waits_for_review_then_is_deleted(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    root = tmp_path / "voice-data"
+    vault.mkdir()
+    repository = R1VoiceRepository(root, vault_path=vault, asr_backend=FakeASR())
+    imported = repository.import_audio(
+        _wav_fixture(),
+        filename="ephemeral.wav",
+        mode="voice_memo",
+        retention_class="ephemeral",
+        evidence_mode="save_owner_turns_for_review",
+        observed_at=200.0,
+    )
+    capture_id = imported["capture"]["artifact"]["capture_id"]
+    storage_ref = imported["capture"]["artifact"]["storage_ref"]
+    candidate_id = imported["candidates"][0]["candidate"]["candidate_id"]
+    assert repository.enforce_retention(now=10_000.0) == []
+    assert (root / storage_ref).exists()
+
+    repository.discard_candidate(candidate_id)
+    assert repository.enforce_retention(now=10_001.0) == [capture_id]
+    assert not (root / storage_ref).exists()
