@@ -1,11 +1,6 @@
 name: public-natural-language-live
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/natural-language-live.yml"
-      - "core/representation_bakeoff.py"
-      - "tests/test_representation_bakeoff.py"
   workflow_dispatch:
     inputs:
       site:
@@ -33,10 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      SITE: ${{ inputs.site || 'workplace' }}
-      FROM_DATE: ${{ inputs.from_date || '2025-01-01' }}
-      TO_DATE: ${{ inputs.to_date || '2025-12-31' }}
-      PAGES: ${{ inputs.pages || '3' }}
+      SITE: ${{ inputs.site }}
+      FROM_DATE: ${{ inputs.from_date }}
+      TO_DATE: ${{ inputs.to_date }}
+      PAGES: ${{ inputs.pages }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -84,7 +79,6 @@ jobs:
               raise SystemExit(
                   f'expected one fetch summary and one bakeoff, found {len(fetch_summaries)} / {len(bakeoffs)}'
               )
-          corpus = json.loads(fetch_summaries[0].read_text())
           bakeoff = json.loads(bakeoffs[0].read_text())
           parser = bakeoff['parser_diagnostics']
           comparison = bakeoff['evaluation']
