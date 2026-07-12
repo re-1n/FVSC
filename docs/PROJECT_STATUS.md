@@ -2,9 +2,23 @@
 
 _Last updated: 2026-07-12_
 
-## Current milestone
+## Executive status
 
-FVSC has reached an **operational daily-pilot checkpoint**. The current branch is suitable for controlled use in a real Obsidian vault, but it is not yet evidence that the density-matrix model is practically useful or superior to simpler baselines.
+FVSC has reached an **operational experimental-pilot checkpoint**.
+
+The implementation is sufficiently tested to begin controlled real-vault and real-audio use. However, the central empirical claim — that the current density-matrix shape adds value beyond simpler semantic structures — is **not demonstrated**.
+
+Current classification:
+
+| Question | Status |
+|---|---|
+| Engineering correctness | Demonstrated at the validated checkpoint |
+| Local Obsidian pilot readiness | Ready for controlled use |
+| Voice R1 implementation | Implemented and CI-tested |
+| Voice R1 real-audio acceptance | Pending ten real owner recordings |
+| Predictive value on public prose | Signal above random, but worse than direct graph |
+| Personal practical usefulness | Not yet measured |
+| Density-matrix superiority | Not demonstrated |
 
 Development branch:
 
@@ -15,16 +29,89 @@ fix/security-and-integrity-hardening
 Draft pull request:
 
 ```text
-#1 — FVSC hardening and daily semantic pilot
+#1 — FVSC hardening, daily pilot, and local voice R1
 ```
 
-Validated code checkpoint:
+Latest validated code checkpoint:
 
 ```text
-6dc02f823c0845b97db7bdf270989159e9b06295
+7d0045be11b2d88aaa2dc6732e4e7f3298018cb9
 ```
 
-GitHub Actions run `29168631054` completed successfully at that checkpoint.
+GitHub Actions run `29186483448` completed successfully at that checkpoint.
+
+## Latest verified engineering checks
+
+The full checkpoint passed:
+
+- 51 Python tests;
+- 12 live/integration tests intentionally deselected by the unit profile;
+- end-to-end temporary-vault workflow;
+- source create/modify/rename/delete and restart restoration;
+- immutable evidence assertion, supersession and retraction;
+- voice import, deterministic VAD, transcript correction and review;
+- explicit voice evidence promotion and provenance-preserving retraction;
+- voice retention and ASR-failure recovery;
+- public-thread schema, grouping and determinism checks;
+- controlled viability benchmark;
+- reproducible `npm ci` from the committed lockfile;
+- TypeScript typecheck;
+- production Obsidian bundle build;
+- non-empty `main.js` packaging check;
+- installable plugin artifact publication.
+
+This demonstrates that the implemented workflows behave consistently under the registered tests. It does not by itself demonstrate semantic usefulness.
+
+## First evaluation on live public language
+
+The first bounded natural-language benchmark used attributed Stack Exchange Workplace discussions from 2025.
+
+Corpus:
+
+- 1,068 attributed records;
+- 194 discussion threads;
+- 155 train threads and 39 test threads;
+- all records from one thread remain on one side of the split;
+- known-positive coverage: `0.8855`;
+- 5,392,800 pairwise comparisons per model;
+- corpus SHA-256: `fb914a374bbf5c44688325d6588d175b995592b73bf2b7b2cea724b7ac074ecb`.
+
+Results:
+
+| Model | ROC AUC | Average precision |
+|---|---:|---:|
+| Direct parser graph | **0.5935** | **0.8281** |
+| FVSC normalized density shape | 0.5607 | 0.7934 |
+| Deterministic random | 0.4936 | 0.7749 |
+| Trace mass | 0.3484 | 0.7201 |
+
+FVSC difference from the strongest baseline:
+
+```text
+-0.032830
+```
+
+Paired bootstrap 95% interval:
+
+```text
+[-0.033206, -0.032441]
+```
+
+Registered verdict:
+
+```text
+no_demonstrated_added_value
+```
+
+Interpretation:
+
+- the current normalized matrix shape contains some predictive signal above deterministic random;
+- it is reliably worse than retaining direct parser-edge frequency;
+- the current hash-based materializer and shape metric have not justified their additional complexity;
+- the result does not prove that density matrices are unsuitable in general;
+- parser-derived labels are proxy labels and require a blinded manual audit before assigning the deficit entirely to the representation.
+
+Full aggregate result: `benchmarks/results/public-language-workplace-2025-r1.md`.
 
 ## What is implemented
 
@@ -32,8 +119,8 @@ GitHub Actions run `29168631054` completed successfully at that checkpoint.
 
 - loopback API origin and Host restrictions;
 - bounded API inputs and safer persistence paths;
-- versioned, atomic JSON pilot persistence;
-- generated FVSC notes and reports excluded from semantic ingest;
+- versioned, atomic JSON pilot and voice persistence;
+- generated FVSC notes, reports and raw corpora excluded from semantic ingest/version control;
 - deterministic basis generation and explicit dimension checks;
 - source replacement, deletion, rename, retraction and restart restoration.
 
@@ -44,7 +131,7 @@ GitHub Actions run `29168631054` completed successfully at that checkpoint.
 - append-only evidence ledger with assertion, retraction and supersession;
 - deterministic materialization into semantic snapshots;
 - provenance-preserving concept reports and trace results;
-- shape-only metrics with trace-mass controls.
+- shape-only metrics with direct-graph and trace-mass controls.
 
 ### Daily Obsidian pilot
 
@@ -52,60 +139,40 @@ GitHub Actions run `29168631054` completed successfully at that checkpoint.
 - initial rebuild from eligible Markdown notes;
 - live synchronization for create, modify, rename and delete events;
 - state stored in `.fvsc/pilot-state.json`;
-- daily review generated at `_fvsc_review/FVSC Daily Review.md`;
-- checkbox feedback written to an append-only local feedback history;
-- revised ratings supersede earlier ratings in summaries without deleting history;
-- feedback survives a full rebuild;
+- daily review generated under `_fvsc_review/`;
+- append-only local feedback history;
+- revision-aware feedback summaries that survive rebuild;
 - readiness endpoint with explicit minimum-data and usefulness gates.
 
-### Evaluation
+### Voice R1
 
-- controlled viability benchmark;
-- chronological train/test split on the vault;
-- FVSC comparison with direct graph, trace mass and deterministic random baselines;
-- AUC, average precision, coverage and paired bootstrap interval;
-- explicit `insufficient_data` verdict when the sample is too small;
-- JSON and Markdown held-out reports generated after rebuild.
-
-## Verified checks
-
-The final engineering checkpoint passed:
-
-- 43 Python tests;
-- 12 live/integration tests intentionally deselected by the unit profile;
-- end-to-end temporary-vault workflow;
-- controlled viability benchmark;
-- reproducible `npm ci` from the committed lockfile;
-- TypeScript typecheck;
-- production Obsidian bundle build;
-- non-empty `main.js` packaging check;
-- installable plugin artifact publication.
+- explicit owner voice-memo sessions and emergency stop;
+- bounded local audio import and Obsidian PCM WAV recording;
+- deterministic WAV decode and energy VAD;
+- optional PyAV and local `faster-whisper` adapters;
+- retryable `awaiting_asr` and `failed` captures;
+- immutable capture, transcript and review-candidate artifacts;
+- transcript correction as a new revision;
+- explicit promotion into the evidence ledger;
+- complete capture/session/transcript/ASR provenance;
+- `ephemeral`, `24h`, `7d` and `keep` raw-audio retention;
+- raw-audio deletion without deleting transcript or evidence history.
 
 ## What is not yet validated
 
-The following claims must **not** be made yet:
+The following claims must not be made:
 
 - that FVSC is useful in the owner's ordinary workflow;
-- that the generated relations accurately represent the owner's personal semantics;
-- that density-matrix shape adds value beyond graph frequency or evidence mass;
-- that the current deterministic role-based encoder is an adequate long-term encoder;
-- that performance is acceptable on every large or unusual vault;
-- that desktop installation and operation have been exercised on the owner's actual machine after this checkpoint.
+- that generated relations accurately represent the owner's personal semantics;
+- that density-matrix shape adds value beyond direct graph, TF-IDF, PPMI or embedding baselines;
+- that the current deterministic hash-based encoder is an adequate long-term encoder;
+- that owner-speaker identity is verified in R1;
+- that voice capture and local ASR work reliably on the owner's actual audio environment;
+- that performance is acceptable on every large or unusual vault.
 
-## Operational readiness definition
+## Required empirical gates
 
-The current implementation is operationally ready for a pilot because:
-
-- rebuild and live-update paths are tested;
-- state restoration is deterministic;
-- generated reviews do not become evidence;
-- feedback is persisted and revision-aware;
-- a real production plugin bundle is produced by CI;
-- failures in Python, npm, TypeScript or packaging now fail CI instead of being hidden by shell pipelines.
-
-## Empirical readiness definition
-
-Before interpreting the pilot as practically useful, collect at least:
+### Personal pilot
 
 | Measure | Minimum |
 |---|---:|
@@ -116,18 +183,69 @@ Before interpreting the pilot as practically useful, collect at least:
 | Known-positive coverage | 0.50 |
 | Ordinary-use duration | 7–14 days |
 
-A unique-model-value claim additionally requires FVSC to beat the strongest registered simple baseline with a positive lower bound of the paired bootstrap confidence interval.
+### Voice R1
 
-## Known engineering debt
+- ten real owner recordings;
+- import or explicit recording succeeds;
+- transcription can be corrected;
+- promotion/discard and restart restoration succeed;
+- raw-audio deletion preserves provenance;
+- no assistant or known non-owner speech enters owner evidence automatically.
 
-- the draft PR is large and should be squash-merged after the pilot checkpoint is accepted;
-- the legacy visualization/runtime remains beside the new pilot runtime;
-- the current encoder is deterministic and context-light;
-- installation is still manual rather than release-driven;
-- there is no blinded in-plugin comparison interface yet;
-- large-vault latency, memory use and cancellation behavior need measurements on real data;
-- model and parser errors need structured inspection from actual pilot outputs.
+### Public-language benchmark
+
+- blinded manual audit of at least 100 parser-derived relations;
+- TF-IDF baseline;
+- PPMI baseline;
+- frozen embedding baseline;
+- independent runs on interpersonal and narrative/worldbuilding corpora.
+
+## Development prospects
+
+The project has credible prospects as a system, even though the current matrix hypothesis is unproven.
+
+The strongest reusable assets are already independent of the final semantic representation:
+
+- append-only evidence and provenance;
+- deterministic source lifecycle;
+- versioned semantic snapshots;
+- local voice capture, review and retention;
+- Obsidian integration;
+- auditable evaluation and readiness gates;
+- future operator and scenario interfaces.
+
+The next research value comes from improving context handling, independently auditing labels and comparing against stronger baselines — not from increasing matrix complexity without evidence.
+
+Decision rule:
+
+- if a context-aware encoder and independently audited labels produce a reproducible advantage, density matrices remain a candidate core representation;
+- if they still fail against simpler baselines, the project should preserve its evidence, voice, provenance and operator architecture while treating density matrices as an optional backend.
+
+Therefore the project should continue, but continuation of the **system** and continuation of the **current density-matrix implementation** are separate decisions.
+
+## Repository condition
+
+The active branch is 166 commits ahead of `main` and changes 101 files. The branch is a valid experimental checkpoint but its raw history should not be integrated directly.
+
+Current policy:
+
+- keep `main`;
+- keep `fix/security-and-integrity-hardening` while PR `#1` is open;
+- do not delete branches without checking unique commits and open PRs;
+- reconstruct accepted work as a small set of logical commits before integration;
+- consolidate scattered test locations after the real-pilot checkpoint;
+- delete the active feature branch only after an accepted integration commit or release tag preserves it.
+
+See `docs/REPOSITORY_HYGIENE.md`.
 
 ## Resume point
 
-The next session should begin with the real-vault installation checklist in `docs/NEXT_GOALS.md`, not with additional speculative operators. The first objective is to obtain trustworthy operational and human-feedback data from ordinary use.
+Proceed in this order:
+
+1. install the validated plugin and local voice dependencies;
+2. complete ten real owner voice memos;
+3. run the real-vault pilot and collect explicit usefulness ratings;
+4. blind-audit public-corpus parser relations;
+5. add stronger baselines;
+6. decide whether to improve or demote the matrix representation;
+7. clean and reconstruct the integration history only after the checkpoint is accepted.
