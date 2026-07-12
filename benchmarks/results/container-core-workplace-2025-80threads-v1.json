@@ -1,0 +1,110 @@
+{
+  "benchmark": "fvsc-explicit-container-cached-bakeoff-v2",
+  "comparison": {
+    "asymmetric_positive_pair_rate": 0.5125,
+    "best_container_backend": "container_structure",
+    "best_non_container_backend": "direct_graph",
+    "container_auc_delta_vs_best_non_container": -0.007890624999999929,
+    "paired_document_bootstrap_ci95": [
+      -0.04890625,
+      0.029076171874999928
+    ],
+    "verdict": "container_model_competitive"
+  },
+  "container_snapshot": {
+    "containers": 2222,
+    "embeddings": 51049,
+    "query_edges": 51049,
+    "semantic_dim": 16,
+    "snapshot_id": "e2886395c979148909acdbc8fdd7f6f8791142c8c6ee2513405d8ac8e364df3e",
+    "version": "explicit-container-core-signed-permutation-v1"
+  },
+  "corpus": {
+    "name": "Stack Exchange Workplace 2025 chronological slice",
+    "parseable_threads": 80,
+    "raw_text_committed": false,
+    "records_available": 1068,
+    "sha256": "fb914a374bbf5c44688325d6588d175b995592b73bf2b7b2cea724b7ac074ecb",
+    "threads_available": 194,
+    "threads_selected": 80
+  },
+  "interpretation": [
+    "The explicit container structure is statistically competitive with the direct graph on this bounded proxy-labelled slice, but superiority is not demonstrated.",
+    "The density component did not improve over structure-only containers in this implementation.",
+    "The result tests deterministic signed-permutation operators at dimension 16, not all possible container or density models.",
+    "Parser-derived relations are proxy labels and require blinded manual audit.",
+    "The 80-thread slice is preliminary; scale-up and contextual-polysemy tests remain separate gates."
+  ],
+  "limitations": [
+    "parser-derived relations remain proxy labels until blinded manual audit",
+    "pair candidates are deterministically capped per test document",
+    "v1 projection operators are deterministic rather than learned",
+    "the strongest path is used for state projection",
+    "relation ranking does not exhaust contextual polysemy or order effects",
+    "personal usefulness still requires real-vault ratings"
+  ],
+  "models": {
+    "conditional_graph": {
+      "auc": 0.57015625,
+      "average_precision": 0.5708860238044269,
+      "pairwise_comparisons": 6400
+    },
+    "container_density": {
+      "auc": 0.563125,
+      "average_precision": 0.5875027125827205,
+      "pairwise_comparisons": 6400
+    },
+    "container_hybrid": {
+      "auc": 0.563125,
+      "average_precision": 0.5869113558022019,
+      "pairwise_comparisons": 6400
+    },
+    "container_structure": {
+      "auc": 0.563671875,
+      "average_precision": 0.5871546202211559,
+      "pairwise_comparisons": 6400
+    },
+    "direct_graph": {
+      "auc": 0.5715625,
+      "average_precision": 0.5866538634518057,
+      "pairwise_comparisons": 6400
+    },
+    "fvsc_density_shape": {
+      "auc": 0.55671875,
+      "average_precision": 0.5558090829521156,
+      "pairwise_comparisons": 6400
+    },
+    "ppmi_graph": {
+      "auc": 0.550859375,
+      "average_precision": 0.5502976736422382,
+      "pairwise_comparisons": 6400
+    },
+    "random": {
+      "auc": 0.53640625,
+      "average_precision": 0.5148401205107985,
+      "pairwise_comparisons": 6400
+    }
+  },
+  "registered_at": "2026-07-12",
+  "runtime_seconds": 39.705550879,
+  "sampling": {
+    "branch_limit": 12,
+    "max_depth": 2,
+    "max_negatives_per_document": 20,
+    "max_paths_per_target": 2,
+    "max_positives_per_document": 20,
+    "negative_pairs": 320,
+    "pairwise_comparisons_per_model": 6400,
+    "positive_pairs": 320,
+    "semantic_dim": 16
+  },
+  "source_commit": "e05e923f2f13ac3d8f11a0c75a205629c1d8f7f6",
+  "source_run": 29193677480,
+  "split": {
+    "evaluated_test_documents": 16,
+    "known_positive_coverage": 0.782098716838542,
+    "test_documents": 16,
+    "train_cutoff": 1743165997.0,
+    "train_documents": 64
+  }
+}
