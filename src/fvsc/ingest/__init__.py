@@ -7,6 +7,12 @@ Together they are the foundation of the language-agnostic pivot.
 """
 
 from .basis_vectors import BasisVectorGenerator, create_basis_generator
+from .exocortex_ingest import (
+    TELEGRAM_EXPORT_ADAPTER,
+    TelegramExportResult,
+    clean_external_text,
+    load_telegram_export,
+)
 from .parser import (
     DEFAULT_COORDINATORS,
     DEFAULT_STOPWORDS_RU_EN,
@@ -48,9 +54,13 @@ __all__ = [
     "SemanticInputParser",
     "SourceDocument",
     "SourceKind",
+    "TELEGRAM_EXPORT_ADAPTER",
+    "TelegramExportResult",
     "VaultScan",
+    "clean_external_text",
     "create_basis_generator",
     "extract_concepts_and_cooccurrence",
+    "load_telegram_export",
     "normalize_markdown",
     "parse_semantic_input",
     "parse_text",
