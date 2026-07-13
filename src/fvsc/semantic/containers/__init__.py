@@ -17,16 +17,46 @@ from .core import (
     materialize_container_ledger,
     normalize_context_keys,
 )
+from .query import (
+    ContainerPath,
+    ContainerQueryIndex,
+    QueryActivation,
+    QueryEdge,
+    QueryProjection,
+)
+from .traversal import (
+    BoundedContainerTraversal,
+    IndexedActivation,
+    IndexedProjection,
+    TraversalEdge,
+)
+from .materializer_fast import (
+    FAST_CONTAINER_VERSION,
+    materialize_fast_container_ledger,
+    signed_permutation_operator,
+)
 
 __all__ = [
+    "BoundedContainerTraversal",
     "CONTAINER_CORE_VERSION",
     "ContainerActivation",
     "ContainerContribution",
     "ContainerEmbedding",
     "ContainerFacet",
+    "ContainerPath",
     "ContainerProjection",
+    "ContainerQueryIndex",
     "ContainerSnapshot",
+    "FAST_CONTAINER_VERSION",
+    "IndexedActivation",
+    "IndexedProjection",
+    "QueryActivation",
+    "QueryEdge",
+    "QueryProjection",
     "SemanticContainer",
+    "TraversalEdge",
     "materialize_container_ledger",
+    "materialize_fast_container_ledger",
     "normalize_context_keys",
+    "signed_permutation_operator",
 ]
