@@ -29,6 +29,9 @@ core/*.pkl
 data/spaces/
 *.pkl.tmp
 
+# Local vault-ingest state (derived from personal notes)
+.fvsc/
+
 # Large data files (download separately)
 data/conceptnet-assertions-5.7.0.csv.gz
 # RuWordNet XML (non-commercial license, request from louk_nat@mail.ru)
