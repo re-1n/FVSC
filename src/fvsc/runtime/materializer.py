@@ -97,6 +97,7 @@ class DeterministicEvidenceEncoder:
     object_share: float = 0.5
     relation_share: float = 0.2
     excluded_terms: frozenset[str] = frozenset()
+    excluded_relations: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         if isinstance(self.dim, bool) or not isinstance(self.dim, int) or self.dim <= 0:
@@ -110,6 +111,11 @@ class DeterministicEvidenceEncoder:
             self,
             "excluded_terms",
             frozenset(str(term).casefold() for term in self.excluded_terms),
+        )
+        object.__setattr__(
+            self,
+            "excluded_relations",
+            frozenset(str(relation).casefold() for relation in self.excluded_relations),
         )
 
     def _rotate(self, term: str, role: str) -> np.ndarray:
@@ -127,6 +133,8 @@ class DeterministicEvidenceEncoder:
         if event.event_kind not in {"assertion", "supersession"}:
             return ()
         if event.subject is None or event.relation is None or event.object is None:
+            return ()
+        if event.relation.casefold() in self.excluded_relations:
             return ()
 
         base_weight = event.modality * event.intensity * event.confidence

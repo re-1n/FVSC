@@ -7,10 +7,19 @@ from fvsc.ingest import (
     OBSIDIAN_VAULT_ADAPTER,
     ParseConfig,
     SourceDocument,
+    TELEGRAM_EXPORT_ADAPTER,
 )
 from fvsc.ingest.document_ingest import (
+    FVSC_AUTHORED_BY_RELATION,
     FVSC_CONTAINS_RELATION,
+    FVSC_DEFERRED_MEDIA_RELATION,
+    FVSC_FORWARDED_FROM_RELATION,
+    FVSC_LOCATOR_RELATION,
+    FVSC_REPLY_TO_RELATION,
     FVSC_SELF_RELATION,
+    FVSC_TEMPORAL_CONTEXT_RELATION,
+    SOURCE_METADATA_EXTRACTOR,
+    STRUCTURAL_RELATIONS,
     build_evidence_batch,
     materialize_evidence_ledger,
     reconcile_evidence_batch,
@@ -43,6 +52,26 @@ def _config() -> ParseConfig:
         max_concepts=None,
         window=4,
         weight_threshold=0.0,
+    )
+
+
+def _telegram_document(
+    source_id: str,
+    text: str,
+    *,
+    observed_at: float,
+    metadata: dict,
+    source_kind: str = "owner_reflection",
+) -> SourceDocument:
+    return SourceDocument.create(
+        source_id=source_id,
+        source_revision=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        observed_at=observed_at,
+        text=text,
+        adapter=TELEGRAM_EXPORT_ADAPTER,
+        source_kind=source_kind,  # type: ignore[arg-type]
+        raw_chars=len(text),
+        metadata={"format": "telegram-json", **metadata},
     )
 
 
@@ -180,3 +209,129 @@ def test_materialized_view_is_reproducible_and_hides_relation_pseudo_nodes() -> 
     assert first.concept_count > 0
     assert first.get(FVSC_SELF_RELATION) is None
     assert first.get(FVSC_CONTAINS_RELATION) is None
+
+
+def test_telegram_metadata_becomes_structural_evidence_not_semantic_concepts() -> None:
+    first_id = "telegram/export/messages/message-1.json"
+    second_id = "telegram/export/messages/message-2.json"
+    media_id = "telegram/export/messages/message-3.json"
+    first = _telegram_document(
+        first_id,
+        "parasite metaphor",
+        observed_at=10.0,
+        metadata={
+            "author_key": "actor-owner",
+            "forwarded": True,
+            "forward_source_key": "actor-origin",
+            "locators": ["https://example.test/source"],
+            "media_deferred": False,
+            "owner_adopted_expression": True,
+            "owner_authored": True,
+            "reply_to_source_id": None,
+            "temporal_context": None,
+        },
+    )
+    second = _telegram_document(
+        second_id,
+        "accepted monster",
+        observed_at=20.0,
+        metadata={
+            "author_key": "actor-owner",
+            "forwarded": False,
+            "forward_source_key": None,
+            "locators": [],
+            "media_deferred": False,
+            "owner_adopted_expression": True,
+            "owner_authored": True,
+            "reply_to_source_id": first_id,
+            "temporal_context": {
+                "gap_seconds": 10.0,
+                "heuristic": True,
+                "previous_source_id": first_id,
+                "threshold_seconds": 1800,
+            },
+        },
+    )
+    media = _telegram_document(
+        media_id,
+        "",
+        observed_at=30.0,
+        source_kind="unknown",
+        metadata={
+            "author_key": "actor-participant",
+            "forwarded": False,
+            "forward_source_key": None,
+            "locators": [],
+            "media_deferred": True,
+            "media_kind": "photo",
+            "owner_adopted_expression": False,
+            "owner_authored": False,
+            "reply_to_source_id": None,
+            "temporal_context": None,
+        },
+    )
+
+    batch = build_evidence_batch([first, second, media], config=_config())
+    structural = [event for event in batch.events if event.extractor == SOURCE_METADATA_EXTRACTOR]
+
+    assert {event.relation for event in structural} == {
+        FVSC_AUTHORED_BY_RELATION,
+        FVSC_DEFERRED_MEDIA_RELATION,
+        FVSC_FORWARDED_FROM_RELATION,
+        FVSC_LOCATOR_RELATION,
+        FVSC_REPLY_TO_RELATION,
+        FVSC_TEMPORAL_CONTEXT_RELATION,
+    }
+    assert all(event.interpretation_layer == 0 for event in structural)
+    authored = [event for event in structural if event.relation == FVSC_AUTHORED_BY_RELATION]
+    assert len(authored) == 3
+    assert {event.context["owner_authored"] for event in authored} == {True, False}
+    assert next(
+        event for event in structural if event.relation == FVSC_REPLY_TO_RELATION
+    ).object == f"fvsc:source:{first_id}"
+
+    snapshot = materialize_evidence_ledger(EvidenceLedger(batch.events), dim=16)
+    assert snapshot.get("parasite") is not None
+    assert snapshot.get("accepted") is not None
+    assert all(snapshot.get(relation) is None for relation in STRUCTURAL_RELATIONS)
+    assert snapshot.get(f"fvsc:source:{first_id}") is None
+    assert snapshot.get("fvsc:actor:actor-owner") is None
+    assert snapshot.get("https://example.test/source") is None
+    assert snapshot.get("fvsc:media:photo") is None
+
+
+def test_structural_metadata_change_retracts_only_changed_relation() -> None:
+    source_id = "telegram/export/messages/message-2.json"
+    common = {
+        "author_key": "actor-owner",
+        "forwarded": False,
+        "forward_source_key": None,
+        "locators": [],
+        "media_deferred": False,
+        "owner_adopted_expression": True,
+        "owner_authored": True,
+        "temporal_context": None,
+    }
+    first = _telegram_document(
+        source_id,
+        "alpha beta",
+        observed_at=20.0,
+        metadata={**common, "reply_to_source_id": "telegram/export/messages/message-1.json"},
+    )
+    changed = _telegram_document(
+        source_id,
+        "alpha beta",
+        observed_at=20.0,
+        metadata={**common, "reply_to_source_id": "telegram/export/messages/message-3.json"},
+    )
+    ledger = EvidenceLedger()
+    initial = build_evidence_batch([first], config=_config())
+    reconcile_evidence_batch(ledger, initial, sync_time=30.0)
+
+    replacement = build_evidence_batch([changed], config=_config())
+    report = reconcile_evidence_batch(ledger, replacement, sync_time=40.0)
+
+    assert report.asserted_count == 1
+    assert report.retracted_count == 1
+    assert report.unchanged_count == len(initial.events) - 1
+    assert report.changed_sources == (source_id,)

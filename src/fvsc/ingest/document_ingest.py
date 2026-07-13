@@ -24,10 +24,28 @@ from .vault_ingest import SourceDocument, SourceKind
 DOCUMENT_INGEST_MANAGER = "fvsc-document-ingest-v1"
 DOCUMENT_EXTRACTOR = "fvsc.ingest.cooccurrence"
 DOCUMENT_EXTRACTOR_VERSION = "1"
+SOURCE_METADATA_EXTRACTOR = "fvsc.ingest.source-metadata"
+SOURCE_METADATA_EXTRACTOR_VERSION = "1"
 LIFECYCLE_EXTRACTOR = "fvsc.ingest.source-lifecycle"
 LIFECYCLE_EXTRACTOR_VERSION = "1"
 FVSC_SELF_RELATION = "fvsc:self"
 FVSC_CONTAINS_RELATION = "fvsc:contains"
+FVSC_AUTHORED_BY_RELATION = "fvsc:authored-by"
+FVSC_FORWARDED_FROM_RELATION = "fvsc:forwarded-from"
+FVSC_REPLY_TO_RELATION = "fvsc:replies-to"
+FVSC_TEMPORAL_CONTEXT_RELATION = "fvsc:temporal-context"
+FVSC_LOCATOR_RELATION = "fvsc:references-locator"
+FVSC_DEFERRED_MEDIA_RELATION = "fvsc:deferred-media"
+STRUCTURAL_RELATIONS = frozenset(
+    {
+        FVSC_AUTHORED_BY_RELATION,
+        FVSC_FORWARDED_FROM_RELATION,
+        FVSC_REPLY_TO_RELATION,
+        FVSC_TEMPORAL_CONTEXT_RELATION,
+        FVSC_LOCATOR_RELATION,
+        FVSC_DEFERRED_MEDIA_RELATION,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -179,6 +197,182 @@ def _assertion_for_source(
     )
 
 
+def _source_entity(source_id: str) -> str:
+    return f"fvsc:source:{source_id}"
+
+
+def _structural_assertion_for_source(
+    *,
+    document: SourceDocument,
+    relation: str,
+    object_: str,
+    structural_role: str,
+    context: Mapping | None = None,
+) -> EvidenceEvent:
+    event_context = {
+        "derivation": "source-metadata",
+        "source_kind": document.source_kind,
+        "structural_role": structural_role,
+        **dict(context or {}),
+    }
+    assertion_key_payload = {
+        "adapter": document.adapter,
+        "context": event_context,
+        "extractor": SOURCE_METADATA_EXTRACTOR,
+        "extractor_version": SOURCE_METADATA_EXTRACTOR_VERSION,
+        "interpretation_layer": 0,
+        "object": object_,
+        "relation": relation,
+        "source_id": document.source_id,
+        "source_revision": document.source_revision,
+        "subject": _source_entity(document.source_id),
+    }
+    source_assertion_key = hashlib.sha256(
+        json.dumps(
+            assertion_key_payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    ).hexdigest()
+    return EvidenceEvent.assertion(
+        source_id=document.source_id,
+        source_revision=document.source_revision,
+        observed_at=document.observed_at,
+        recorded_at=document.observed_at,
+        subject=_source_entity(document.source_id),
+        relation=relation,
+        object=object_,
+        polarity=1.0,
+        modality=1.0,
+        intensity=1.0,
+        confidence=1.0,
+        interpretation_layer=0,
+        extractor=SOURCE_METADATA_EXTRACTOR,
+        extractor_version=SOURCE_METADATA_EXTRACTOR_VERSION,
+        context=event_context,
+        provenance={
+            "managed_by": DOCUMENT_INGEST_MANAGER,
+            "source_adapter": document.adapter,
+            "source_assertion_key": source_assertion_key,
+            "source_id": document.source_id,
+            "source_revision": document.source_revision,
+        },
+    )
+
+
+def _structural_events_for_document(document: SourceDocument) -> list[EvidenceEvent]:
+    metadata = document.metadata
+    if metadata.get("format") != "telegram-json":
+        return []
+
+    events: list[EvidenceEvent] = []
+    author_key = metadata.get("author_key")
+    if isinstance(author_key, str) and author_key.strip():
+        events.append(
+            _structural_assertion_for_source(
+                document=document,
+                relation=FVSC_AUTHORED_BY_RELATION,
+                object_=f"fvsc:actor:{author_key.strip()}",
+                structural_role="authorship",
+                context={
+                    "owner_adopted_expression": bool(
+                        metadata.get("owner_adopted_expression", False)
+                    ),
+                    "owner_authored": bool(metadata.get("owner_authored", False)),
+                },
+            )
+        )
+
+    forward_source_key = metadata.get("forward_source_key")
+    if (
+        metadata.get("forwarded") is True
+        and isinstance(forward_source_key, str)
+        and forward_source_key.strip()
+    ):
+        events.append(
+            _structural_assertion_for_source(
+                document=document,
+                relation=FVSC_FORWARDED_FROM_RELATION,
+                object_=f"fvsc:actor:{forward_source_key.strip()}",
+                structural_role="forward_origin",
+            )
+        )
+
+    reply_to_source_id = metadata.get("reply_to_source_id")
+    if isinstance(reply_to_source_id, str) and reply_to_source_id.strip():
+        events.append(
+            _structural_assertion_for_source(
+                document=document,
+                relation=FVSC_REPLY_TO_RELATION,
+                object_=_source_entity(reply_to_source_id.strip()),
+                structural_role="reply_context",
+            )
+        )
+
+    temporal_context = metadata.get("temporal_context")
+    if isinstance(temporal_context, Mapping):
+        previous_source_id = temporal_context.get("previous_source_id")
+        gap_seconds = temporal_context.get("gap_seconds")
+        threshold_seconds = temporal_context.get("threshold_seconds")
+        if isinstance(previous_source_id, str) and previous_source_id.strip():
+            try:
+                gap = float(gap_seconds)
+                threshold = float(threshold_seconds)
+            except (TypeError, ValueError):
+                gap = math.nan
+                threshold = math.nan
+            if math.isfinite(gap) and math.isfinite(threshold) and 0.0 <= gap <= threshold:
+                events.append(
+                    _structural_assertion_for_source(
+                        document=document,
+                        relation=FVSC_TEMPORAL_CONTEXT_RELATION,
+                        object_=_source_entity(previous_source_id.strip()),
+                        structural_role="temporal_context",
+                        context={
+                            "gap_seconds": gap,
+                            "heuristic": True,
+                            "threshold_seconds": threshold,
+                        },
+                    )
+                )
+
+    locators = metadata.get("locators", [])
+    if isinstance(locators, list):
+        for locator in sorted(
+            {
+                value.strip()
+                for value in locators
+                if isinstance(value, str) and value.strip()
+            }
+        ):
+            events.append(
+                _structural_assertion_for_source(
+                    document=document,
+                    relation=FVSC_LOCATOR_RELATION,
+                    object_=locator,
+                    structural_role="source_locator",
+                )
+            )
+
+    media_kind = metadata.get("media_kind")
+    if (
+        metadata.get("media_deferred") is True
+        and isinstance(media_kind, str)
+        and media_kind.strip()
+    ):
+        events.append(
+            _structural_assertion_for_source(
+                document=document,
+                relation=FVSC_DEFERRED_MEDIA_RELATION,
+                object_=f"fvsc:media:{media_kind.strip()}",
+                structural_role="deferred_media",
+            )
+        )
+    return events
+
+
 def build_evidence_batch(
     documents: Iterable[SourceDocument],
     *,
@@ -219,6 +413,8 @@ def build_evidence_batch(
     documents_by_id = {document.source_id: document for document in ordered}
 
     events: list[EvidenceEvent] = []
+    for document in ordered:
+        events.extend(_structural_events_for_document(document))
     for concept in sorted(semantic_input):
         specification = semantic_input[concept]
         parser_weight = float(specification.get("weight", 1.0))
@@ -420,15 +616,24 @@ def materialize_evidence_ledger(
     encoder = DeterministicEvidenceEncoder(
         dim=dim,
         excluded_terms=frozenset({FVSC_SELF_RELATION, FVSC_CONTAINS_RELATION}),
+        excluded_relations=STRUCTURAL_RELATIONS,
     )
     return materialize_ledger(ledger, encoder=encoder)
 
 
 __all__ = [
     "DOCUMENT_INGEST_MANAGER",
+    "FVSC_AUTHORED_BY_RELATION",
     "EvidenceBatch",
     "FVSC_CONTAINS_RELATION",
+    "FVSC_DEFERRED_MEDIA_RELATION",
+    "FVSC_FORWARDED_FROM_RELATION",
+    "FVSC_LOCATOR_RELATION",
+    "FVSC_REPLY_TO_RELATION",
     "FVSC_SELF_RELATION",
+    "FVSC_TEMPORAL_CONTEXT_RELATION",
+    "SOURCE_METADATA_EXTRACTOR",
+    "STRUCTURAL_RELATIONS",
     "SourceLifecycleReport",
     "build_evidence_batch",
     "materialize_evidence_ledger",
