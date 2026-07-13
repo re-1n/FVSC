@@ -21,9 +21,16 @@ Migration order (foundation-first; each commit must build and pass tests):
      lifecycle, protected generated-folder exclusions, explicit source kinds, and a
      portable Telegram JSON source adapter. Commits `817bd2f` `180f6c0` `964b296`
      `e63ee84` `ba7c893` `c512367`; **152 passed / 1 skipped**.
-   - **Next: FastAPI service** — a thin transport over the vault cache/ledger contracts;
-     no ingest logic in routers.
-   - Chat + local Ollama integration.
+   - ✅ **Stage 4d.1 — real-data ingest correction** — message-level Telegram sources,
+     explicit owner adoption, private participant provenance, reply/time/forward/media
+     evidence excluded from semantic concepts, and a character n-gram lexical floor.
+     Commits `1bea6d7` `f6f4389` `48f9916` `7a7b175`; **160 passed / 1 skipped /
+     11 deselected** and GitHub CI green.
+   - **Next: Stage 4e — real-data semantic evaluation** — owner-validated open gold
+     interpretations with message citations, more natural-language gold questions, and
+     a comparison against the lexical floor. Retrieval alone is not a superiority claim.
+   - **Then: FastAPI + chat/Ollama** — thin transports over accepted ingest/evaluation
+     contracts; no ingest or evaluation logic in routers.
    - Visualization + Obsidian bridge.
    Keep HTTP, plugin, and LLM dependencies outside the ingest layer. Do not commit
    vault data, voice data, or generated folders.

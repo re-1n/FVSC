@@ -1,6 +1,6 @@
 # Stage 4d.1 — Real-data ingest correction
 
-**Status:** In progress on `integration/fvsc-core-v1` (2026-07-14).
+**Status:** Implemented on `integration/fvsc-core-v1` (2026-07-14).
 
 ## Why this checkpoint exists
 
@@ -79,3 +79,25 @@ metaphors?" The current snapshot materializes no `паразит*` form at its c
 concept cap. Stage 4d.1 does not hard-code an answer. It ensures the primary
 message, its framing message, and its emotional reply can be retrieved and cited
 as separate evidence before an open interpretation layer is evaluated.
+
+## Real-data validation
+
+The private Telegram export was used locally as an acceptance fixture and was not
+committed. Its 658 records produced 645 addressable message documents: 614 configured
+owner messages, 31 participant comments, and 13 skipped service records. The adapter
+preserved 194 forwarding origins, 113 explicit replies, 313 short-gap context links,
+and deferred 191 non-text records without discarding their identity.
+
+The structural pass emitted 1,502 layer-0 events while excluding structural relations
+from the 1,200-concept semantic snapshot. Replaying the unchanged export produced no
+new lifecycle events.
+
+For the first gold question, character n-gram TF-IDF ranked the primary source message
+first and context expansion returned the three-message chain containing its framing,
+metaphor, and reply. The current semantic snapshot still contains no `паразит*` concept
+at its configured cap. Therefore Stage 4d.1 proves source fidelity and establishes a
+retrieval floor; it does **not** demonstrate semantic superiority.
+
+Validated checkpoints are `1bea6d7`, `f6f4389`, `48f9916`, and `7a7b175`.
+The full suite reports **160 passed / 1 skipped / 11 deselected**, the legacy-import
+boundary check passes, and GitHub CI is green at every checkpoint.

@@ -1,4 +1,4 @@
-# Project status — 2026-07-13
+# Project status — 2026-07-14
 
 ## Where we are
 
@@ -10,15 +10,23 @@
 - `integration/fvsc-core-v1` — **active.** Clean rebuild from `main`, carrying file
   states (not history) in logical blocks into the `src/fvsc/` layout.
   - Rebuild progress: Stage 0 (scaffold) ✅, Stage 1 foundation ✅, Stage 3
-    representations ✅, Stage 4a–4c ingest foundation ✅, and Stage 4d vault ingest ✅.
+    representations ✅, Stage 4a–4c ingest foundation ✅, Stage 4d vault ingest ✅,
+    and Stage 4d.1 real-data ingest correction ✅.
   - Working vault chain: `Obsidian Markdown -> SourceDocument -> EvidenceLedger ->
     MaterializedSnapshot -> atomic JSON cache`. Source replacement/deletion is
     append-only; source kinds remain explicit; cache stores no raw note body or absolute
     vault path.
-  - Stage 4d checkpoints: `817bd2f` `180f6c0` `964b296` `e63ee84` `ba7c893`
-    `c512367`; **152 passed / 1 skipped** and GitHub CI green.
-  - Next: FastAPI service, then chat + Ollama, then visualization + Obsidian bridge for
-    the first clickable MVP.
+  - Stage 4d.1 checkpoints: `1bea6d7` `f6f4389` `48f9916` `7a7b175`;
+    **160 passed / 1 skipped / 11 deselected**, boundary check and GitHub CI green.
+  - A 658-record private Telegram diary now produces 645 message-level documents while
+    preserving configured owner adoption, participant comments, forwards, replies,
+    deferred media, and Moscow calendar metadata. The diary itself is not committed.
+  - The first gold query retrieves its primary message first with the lexical baseline
+    and expands to the correct three-message context. The semantic snapshot misses the
+    rare metaphor term, so semantic superiority is **not demonstrated**.
+  - Next: Stage 4e real-data semantic evaluation. Validate the first gold interpretation,
+    add more owner questions, and compare source-cited semantic answers against the
+    lexical floor before spending another stage on FastAPI/chat/UI transport.
 
 ## Settled decisions (ADRs)
 
@@ -46,3 +54,5 @@ C5 validation is required before any promotion claim.
 - Do not claim density proven better; do not hide negative results.
 - Do not auto-record LLM / Antourage output as owner evidence.
 - Distinguish `dream_report` / `owner_reflection` / external fact.
+- Do not claim semantic superiority from source retrieval alone; the owner must validate
+  open interpretations and evidence links on a real-data gold set.
