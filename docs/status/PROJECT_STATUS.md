@@ -10,11 +10,15 @@
 - `integration/fvsc-core-v1` — **active.** Clean rebuild from `main`, carrying file
   states (not history) in logical blocks into the `src/fvsc/` layout.
   - Rebuild progress: Stage 0 (scaffold) ✅, Stage 1 foundation ✅, Stage 3
-    representations ✅, Stage 4a–4c ingest foundation ✅ (`parser`, provenance
-    adapter, `semantic_input`, `basis_vectors`; **117 passed / 1 skipped**).
-  - Working ingest chain: `raw text -> parser -> concept tree -> vectors / rho`.
-  - Next: Stage 4d vault ingest, followed by the FastAPI service, chat + Ollama,
-    then visualization + Obsidian bridge for the first clickable MVP.
+    representations ✅, Stage 4a–4c ingest foundation ✅, and Stage 4d vault ingest ✅.
+  - Working vault chain: `Obsidian Markdown -> SourceDocument -> EvidenceLedger ->
+    MaterializedSnapshot -> atomic JSON cache`. Source replacement/deletion is
+    append-only; source kinds remain explicit; cache stores no raw note body or absolute
+    vault path.
+  - Stage 4d checkpoints: `817bd2f` `180f6c0` `964b296` `e63ee84` `ba7c893`
+    `c512367`; **152 passed / 1 skipped** and GitHub CI green.
+  - Next: FastAPI service, then chat + Ollama, then visualization + Obsidian bridge for
+    the first clickable MVP.
 
 ## Settled decisions (ADRs)
 

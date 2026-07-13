@@ -1,5 +1,7 @@
 # Stage 4d — Vault ingest
 
+**Status:** Implemented on `integration/fvsc-core-v1` (2026-07-13).
+
 ## Outcome
 
 Stage 4d adds a deterministic, local-only path:
@@ -98,3 +100,15 @@ stable.
 - No `core`, HTTP, plugin, LLM, visualization, or export import under the new ingest/cache
   modules.
 - Full test suite, boundary check, and Obsidian-plugin CI build pass.
+
+All acceptance gates are covered by the Stage 4d unit/end-to-end suite. The validated
+code checkpoints are `180f6c0`, `964b296`, `e63ee84`, `ba7c893`, and `c512367`.
+
+## Local entry point
+
+```bash
+PYTHONPATH=src python -m fvsc.ingest.vault_sync --vault /path/to/vault
+```
+
+The default cache is `/path/to/vault/.fvsc/cache.json`. `FVSC_VAULT_PATH` may be used
+instead of `--vault`; there is no author-specific default.

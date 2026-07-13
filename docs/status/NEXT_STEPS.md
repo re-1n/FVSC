@@ -2,7 +2,7 @@
 
 Migration order (foundation-first; each commit must build and pass tests):
 
-1. **Commit №0 — scaffold + tooling** (this branch, in progress): `src/fvsc/` skeleton,
+1. ✅ **Commit №0 — scaffold + tooling**: `src/fvsc/` skeleton,
    CI (`tests.yml`), pytest markers, `data/.gitignore`, legacy-boundary check, ADRs,
    architecture / status docs.
 2. ✅ **Foundation** — `EvidenceEvent`, `EvidenceLedger`, `SemanticState`, persistence,
@@ -15,10 +15,14 @@ Migration order (foundation-first; each commit must build and pass tests):
    - ✅ ingest foundation — language-agnostic parser, provenance adapter,
      `semantic_input`, and deterministic basis vectors. Working chain:
      `raw text -> parser -> concept tree -> vectors / rho`; **117 passed / 1 skipped**.
-   - **Stage 4d — vault ingest** — Obsidian Markdown files → canonical
-     `EvidenceLedger` + derived semantic representations → local on-disk cache;
-     source lifecycle and provenance are mandatory.
-   - FastAPI service.
+   - ✅ **Stage 4d — vault ingest** — Obsidian Markdown → typed `SourceDocument` →
+     canonical `EvidenceLedger` → deterministic `MaterializedSnapshot` → versioned,
+     atomic JSON cache. Includes idempotent replay, append-only change/delete/reactivate
+     lifecycle, protected generated-folder exclusions, explicit source kinds, and a
+     portable Telegram JSON source adapter. Commits `817bd2f` `180f6c0` `964b296`
+     `e63ee84` `ba7c893` `c512367`; **152 passed / 1 skipped**.
+   - **Next: FastAPI service** — a thin transport over the vault cache/ledger contracts;
+     no ingest logic in routers.
    - Chat + local Ollama integration.
    - Visualization + Obsidian bridge.
    Keep HTTP, plugin, and LLM dependencies outside the ingest layer. Do not commit
@@ -37,9 +41,8 @@ Migration order (foundation-first; each commit must build and pass tests):
   are recorded in `benchmarks/results/`, not hidden"). Port the registered negative
   results as a `chore(benchmarks)` commit in Stage 5 alongside the runners. None of the
   Stage-3 modules read them, so not a blocker.
-- ✅ **Parser + provenance** landed in Stage 4a–4c under `src/fvsc/ingest/` and
-  `src/fvsc/evidence/`; Stage 4d must consume those public contracts rather than
-  importing the legacy `core/` package.
+- ✅ **Parser + provenance + vault ingest** now use only `src/fvsc/` contracts; the new
+  modules do not import legacy `core/`, HTTP, plugin, visualization, export, or LLM code.
 - Decide on `data/conceptnet_ru.json` (12.7 MB, tracked) — keep as a curated asset or
   untrack with a download fallback.
 - Unify tests under `tests/{unit,integration,e2e}/` as subsystems port. Note: test dirs
