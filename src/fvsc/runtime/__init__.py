@@ -8,12 +8,24 @@ from .materializer import (
     MaterializedSnapshot,
     materialize_ledger,
 )
+from .snapshots import (
+    ConceptChange,
+    SemanticSnapshot,
+    SnapshotConcept,
+    StateDelta,
+    apply_delta,
+)
 
 __all__ = [
+    "ConceptChange",
     "Contribution",
     "DeterministicEvidenceEncoder",
     "EvidenceEncoder",
     "MaterializedConcept",
     "MaterializedSnapshot",
+    "SemanticSnapshot",
+    "SnapshotConcept",
+    "StateDelta",
+    "apply_delta",
     "materialize_ledger",
 ]
