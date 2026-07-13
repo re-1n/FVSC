@@ -9,6 +9,9 @@
   journal; archived by tag `experiment/container-core-v1` (pushed to origin).
 - `integration/fvsc-core-v1` — **active.** Clean rebuild from `main`, carrying file
   states (not history) in logical blocks into the `src/fvsc/` layout.
+  - Rebuild progress: Stage 0 (scaffold) ✅, Stage 1 foundation ✅, Stage 3
+    representations ✅ (`semantic/{metrics,containers,density}`, **104 unit tests
+    green**). Next: Stage 4 (applied — voice, Antourage, obsidian, service).
 
 ## Settled decisions (ADRs)
 
