@@ -1,14 +1,13 @@
 """Portable Telegram JSON -> ``SourceDocument`` adapter.
 
 The research module also wrote an Obsidian vault and materialized a legacy
-semantic backend. Stage 4d intentionally keeps only source decoding and
-normalization. No personal channel map, output path, HTTP, plugin, LLM, or
-semantic representation is imported here.
+semantic backend. Stage 4d.1 intentionally keeps only message-level source
+decoding and normalization. No personal channel map, output path, HTTP, plugin,
+LLM, or semantic representation is imported here.
 """
 
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -16,8 +15,9 @@ import json
 import math
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Iterable
 import unicodedata
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .vault_ingest import SOURCE_KINDS, SourceDocument, SourceKind
 
@@ -37,9 +37,17 @@ _NAMESPACE_RE = re.compile(r"[^\w.-]+", flags=re.UNICODE)
 class _TelegramMessage:
     message_id: str
     observed_at: float
-    bucket: str
+    dated: bool
     text: str
     raw_chars: int
+    raw_text_sha256: str
+    author_key: str
+    owner_authored: bool
+    forwarded: bool
+    forward_source_key: str | None
+    reply_to_message_id: str | None
+    media_kind: str | None
+    locators: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -49,6 +57,8 @@ class TelegramExportResult:
     namespace: str
     documents: tuple[SourceDocument, ...]
     message_count: int
+    text_message_count: int
+    deferred_message_count: int
     skipped_message_count: int
 
     def __post_init__(self) -> None:
@@ -59,11 +69,18 @@ class TelegramExportResult:
             raise ValueError("Telegram documents must be sorted by source_id")
         if any(document.adapter != TELEGRAM_EXPORT_ADAPTER for document in self.documents):
             raise ValueError("Telegram result contains a document from another adapter")
-        if self.message_count < 0 or self.skipped_message_count < 0:
+        if (
+            self.message_count < 0
+            or self.text_message_count < 0
+            or self.deferred_message_count < 0
+            or self.skipped_message_count < 0
+        ):
             raise ValueError("Telegram message counts must be non-negative")
         represented = sum(int(document.metadata["message_count"]) for document in self.documents)
         if represented != self.message_count:
             raise ValueError("Telegram document message counts do not match the result")
+        if self.text_message_count + self.deferred_message_count != self.message_count:
+            raise ValueError("Telegram text/deferred counts do not match the result")
 
 
 def _flatten_text(raw: Any) -> str:
@@ -94,27 +111,29 @@ def clean_external_text(text: str) -> str:
     return cleaned.strip()
 
 
-def _month_bucket(timestamp: float) -> str | None:
+def _valid_timestamp(value: float) -> bool:
+    if not math.isfinite(value):
+        return False
     try:
-        return datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m")
+        datetime.fromtimestamp(value, tz=timezone.utc)
     except (OverflowError, OSError, ValueError):
-        return None
+        return False
+    return True
 
 
-def _observed_at_and_bucket(
+def _observed_at(
     message: dict[str, Any],
     *,
     fallback: float,
-) -> tuple[float, str]:
+) -> tuple[float, bool]:
     unix_value = message.get("date_unixtime")
     if unix_value not in (None, ""):
         try:
             timestamp = float(unix_value)
         except (TypeError, ValueError):
             timestamp = math.nan
-        bucket = _month_bucket(timestamp) if math.isfinite(timestamp) else None
-        if bucket is not None:
-            return timestamp, bucket
+        if _valid_timestamp(timestamp):
+            return timestamp, True
 
     date_value = message.get("date")
     if isinstance(date_value, str) and date_value.strip():
@@ -129,10 +148,9 @@ def _observed_at_and_bucket(
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=timezone.utc)
             timestamp = parsed.timestamp()
-            bucket = _month_bucket(timestamp) if math.isfinite(timestamp) else None
-            if bucket is not None:
-                return timestamp, bucket
-    return fallback, "undated"
+            if _valid_timestamp(timestamp):
+                return timestamp, True
+    return fallback, False
 
 
 def _safe_namespace(value: str) -> str:
@@ -148,10 +166,71 @@ def _opaque_namespace(label: str) -> str:
     return f"export-{digest}"
 
 
+def _opaque_actor_key(value: Any) -> str:
+    digest = hashlib.sha256(str(value).encode("utf-8")).hexdigest()[:16]
+    return f"actor-{digest}"
+
+
+def _message_segment(value: str) -> str:
+    message_id = str(value).strip()
+    if (
+        message_id
+        and message_id not in {".", ".."}
+        and re.fullmatch(r"[A-Za-z0-9._-]+", message_id)
+    ):
+        return message_id
+    digest = hashlib.sha256(message_id.encode("utf-8")).hexdigest()[:24]
+    return f"id-{digest}"
+
+
+def _message_source_id(namespace: str, message_id: str) -> str:
+    return f"telegram/{namespace}/messages/message-{_message_segment(message_id)}.json"
+
+
+def _actor_value(message: dict[str, Any]) -> str:
+    value = message.get("from_id", message.get("from", "unknown"))
+    return str(value).strip() or "unknown"
+
+
+def _forward_source_value(message: dict[str, Any]) -> str | None:
+    if "forwarded_from_id" in message:
+        value = message.get("forwarded_from_id")
+    elif "forwarded_from" in message:
+        value = message.get("forwarded_from")
+    else:
+        return None
+    cleaned = str(value).strip()
+    return cleaned or None
+
+
+def _media_kind(message: dict[str, Any]) -> str | None:
+    value = message.get("media_type")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if message.get("photo"):
+        return "photo"
+    if message.get("file"):
+        return "file"
+    if message.get("sticker_emoji"):
+        return "sticker"
+    return None
+
+
+def _locators(text: str) -> tuple[str, ...]:
+    return tuple(sorted(set(_URL_RE.findall(text))))
+
+
 def _message_record(message: _TelegramMessage) -> dict[str, Any]:
     return {
+        "author_key": message.author_key,
+        "forward_source_key": message.forward_source_key,
+        "forwarded": message.forwarded,
         "id": message.message_id,
+        "locators": list(message.locators),
+        "media_kind": message.media_kind,
         "observed_at": message.observed_at,
+        "reply_to_message_id": message.reply_to_message_id,
+        "raw_text_sha256": message.raw_text_sha256,
         "text": message.text,
     }
 
@@ -159,12 +238,42 @@ def _message_record(message: _TelegramMessage) -> dict[str, Any]:
 def load_telegram_export(
     path: Path,
     *,
-    source_kind: SourceKind = "unknown",
+    source_kind: SourceKind | None = None,
     source_namespace: str | None = None,
+    owner_author_ids: Iterable[str] = (),
+    display_timezone: str = "UTC",
+    temporal_context_seconds: int | None = 30 * 60,
 ) -> TelegramExportResult:
-    """Decode a Telegram Desktop result.json into monthly source documents."""
-    if source_kind not in SOURCE_KINDS:
+    """Decode Telegram Desktop JSON into independent message source documents.
+
+    ``owner_author_ids`` is transient caller configuration. Raw actor ids and
+    display names never enter document metadata; only opaque actor keys do.
+    Forwarding is retained as origin metadata and never overrides authorship.
+    """
+    if source_kind is not None and source_kind not in SOURCE_KINDS:
         raise ValueError(f"unknown source kind: {source_kind!r}")
+    if isinstance(owner_author_ids, (str, bytes)):
+        raise TypeError("owner_author_ids must be an iterable of actor ids")
+    owner_ids = frozenset(
+        value
+        for raw_value in owner_author_ids
+        if (value := str(raw_value).strip())
+    )
+    timezone_name = str(display_timezone).strip()
+    if not timezone_name:
+        raise ValueError("display_timezone must be a non-empty IANA timezone")
+    try:
+        display_zone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError as exc:
+        raise ValueError(f"unknown display timezone: {timezone_name!r}") from exc
+    if temporal_context_seconds is not None:
+        if (
+            isinstance(temporal_context_seconds, bool)
+            or not isinstance(temporal_context_seconds, int)
+            or temporal_context_seconds < 0
+        ):
+            raise ValueError("temporal_context_seconds must be a non-negative integer or None")
+
     export_path = Path(path)
     if export_path.is_symlink() or not export_path.is_file():
         raise ValueError(f"refusing non-regular Telegram export: {export_path}")
@@ -186,7 +295,8 @@ def load_telegram_export(
     )
     fallback = export_path.stat().st_mtime_ns / 1_000_000_000
 
-    accepted: list[_TelegramMessage] = []
+    messages: list[_TelegramMessage] = []
+    message_ids: set[str] = set()
     skipped = 0
     for index, raw_message in enumerate(payload["messages"]):
         if not isinstance(raw_message, dict) or raw_message.get("type") != "message":
@@ -194,57 +304,140 @@ def load_telegram_export(
             continue
         flattened = _flatten_text(raw_message.get("text", "")).strip()
         cleaned = clean_external_text(flattened)
-        if not cleaned:
-            skipped += 1
-            continue
-        observed_at, bucket_name = _observed_at_and_bucket(raw_message, fallback=fallback)
+        observed_at, dated = _observed_at(raw_message, fallback=fallback)
         message_id = str(raw_message.get("id", index)).strip() or str(index)
-        accepted.append(
+        if message_id in message_ids:
+            raise ValueError(f"Telegram export contains duplicate message id: {message_id!r}")
+        message_ids.add(message_id)
+        actor_value = _actor_value(raw_message)
+        forward_value = _forward_source_value(raw_message)
+        raw_reply = raw_message.get("reply_to_message_id")
+        reply_to_message_id = (
+            str(raw_reply).strip()
+            if raw_reply not in (None, "")
+            else None
+        )
+        messages.append(
             _TelegramMessage(
                 message_id=message_id,
                 observed_at=observed_at,
-                bucket=bucket_name,
+                dated=dated,
                 text=cleaned,
                 raw_chars=len(flattened),
+                raw_text_sha256=hashlib.sha256(flattened.encode("utf-8")).hexdigest(),
+                author_key=_opaque_actor_key(actor_value),
+                owner_authored=actor_value in owner_ids,
+                forwarded=forward_value is not None,
+                forward_source_key=(
+                    _opaque_actor_key(forward_value)
+                    if forward_value is not None
+                    else None
+                ),
+                reply_to_message_id=reply_to_message_id,
+                media_kind=_media_kind(raw_message),
+                locators=_locators(flattened),
             )
         )
-    accepted.sort(key=lambda item: (item.bucket, item.observed_at, item.message_id, item.text))
-
-    grouped: dict[str, list[_TelegramMessage]] = defaultdict(list)
-    for message in accepted:
-        grouped[message.bucket].append(message)
+    messages.sort(key=lambda item: (item.observed_at, item.message_id, item.text))
 
     documents: list[SourceDocument] = []
-    for bucket_name in sorted(grouped):
-        messages = grouped[bucket_name]
+    previous: _TelegramMessage | None = None
+    for message in messages:
         canonical = json.dumps(
-            [_message_record(message) for message in messages],
+            _message_record(message),
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
             allow_nan=False,
         )
+        source_id = _message_source_id(namespace, message.message_id)
+        display_time = None
+        period = "undated"
+        if message.dated:
+            displayed = datetime.fromtimestamp(message.observed_at, tz=timezone.utc).astimezone(
+                display_zone
+            )
+            display_time = displayed.isoformat()
+            period = displayed.strftime("%Y-%m")
+
+        temporal_context: dict[str, Any] | None = None
+        if previous is not None and temporal_context_seconds is not None:
+            gap_seconds = message.observed_at - previous.observed_at
+            if (
+                message.dated
+                and previous.dated
+                and 0.0 <= gap_seconds <= temporal_context_seconds
+            ):
+                temporal_context = {
+                    "gap_seconds": gap_seconds,
+                    "heuristic": True,
+                    "previous_source_id": _message_source_id(
+                        namespace,
+                        previous.message_id,
+                    ),
+                    "threshold_seconds": temporal_context_seconds,
+                }
+
+        if message.text:
+            ingest_status = "text"
+        elif message.locators:
+            ingest_status = "locator_only"
+        elif message.media_kind is not None:
+            ingest_status = "deferred_media"
+        else:
+            ingest_status = "empty"
+        effective_source_kind: SourceKind = (
+            source_kind
+            if source_kind is not None
+            else ("owner_reflection" if message.owner_authored else "unknown")
+        )
         documents.append(
             SourceDocument.create(
-                source_id=f"telegram/{namespace}/{bucket_name}.json",
+                source_id=source_id,
                 source_revision=hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
-                observed_at=max(message.observed_at for message in messages),
-                text="\n\n".join(message.text for message in messages),
+                observed_at=message.observed_at,
+                text=message.text,
                 adapter=TELEGRAM_EXPORT_ADAPTER,
-                source_kind=source_kind,
-                raw_chars=sum(message.raw_chars for message in messages),
+                source_kind=effective_source_kind,
+                raw_chars=message.raw_chars,
                 metadata={
+                    "author_key": message.author_key,
+                    "date_status": "dated" if message.dated else "undated",
+                    "display_time": display_time,
+                    "display_timezone": timezone_name,
                     "format": "telegram-json",
-                    "message_count": len(messages),
-                    "period": bucket_name,
+                    "forward_source_key": message.forward_source_key,
+                    "forwarded": message.forwarded,
+                    "ingest_status": ingest_status,
+                    "locators": list(message.locators),
+                    "media_deferred": message.media_kind is not None and not message.text,
+                    "media_kind": message.media_kind,
+                    "message_count": 1,
+                    "message_id": message.message_id,
+                    "owner_adopted_expression": message.owner_authored,
+                    "owner_authored": message.owner_authored,
+                    "period": period,
+                    "reply_to_message_id": message.reply_to_message_id,
+                    "reply_to_source_id": (
+                        _message_source_id(namespace, message.reply_to_message_id)
+                        if message.reply_to_message_id is not None
+                        else None
+                    ),
+                    "temporal_context": temporal_context,
                 },
             )
         )
+        previous = message
+
+    documents.sort(key=lambda document: document.source_id)
+    text_message_count = sum(bool(document.text) for document in documents)
 
     return TelegramExportResult(
         namespace=namespace,
         documents=tuple(documents),
-        message_count=len(accepted),
+        message_count=len(documents),
+        text_message_count=text_message_count,
+        deferred_message_count=len(documents) - text_message_count,
         skipped_message_count=skipped,
     )
 
