@@ -11,7 +11,18 @@ Migration order (foundation-first; each commit must build and pass tests):
    ContainerCore v1 experimental (`semantic/containers/`, ADR-002) → density optional
    backend (`semantic/density/`, ADR-003). No Obsidian/HTTP/parser deps. Commits
    `717da42` `3165784` `95c3830` `2809c39`; **104 passed / 1 skipped**.
-4. **Applied** — voice (reviewed R1) → Antourage contracts → obsidian → service.
+4. **Applied / clickable MVP**:
+   - ✅ ingest foundation — language-agnostic parser, provenance adapter,
+     `semantic_input`, and deterministic basis vectors. Working chain:
+     `raw text -> parser -> concept tree -> vectors / rho`; **117 passed / 1 skipped**.
+   - **Stage 4d — vault ingest** — Obsidian Markdown files → canonical
+     `EvidenceLedger` + derived semantic representations → local on-disk cache;
+     source lifecycle and provenance are mandatory.
+   - FastAPI service.
+   - Chat + local Ollama integration.
+   - Visualization + Obsidian bridge.
+   Keep HTTP, plugin, and LLM dependencies outside the ingest layer. Do not commit
+   vault data, voice data, or generated folders.
 5. **Verify** — unit, persistence/restart, synthetic voice, plugin build, ContainerCore
    fixtures, registered benchmarks. Then open a new small PR and close PR #1 as
   `superseded`.
@@ -26,8 +37,9 @@ Migration order (foundation-first; each commit must build and pass tests):
   are recorded in `benchmarks/results/`, not hidden"). Port the registered negative
   results as a `chore(benchmarks)` commit in Stage 5 alongside the runners. None of the
   Stage-3 modules read them, so not a blocker.
-- **Parser + provenance** (`text_parser_agnostic`, `provenance`) port with voice/pilot
-  ingestion in Stage 4 — verified no Stage-3 module imports them.
+- ✅ **Parser + provenance** landed in Stage 4a–4c under `src/fvsc/ingest/` and
+  `src/fvsc/evidence/`; Stage 4d must consume those public contracts rather than
+  importing the legacy `core/` package.
 - Decide on `data/conceptnet_ru.json` (12.7 MB, tracked) — keep as a curated asset or
   untrack with a download fallback.
 - Unify tests under `tests/{unit,integration,e2e}/` as subsystems port. Note: test dirs

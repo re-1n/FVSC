@@ -10,8 +10,11 @@
 - `integration/fvsc-core-v1` — **active.** Clean rebuild from `main`, carrying file
   states (not history) in logical blocks into the `src/fvsc/` layout.
   - Rebuild progress: Stage 0 (scaffold) ✅, Stage 1 foundation ✅, Stage 3
-    representations ✅ (`semantic/{metrics,containers,density}`, **104 unit tests
-    green**). Next: Stage 4 (applied — voice, Antourage, obsidian, service).
+    representations ✅, Stage 4a–4c ingest foundation ✅ (`parser`, provenance
+    adapter, `semantic_input`, `basis_vectors`; **117 passed / 1 skipped**).
+  - Working ingest chain: `raw text -> parser -> concept tree -> vectors / rho`.
+  - Next: Stage 4d vault ingest, followed by the FastAPI service, chat + Ollama,
+    then visualization + Obsidian bridge for the first clickable MVP.
 
 ## Settled decisions (ADRs)
 
