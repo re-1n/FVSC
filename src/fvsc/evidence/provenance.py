@@ -32,7 +32,7 @@ from __future__ import annotations
 from typing import Dict, Mapping, Tuple
 from collections import defaultdict, Counter
 
-from ..ingest import (
+from ..ingest.parser import (
     ParseConfig,
     extract_concepts_and_cooccurrence,
 )
@@ -161,4 +161,3 @@ def build_provenance(
 ) -> ProvenanceMap:
     provenance, _silent = build_provenance_and_silent(si, files_by_path, config)
     return provenance
-
