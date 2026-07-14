@@ -1,0 +1,128 @@
+from __future__ import annotations
+
+from io import BytesIO
+import hashlib
+import json
+import urllib.error
+
+import pytest
+
+from fvsc.ingest import SourceDocument
+from fvsc.integrations import OllamaIntegrationError, OllamaInterpretationBackend
+from fvsc.interpretation import PromptSource
+
+
+class _Response(BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        self.close()
+
+
+class _Opener:
+    def __init__(self, responses: list[dict] | None = None, raw: bytes | None = None):
+        self.responses = list(responses or [])
+        self.raw = raw
+        self.requests = []
+
+    def open(self, request, timeout):
+        self.requests.append((request, timeout))
+        if self.raw is not None:
+            return _Response(self.raw)
+        value = self.responses.pop(0)
+        return _Response(json.dumps(value, ensure_ascii=False).encode("utf-8"))
+
+
+def _source() -> PromptSource:
+    text = "Паразиты превращают внимание в чужой ресурс."
+    document = SourceDocument.create(
+        source_id="private/diary/message-334",
+        source_revision=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        observed_at=1.0,
+        text=text,
+        adapter="test",
+        source_kind="owner_reflection",
+        raw_chars=len(text),
+    )
+    return PromptSource.from_document(document, label="S1")
+
+
+def test_ollama_generates_strict_claims_without_exposing_source_ids_to_model() -> None:
+    model_content = {
+        "answer": "Образ описывает захват внимания.",
+        "claims": [
+            {
+                "text": "Внимание представлено захваченным ресурсом.",
+                "citations": ["S1"],
+                "support_level": "evidence_bound",
+            }
+        ],
+    }
+    opener = _Opener(
+        responses=[{"message": {"content": json.dumps(model_content, ensure_ascii=False)}}]
+    )
+    backend = OllamaInterpretationBackend(opener=opener)
+
+    result = backend.generate("Какова роль паразитов?", (_source(),))
+
+    assert result.claims[0].source_labels == ("S1",)
+    request = opener.requests[0][0]
+    sent = json.loads(request.data.decode("utf-8"))
+    user_payload = sent["messages"][1]["content"]
+    assert "private/diary/message-334" not in user_payload
+    assert "Паразиты" in user_payload
+    assert sent["format"] == "json"
+    assert sent["stream"] is False
+
+
+@pytest.mark.parametrize(
+    "host",
+    (
+        "https://example.com:11434",
+        "http://user:pass@127.0.0.1:11434",
+        "http://127.0.0.1:11434/api",
+    ),
+)
+def test_ollama_host_is_restricted_to_bare_loopback_origin(host) -> None:
+    with pytest.raises(ValueError):
+        OllamaInterpretationBackend(host=host, opener=_Opener())
+
+
+def test_invalid_or_oversized_ollama_output_fails_without_echoing_private_text() -> None:
+    malformed = _Opener(responses=[{"message": {"content": "not json"}}])
+    backend = OllamaInterpretationBackend(opener=malformed)
+    with pytest.raises(OllamaIntegrationError, match="not valid JSON") as caught:
+        backend.generate("Question", (_source(),))
+    assert "Паразиты" not in str(caught.value)
+
+    oversized = _Opener(raw=b"x" * 1_025)
+    backend = OllamaInterpretationBackend(
+        opener=oversized,
+        max_response_bytes=1_024,
+    )
+    with pytest.raises(OllamaIntegrationError, match="size limit"):
+        backend.generate("Question", (_source(),))
+
+
+def test_model_listing_is_deterministic_and_transport_failures_are_safe() -> None:
+    opener = _Opener(
+        responses=[
+            {
+                "models": [
+                    {"name": "zeta:latest"},
+                    {"name": "alpha:latest"},
+                    {"name": "alpha:latest"},
+                ]
+            }
+        ]
+    )
+    backend = OllamaInterpretationBackend(opener=opener)
+    assert backend.list_local_models() == ("alpha:latest", "zeta:latest")
+
+    class Broken:
+        def open(self, request, timeout):
+            raise urllib.error.URLError("private transport detail")
+
+    broken = OllamaInterpretationBackend(opener=Broken())
+    assert broken.ping() is False
