@@ -9,6 +9,25 @@ and optional interpretation.
 The active implementation is under `src/fvsc/`. The older `core/` and root `service/`
 trees remain as a research record; clean code is forbidden from importing them.
 
+The canonical, complete statement of purpose is
+[docs/PROJECT_PURPOSE.md](./docs/PROJECT_PURPOSE.md).
+
+## Project purpose
+
+FVSC is an external semantic memory: it records how a particular person expressed or
+adopted meaning, compresses those traces into a computational map, and uses that map to
+retrieve, compare, and test relationships across time. It is not primarily a chatbot,
+topic classifier, or graph visualization. Its success criterion is whether analysis
+reflects the meanings people put into the sources, with inspectable evidence for every
+material claim.
+
+The map is intentionally lossy with respect to wording. It does **not** have to recreate
+the original text from compressed structure alone. Its mandatory form of reversibility
+is evidential: a node, relation, or derived claim must resolve through provenance to the
+exact source revision and span that supports it. Natural-language expansion of a map is
+a new, cited, defeasible interpretation, never the recovered original. See
+[ADR-006](./docs/adr/ADR-006-semantic-compression-is-referentially-reversible.md).
+
 ## What works now
 
 - Obsidian Markdown and Telegram JSON become revisioned `SourceDocument` records.
