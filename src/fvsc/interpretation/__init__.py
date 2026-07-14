@@ -16,19 +16,31 @@ from .proposals import (
     SourceCitation,
     SupportLevel,
 )
+from .store import (
+    DEFAULT_INTERPRETATION_JOURNAL_RELATIVE_PATH,
+    InterpretationJournal,
+    InterpretationStore,
+    load_interpretation_journal,
+    save_interpretation_journal,
+)
 
 __all__ = [
     "AssessmentVerdict",
+    "DEFAULT_INTERPRETATION_JOURNAL_RELATIVE_PATH",
     "GeneratedClaim",
     "GeneratedInterpretation",
     "InterpretationBackend",
+    "InterpretationJournal",
     "AntourageOutputType",
     "InterpretationClaim",
     "InterpretationLayer",
     "InterpretationProposal",
+    "InterpretationStore",
     "OwnerProposalAssessment",
     "PromptSource",
     "SourceCitation",
     "SupportLevel",
     "generate_interpretation_proposal",
+    "load_interpretation_journal",
+    "save_interpretation_journal",
 ]
