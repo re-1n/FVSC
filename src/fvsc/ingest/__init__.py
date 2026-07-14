@@ -24,6 +24,13 @@ from .parser import (
     text_to_semantic_input,
     tokenize,
 )
+from .judgment_events import (
+    JUDGMENT_DERIVATION,
+    JUDGMENT_EVENT_EXTRACTOR,
+    JUDGMENT_EVENT_EXTRACTOR_VERSION,
+    SourceSpan,
+    judgment_to_evidence_event,
+)
 from .semantic_input import (
     ConceptDef,
     SemanticInput,
@@ -48,11 +55,15 @@ __all__ = [
     "DEFAULT_COORDINATORS",
     "DEFAULT_STOPWORDS_RU_EN",
     "ParseConfig",
+    "JUDGMENT_DERIVATION",
+    "JUDGMENT_EVENT_EXTRACTOR",
+    "JUDGMENT_EVENT_EXTRACTOR_VERSION",
     "OBSIDIAN_VAULT_ADAPTER",
     "SOURCE_KINDS",
     "SemanticInput",
     "SemanticInputParser",
     "SourceDocument",
+    "SourceSpan",
     "SourceKind",
     "TELEGRAM_EXPORT_ADAPTER",
     "TelegramExportResult",
@@ -60,6 +71,7 @@ __all__ = [
     "clean_external_text",
     "create_basis_generator",
     "extract_concepts_and_cooccurrence",
+    "judgment_to_evidence_event",
     "load_telegram_export",
     "normalize_markdown",
     "parse_semantic_input",
