@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from fvsc.ingest import ParseConfig
 from fvsc.ingest.vault_sync import VaultSyncConfig
+from fvsc.interpretation import GeneratedClaim, GeneratedInterpretation
 from fvsc.service.app import create_app
 from fvsc.service.runtime import VaultRuntime
 
@@ -27,9 +28,29 @@ def _runtime(tmp_path) -> VaultRuntime:
     )
 
 
-def test_http_transport_delegates_sync_search_source_and_feedback(tmp_path) -> None:
+class _Backend:
+    backend_id = "test.backend"
+    model = "fake"
+    prompt_version = "1"
+    interpretation_layer = 3
+
+    def generate(self, question, sources):
+        return GeneratedInterpretation(
+            answer="Ответ с опорой на исходник.",
+            claims=(
+                GeneratedClaim(
+                    text="Свобода связана с ответственностью.",
+                    source_labels=("S1",),
+                ),
+            ),
+        )
+
+
+def test_http_transport_delegates_sync_search_source_interpretation_and_feedback(tmp_path) -> None:
     runtime = _runtime(tmp_path)
-    with TestClient(create_app(runtime, auto_load=False)) as client:
+    with TestClient(
+        create_app(runtime, interpretation_backend=_Backend(), auto_load=False)
+    ) as client:
         assert client.get("/health").json()["loaded"] is False
         synced = client.post("/v1/vault/sync")
         assert synced.status_code == 200
@@ -55,6 +76,14 @@ def test_http_transport_delegates_sync_search_source_and_feedback(tmp_path) -> N
         assert source.status_code == 200
         assert source.json()["text"] == "Свобода требует ответственности."
 
+        proposal = client.post(
+            "/v1/interpret",
+            json={"question": "свобода и ответственность", "top_k": 1},
+        )
+        assert proposal.status_code == 200
+        assert proposal.json()["citations"][0]["source_id"] == "note.md"
+        assert proposal.json()["defeasible"] is True
+
         target = next(iter(runtime.ledger.active_events))
         feedback = client.post(
             "/v1/feedback",
@@ -69,7 +98,9 @@ def test_http_transport_delegates_sync_search_source_and_feedback(tmp_path) -> N
 
 
 def test_unconfigured_app_is_healthy_but_refuses_stateful_routes() -> None:
-    with TestClient(create_app(None, auto_load=False)) as client:
+    with TestClient(
+        create_app(None, interpretation_backend=None, auto_load=False)
+    ) as client:
         health = client.get("/health")
         assert health.status_code == 200
         assert health.json()["status"] == "unconfigured"

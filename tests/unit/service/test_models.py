@@ -3,7 +3,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from fvsc.service.models import FeedbackRequest, SearchRequest
+from fvsc.service.models import (
+    FeedbackRequest,
+    InterpretRequest,
+    SearchRequest,
+)
 
 
 def test_search_request_has_bounded_work_controls() -> None:
@@ -23,3 +27,10 @@ def test_feedback_schema_rejects_unknown_actions_and_event_shapes() -> None:
         FeedbackRequest(target_event_id="short", action="reject")
     with pytest.raises(ValidationError):
         FeedbackRequest(target_event_id="a" * 64, action="erase")
+
+
+def test_interpretation_request_has_tighter_source_budget() -> None:
+    request = InterpretRequest(question="роль паразитов", top_k=5)
+    assert request.context_depth == 1
+    with pytest.raises(ValidationError):
+        InterpretRequest(question="x", top_k=21)

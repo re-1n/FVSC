@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from ..interpretation import InterpretationProposal
 from .runtime import RuntimeSearchHit, RuntimeStatus
 
 
@@ -82,13 +83,75 @@ class HealthResponse(_StrictModel):
     status: Literal["ok", "unconfigured"]
     configured: bool
     loaded: bool
+    interpretation_configured: bool
     startup_error: Literal["cache_stale", "cache_invalid"] | None = None
+
+
+class InterpretRequest(_StrictModel):
+    question: str = Field(min_length=1, max_length=8_192)
+    top_k: int = Field(default=5, ge=1, le=20)
+    context_depth: int = Field(default=1, ge=0, le=4)
+
+
+class ProposalCitationResponse(_StrictModel):
+    citation_id: str
+    source_id: str
+    source_revision: str
+    start: int
+    end: int
+    text_sha256: str
+    evidence_event_ids: list[str]
+
+
+class ProposalClaimResponse(_StrictModel):
+    claim_id: str
+    text: str
+    citation_ids: list[str]
+    support_level: str
+
+
+class InterpretationProposalResponse(_StrictModel):
+    proposal_id: str
+    question: str
+    answer: str
+    claims: list[ProposalClaimResponse]
+    citations: list[ProposalCitationResponse]
+    output_type: str
+    support_level: str
+    interpretation_layer: int
+    producer: str
+    model: str | None
+    prompt_version: str
+    generated_at: float
+    retrieval_method: str
+    metadata: dict[str, Any]
+    defeasible: bool
+
+    @classmethod
+    def from_proposal(
+        cls,
+        proposal: InterpretationProposal,
+    ) -> "InterpretationProposalResponse":
+        return cls(**proposal.to_dict())
+
+
+class InterpretationBackendStatusResponse(_StrictModel):
+    configured: bool
+    backend_id: str | None
+    model: str | None
+    reachable: bool | None
+    local_models: list[str]
 
 
 __all__ = [
     "FeedbackRequest",
     "FeedbackResponse",
     "HealthResponse",
+    "InterpretRequest",
+    "InterpretationBackendStatusResponse",
+    "InterpretationProposalResponse",
+    "ProposalCitationResponse",
+    "ProposalClaimResponse",
     "SearchHitResponse",
     "SearchRequest",
     "SearchResponse",
