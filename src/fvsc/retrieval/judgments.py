@@ -128,6 +128,86 @@ def _cosine(left: dict[str, float], right: dict[str, float]) -> float:
     return min(max(dot / (left_norm * right_norm), 0.0), 1.0)
 
 
+class JudgmentSearchIndex:
+    """Reusable in-memory index over policy-selected judgment events."""
+
+    def __init__(
+        self,
+        ledger: EvidenceLedger,
+        *,
+        morphology: Morphology | None = None,
+        policy: EvidencePolicy | None = None,
+    ) -> None:
+        self.morphology = morphology or Pymorphy3Morphology()
+        self.policy = policy
+        feedback = FeedbackState.from_ledger(ledger)
+        source_features: dict[str, dict[str, float]] = {}
+        evidence_ids: dict[str, set[str]] = {}
+        for event in sorted(ledger.active_events, key=lambda item: item.event_id):
+            if event.subject is None or event.relation is None or event.object is None:
+                continue
+            status = feedback.confirmation_status_for(event.event_id)
+            if policy is not None and not policy.allows(
+                event,
+                confirmation_status=status,
+            ):
+                continue
+            if event.context.get("structural_role") is not None:
+                continue
+            weight = event.modality * event.intensity * event.confidence
+            if weight <= 0.0:
+                continue
+            features = source_features.setdefault(event.source_id, {})
+            _add_term(features, event.subject, weight=weight)
+            _add_relation(features, event.relation, weight=1.2 * weight)
+            _add_term(features, event.object, weight=weight)
+            evidence_ids.setdefault(event.source_id, set()).add(event.event_id)
+
+        document_frequency: Counter[str] = Counter()
+        for features in source_features.values():
+            document_frequency.update(features.keys())
+        self.document_frequency = document_frequency
+        self.document_count = len(source_features)
+        self.source_vectors = {
+            source_id: _tfidf(
+                features,
+                document_frequency=document_frequency,
+                document_count=self.document_count,
+            )
+            for source_id, features in source_features.items()
+        }
+        self.evidence_ids = {
+            source_id: tuple(sorted(values))
+            for source_id, values in evidence_ids.items()
+        }
+
+    def search(self, query: str, *, top_k: int = 10) -> tuple[JudgmentHit, ...]:
+        if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k <= 0:
+            raise ValueError("top_k must be a positive integer")
+        query_value = str(query).strip()
+        if not query_value or not self.source_vectors:
+            return ()
+        features = _query_features(query_value, self.morphology)
+        if not features:
+            return ()
+        query_vector = _tfidf(
+            features,
+            document_frequency=self.document_frequency,
+            document_count=self.document_count,
+        )
+        hits = [
+            JudgmentHit(
+                source_id=source_id,
+                score=score,
+                evidence_event_ids=self.evidence_ids[source_id],
+            )
+            for source_id, vector in self.source_vectors.items()
+            if (score := _cosine(vector, query_vector)) > 0.0
+        ]
+        hits.sort(key=lambda item: (-item.score, item.source_id))
+        return tuple(hits[:top_k])
+
+
 def search_judgment_evidence(
     ledger: EvidenceLedger,
     query: str,
@@ -136,70 +216,12 @@ def search_judgment_evidence(
     policy: EvidencePolicy | None = None,
     top_k: int = 10,
 ) -> tuple[JudgmentHit, ...]:
-    """Rank source ids using terms and exact relations from active judgments."""
-    if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k <= 0:
-        raise ValueError("top_k must be a positive integer")
-    query_value = str(query).strip()
-    if not query_value:
-        return ()
-    analyzer = morphology or Pymorphy3Morphology()
-    query_features = _query_features(query_value, analyzer)
-    if not query_features:
-        return ()
-
-    feedback = FeedbackState.from_ledger(ledger)
-    source_features: dict[str, dict[str, float]] = {}
-    evidence_ids: dict[str, set[str]] = {}
-    for event in sorted(ledger.active_events, key=lambda item: item.event_id):
-        if event.subject is None or event.relation is None or event.object is None:
-            continue
-        status = feedback.confirmation_status_for(event.event_id)
-        if policy is not None and not policy.allows(
-            event,
-            confirmation_status=status,
-        ):
-            continue
-        if event.context.get("structural_role") is not None:
-            continue
-        weight = event.modality * event.intensity * event.confidence
-        if weight <= 0.0:
-            continue
-        features = source_features.setdefault(event.source_id, {})
-        _add_term(features, event.subject, weight=weight)
-        _add_relation(features, event.relation, weight=1.2 * weight)
-        _add_term(features, event.object, weight=weight)
-        evidence_ids.setdefault(event.source_id, set()).add(event.event_id)
-
-    if not source_features:
-        return ()
-    document_frequency: Counter[str] = Counter()
-    for features in source_features.values():
-        document_frequency.update(features.keys())
-    document_count = len(source_features)
-    query_vector = _tfidf(
-        query_features,
-        document_frequency=document_frequency,
-        document_count=document_count,
-    )
-
-    hits: list[JudgmentHit] = []
-    for source_id, features in source_features.items():
-        vector = _tfidf(
-            features,
-            document_frequency=document_frequency,
-            document_count=document_count,
-        )
-        score = _cosine(vector, query_vector)
-        if score > 0.0:
-            hits.append(
-                JudgmentHit(
-                    source_id=source_id,
-                    score=score,
-                    evidence_event_ids=tuple(sorted(evidence_ids[source_id])),
-                )
-            )
-    hits.sort(key=lambda item: (-item.score, item.source_id))
-    return tuple(hits[:top_k])
+    """Compatibility wrapper for one-off source-cited judgment searches."""
+    return JudgmentSearchIndex(
+        ledger,
+        morphology=morphology,
+        policy=policy,
+    ).search(query, top_k=top_k)
 
 
-__all__ = ["JudgmentHit", "search_judgment_evidence"]
+__all__ = ["JudgmentHit", "JudgmentSearchIndex", "search_judgment_evidence"]

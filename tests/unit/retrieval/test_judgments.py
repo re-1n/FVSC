@@ -8,7 +8,7 @@ from fvsc.evidence import (
     EvidencePolicy,
     create_owner_feedback,
 )
-from fvsc.retrieval import search_judgment_evidence
+from fvsc.retrieval import JudgmentSearchIndex, search_judgment_evidence
 
 
 def _event(
@@ -119,3 +119,21 @@ def test_empty_query_and_invalid_limit() -> None:
     assert search_judgment_evidence(EvidenceLedger(), "") == ()
     with pytest.raises(ValueError, match="top_k"):
         search_judgment_evidence(EvidenceLedger(), "test", top_k=0)
+
+
+def test_reusable_judgment_index_matches_one_off_search() -> None:
+    target = _event(
+        source_id="message-1",
+        subject="океан",
+        relation="содержать",
+        object_="маяк",
+    )
+    ledger = EvidenceLedger([target])
+    policy = _policy()
+    index = JudgmentSearchIndex(ledger, policy=policy)
+
+    first = index.search("океан и маяки")
+    replay = index.search("океан и маяки")
+    one_off = search_judgment_evidence(ledger, "океан и маяки", policy=policy)
+
+    assert first == replay == one_off
