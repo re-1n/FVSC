@@ -52,7 +52,12 @@ class EvidencePolicy:
             return True
         return value is not None and value in allowed
 
-    def allows(self, event: EvidenceEvent) -> bool:
+    def allows(
+        self,
+        event: EvidenceEvent,
+        *,
+        confirmation_status: str | None = None,
+    ) -> bool:
         if event.event_kind not in {"assertion", "supersession"}:
             return False
         if (
@@ -79,7 +84,11 @@ class EvidencePolicy:
 
         judgment = context.get("judgment")
         judgment_context = judgment if isinstance(judgment, dict) else {}
-        raw_status = judgment_context.get("confirmation_status", "unreviewed")
+        raw_status = (
+            confirmation_status
+            if confirmation_status is not None
+            else judgment_context.get("confirmation_status", "unreviewed")
+        )
         status = raw_status if isinstance(raw_status, str) else None
         if not self._field_allowed(status, self.confirmation_statuses):
             return False

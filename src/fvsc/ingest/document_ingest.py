@@ -11,6 +11,7 @@ from typing import Iterable, Mapping
 
 from ..evidence.events import EvidenceEvent
 from ..evidence.policy import EvidencePolicy
+from ..evidence.feedback import FVSC_OWNER_FEEDBACK_RELATION, FeedbackState
 from ..evidence.ledger import EvidenceLedger
 from ..evidence.provenance import SilentPool, build_provenance_and_silent
 from ..runtime.materializer import (
@@ -51,6 +52,7 @@ STRUCTURAL_RELATIONS = frozenset(
         FVSC_TEMPORAL_CONTEXT_RELATION,
         FVSC_LOCATOR_RELATION,
         FVSC_DEFERRED_MEDIA_RELATION,
+        FVSC_OWNER_FEEDBACK_RELATION,
     }
 )
 
@@ -643,7 +645,15 @@ def materialize_evidence_ledger(
         excluded_relations=STRUCTURAL_RELATIONS,
     )
     selected_encoder = (
-        PolicyEvidenceEncoder(encoder=encoder, policy=policy)
+        PolicyEvidenceEncoder(
+            encoder=encoder,
+            policy=policy,
+            feedback_state=(
+                FeedbackState.from_ledger(ledger)
+                if policy.confirmation_statuses is not None
+                else None
+            ),
+        )
         if policy is not None
         else encoder
     )

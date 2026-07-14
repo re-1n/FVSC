@@ -15,7 +15,7 @@ from typing import Protocol
 
 import numpy as np
 
-from ..evidence import EvidenceEvent, EvidenceLedger, EvidencePolicy
+from ..evidence import EvidenceEvent, EvidenceLedger, EvidencePolicy, FeedbackState
 from ..semantic import SemanticState
 
 
@@ -71,6 +71,7 @@ class PolicyEvidenceEncoder:
 
     encoder: EvidenceEncoder
     policy: EvidencePolicy
+    feedback_state: FeedbackState | None = None
 
     @property
     def dim(self) -> int:
@@ -78,10 +79,20 @@ class PolicyEvidenceEncoder:
 
     @property
     def version(self) -> str:
-        return f"{self.encoder.version}|policy:{self.policy.fingerprint}"
+        feedback = (
+            ""
+            if self.feedback_state is None
+            else f"|feedback:{self.feedback_state.digest}"
+        )
+        return f"{self.encoder.version}|policy:{self.policy.fingerprint}{feedback}"
 
     def encode(self, event: EvidenceEvent) -> tuple[Contribution, ...]:
-        if not self.policy.allows(event):
+        status = (
+            None
+            if self.feedback_state is None
+            else self.feedback_state.confirmation_status_for(event.event_id)
+        )
+        if not self.policy.allows(event, confirmation_status=status):
             return ()
         return self.encoder.encode(event)
 
