@@ -2,11 +2,14 @@
 
 from .lexical import LexicalHit, expand_source_context, search_documents
 from .judgments import JudgmentHit, search_judgment_evidence
+from .fusion import FusedHit, reciprocal_rank_fusion
 
 __all__ = [
     "JudgmentHit",
     "LexicalHit",
+    "FusedHit",
     "expand_source_context",
     "search_documents",
     "search_judgment_evidence",
+    "reciprocal_rank_fusion",
 ]
