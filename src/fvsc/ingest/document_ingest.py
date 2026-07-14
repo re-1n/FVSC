@@ -388,14 +388,16 @@ def build_evidence_batch(
     config: ParseConfig | None = None,
     adapter: str | None = None,
     judgment_extractor: JudgmentExtractor | None = None,
+    include_cooccurrence: bool = True,
 ) -> EvidenceBatch:
     """Build parser-derived assertions with per-document provenance.
 
-    Parsing remains a global corpus pass so vocabulary and containment weights
-    match the research pipeline. A second per-file provenance pass partitions
-    every assertion back to relative source ids. When supplied, a judgment
-    extractor adds exact-relation L1 events beside (not instead of) that stable
-    language-agnostic baseline.
+    By default, parsing remains a global corpus pass so vocabulary and containment
+    weights match the research pipeline. A second per-file provenance pass
+    partitions every assertion back to relative source ids. When supplied, a
+    judgment extractor adds exact-relation L1 events beside that stable baseline.
+    Evaluation may disable co-occurrence explicitly to isolate the exact channel;
+    the default and existing cache behavior do not change.
     """
     ordered = tuple(sorted(documents, key=lambda document: document.source_id))
     source_ids = tuple(document.source_id for document in ordered)
@@ -413,10 +415,16 @@ def build_evidence_batch(
         if adapters and adapters != {adapter_value}:
             raise ValueError("all source documents must match the requested adapter")
 
+    if not isinstance(include_cooccurrence, bool):
+        raise TypeError("include_cooccurrence must be a bool")
     parser_config = config or ParseConfig()
     files_by_path = {document.source_id: document.text for document in ordered}
     corpus = "\n\n".join(document.text for document in ordered if document.text)
-    semantic_input = text_to_semantic_input(corpus, config=parser_config) if corpus else {}
+    semantic_input = (
+        text_to_semantic_input(corpus, config=parser_config)
+        if corpus and include_cooccurrence
+        else {}
+    )
     provenance, silent_pool = build_provenance_and_silent(
         semantic_input,
         files_by_path,

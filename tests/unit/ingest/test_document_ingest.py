@@ -188,6 +188,37 @@ def test_policy_materializes_owner_exact_view_without_participant_contamination(
     assert syntax_only.concept_count == 0
 
 
+def test_exact_channel_can_be_isolated_without_changing_default_batch() -> None:
+    document = _document(
+        "note.md",
+        "Внимание сканирует реальность.",
+        observed_at=10.0,
+        source_kind="owner_reflection",
+    )
+    extractor = RussianJudgmentExtractor()
+
+    default = build_evidence_batch(
+        [document],
+        config=_config(),
+        judgment_extractor=extractor,
+    )
+    exact_only = build_evidence_batch(
+        [document],
+        config=_config(),
+        judgment_extractor=extractor,
+        include_cooccurrence=False,
+    )
+
+    assert default.semantic_input
+    assert any(event.extractor != JUDGMENT_EVENT_EXTRACTOR for event in default.events)
+    assert exact_only.semantic_input == {}
+    assert exact_only.events
+    assert all(
+        event.extractor in {JUDGMENT_EVENT_EXTRACTOR, SOURCE_METADATA_EXTRACTOR}
+        for event in exact_only.events
+    )
+
+
 def test_unchanged_reconciliation_is_idempotent() -> None:
     batch = build_evidence_batch(
         [_document("note.md", "alpha beta gamma.", observed_at=10.0)],
