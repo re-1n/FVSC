@@ -8,6 +8,7 @@ from .runtime import (
     StaleSourceStateError,
     VaultRuntime,
 )
+from .interpret import VaultInterpreter
 
 __all__ = [
     "RuntimeNotLoadedError",
@@ -15,4 +16,5 @@ __all__ = [
     "RuntimeStatus",
     "StaleSourceStateError",
     "VaultRuntime",
+    "VaultInterpreter",
 ]

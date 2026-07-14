@@ -242,6 +242,20 @@ class VaultRuntime:
             except KeyError as exc:
                 raise KeyError(f"unknown source document: {source}") from exc
 
+    def exact_event_ids_for_source(self, source_id: str) -> tuple[str, ...]:
+        with self._lock:
+            cache = self._require_cache()
+            source = str(source_id).strip()
+            if source not in self._documents_by_id:
+                raise KeyError(f"unknown source document: {source}")
+            return tuple(
+                sorted(
+                    event.event_id
+                    for event in cache.ledger.active_for_source(source)
+                    if event.extractor == JUDGMENT_EVENT_EXTRACTOR
+                )
+            )
+
     def source_documents_for_query(
         self,
         query: str,
