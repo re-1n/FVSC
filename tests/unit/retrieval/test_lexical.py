@@ -5,7 +5,7 @@ import json
 import pytest
 
 from fvsc.ingest import load_telegram_export
-from fvsc.retrieval import expand_source_context, search_documents
+from fvsc.retrieval import LexicalSearchIndex, expand_source_context, search_documents
 
 
 def _message(message_id, timestamp, text, **extra):
@@ -102,3 +102,19 @@ def test_lexical_search_and_context_validation(tmp_path) -> None:
         expand_source_context(result.documents, "missing")
     with pytest.raises(ValueError, match="max_depth"):
         expand_source_context(result.documents, result.documents[0].source_id, max_depth=-1)
+
+
+def test_reusable_index_matches_one_off_search(tmp_path) -> None:
+    result = _export(tmp_path)
+    index = LexicalSearchIndex(result.documents, owner_adopted_only=True)
+
+    first = index.search("роль паразитов", top_k=3)
+    replay = index.search("роль паразитов", top_k=3)
+    one_off = search_documents(
+        result.documents,
+        "роль паразитов",
+        top_k=3,
+        owner_adopted_only=True,
+    )
+
+    assert first == replay == one_off

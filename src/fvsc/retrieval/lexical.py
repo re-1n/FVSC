@@ -69,6 +69,93 @@ def _cosine(left: dict[str, float], right: dict[str, float]) -> float:
     return min(max(dot / (left_norm * right_norm), 0.0), 1.0)
 
 
+class LexicalSearchIndex:
+    """Reusable in-memory character TF-IDF floor; never persisted."""
+
+    def __init__(
+        self,
+        documents: Iterable[SourceDocument],
+        *,
+        ngram_min: int = 3,
+        ngram_max: int = 5,
+        owner_adopted_only: bool = False,
+    ) -> None:
+        if (
+            isinstance(ngram_min, bool)
+            or isinstance(ngram_max, bool)
+            or not isinstance(ngram_min, int)
+            or not isinstance(ngram_max, int)
+            or ngram_min <= 0
+            or ngram_max < ngram_min
+        ):
+            raise ValueError("ngram range must contain positive ordered integers")
+        ordered = tuple(sorted(documents, key=lambda document: document.source_id))
+        source_ids = tuple(document.source_id for document in ordered)
+        if len(source_ids) != len(set(source_ids)):
+            raise ValueError("source documents must have unique source ids")
+        self.ngram_min = ngram_min
+        self.ngram_max = ngram_max
+        self.documents = tuple(
+            document
+            for document in ordered
+            if document.text
+            and (
+                not owner_adopted_only
+                or document.metadata.get("owner_adopted_expression") is True
+            )
+        )
+        counts = tuple(
+            _character_ngrams(
+                document.text,
+                minimum=ngram_min,
+                maximum=ngram_max,
+            )
+            for document in self.documents
+        )
+        document_frequency: Counter[str] = Counter()
+        for value in counts:
+            document_frequency.update(value.keys())
+        self.document_frequency = document_frequency
+        self.vectors = tuple(
+            _tfidf(
+                value,
+                document_frequency=document_frequency,
+                document_count=len(self.documents),
+            )
+            for value in counts
+        )
+
+    def search(self, query: str, *, top_k: int = 10) -> tuple[LexicalHit, ...]:
+        if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k <= 0:
+            raise ValueError("top_k must be a positive integer")
+        query_value = str(query).strip()
+        if not query_value or not self.documents:
+            return ()
+        query_counts = _character_ngrams(
+            query_value,
+            minimum=self.ngram_min,
+            maximum=self.ngram_max,
+        )
+        if not query_counts:
+            return ()
+        query_vector = _tfidf(
+            query_counts,
+            document_frequency=self.document_frequency,
+            document_count=len(self.documents),
+        )
+        hits = [
+            LexicalHit(
+                source_id=document.source_id,
+                score=score,
+                document=document,
+            )
+            for document, vector in zip(self.documents, self.vectors, strict=True)
+            if (score := _cosine(vector, query_vector)) > 0.0
+        ]
+        hits.sort(key=lambda hit: (-hit.score, hit.source_id))
+        return tuple(hits[:top_k])
+
+
 def search_documents(
     documents: Iterable[SourceDocument],
     query: str,
@@ -78,67 +165,13 @@ def search_documents(
     ngram_max: int = 5,
     owner_adopted_only: bool = False,
 ) -> tuple[LexicalHit, ...]:
-    """Rank source documents using a dependency-free character TF-IDF baseline."""
-    if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k <= 0:
-        raise ValueError("top_k must be a positive integer")
-    if (
-        isinstance(ngram_min, bool)
-        or isinstance(ngram_max, bool)
-        or not isinstance(ngram_min, int)
-        or not isinstance(ngram_max, int)
-        or ngram_min <= 0
-        or ngram_max < ngram_min
-    ):
-        raise ValueError("ngram range must contain positive ordered integers")
-    query_value = str(query).strip()
-    if not query_value:
-        return ()
-
-    ordered = tuple(sorted(documents, key=lambda document: document.source_id))
-    source_ids = tuple(document.source_id for document in ordered)
-    if len(source_ids) != len(set(source_ids)):
-        raise ValueError("source documents must have unique source ids")
-    candidates = tuple(
-        document
-        for document in ordered
-        if document.text
-        and (
-            not owner_adopted_only
-            or document.metadata.get("owner_adopted_expression") is True
-        )
-    )
-    if not candidates:
-        return ()
-
-    document_counts = [
-        _character_ngrams(document.text, minimum=ngram_min, maximum=ngram_max)
-        for document in candidates
-    ]
-    query_counts = _character_ngrams(query_value, minimum=ngram_min, maximum=ngram_max)
-    if not query_counts:
-        return ()
-    document_frequency: Counter[str] = Counter()
-    for counts in document_counts:
-        document_frequency.update(counts.keys())
-    document_count = len(candidates)
-    query_vector = _tfidf(
-        query_counts,
-        document_frequency=document_frequency,
-        document_count=document_count,
-    )
-
-    hits: list[LexicalHit] = []
-    for document, counts in zip(candidates, document_counts, strict=True):
-        vector = _tfidf(
-            counts,
-            document_frequency=document_frequency,
-            document_count=document_count,
-        )
-        score = _cosine(vector, query_vector)
-        if score > 0.0:
-            hits.append(LexicalHit(source_id=document.source_id, score=score, document=document))
-    hits.sort(key=lambda hit: (-hit.score, hit.source_id))
-    return tuple(hits[:top_k])
+    """Compatibility wrapper for one-off dependency-free lexical searches."""
+    return LexicalSearchIndex(
+        documents,
+        ngram_min=ngram_min,
+        ngram_max=ngram_max,
+        owner_adopted_only=owner_adopted_only,
+    ).search(query, top_k=top_k)
 
 
 def expand_source_context(
@@ -192,4 +225,9 @@ def expand_source_context(
     )
 
 
-__all__ = ["LexicalHit", "expand_source_context", "search_documents"]
+__all__ = [
+    "LexicalHit",
+    "LexicalSearchIndex",
+    "expand_source_context",
+    "search_documents",
+]

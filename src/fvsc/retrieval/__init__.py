@@ -1,12 +1,13 @@
 """Deterministic retrieval baselines over transient source documents."""
 
-from .lexical import LexicalHit, expand_source_context, search_documents
+from .lexical import LexicalHit, LexicalSearchIndex, expand_source_context, search_documents
 from .judgments import JudgmentHit, search_judgment_evidence
 from .fusion import FusedHit, reciprocal_rank_fusion
 
 __all__ = [
     "JudgmentHit",
     "LexicalHit",
+    "LexicalSearchIndex",
     "FusedHit",
     "expand_source_context",
     "search_documents",
