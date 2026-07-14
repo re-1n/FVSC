@@ -17,6 +17,13 @@ from .provenance import (
     build_provenance,
     build_provenance_and_silent,
 )
+from .timeline import (
+    Contradiction,
+    JudgmentScope,
+    JudgmentTimeline,
+    TimelineJudgment,
+    build_judgment_timeline,
+)
 
 __all__ = [
     "EventKind",
@@ -28,8 +35,13 @@ __all__ = [
     "FeedbackAction",
     "FeedbackDecision",
     "FeedbackState",
+    "Contradiction",
+    "JudgmentScope",
+    "JudgmentTimeline",
     "ProvenanceMap",
     "SilentPool",
+    "TimelineJudgment",
+    "build_judgment_timeline",
     "build_provenance",
     "build_provenance_and_silent",
     "create_owner_feedback",
