@@ -6,6 +6,7 @@ import pytest
 
 from fvsc.ingest import ParseConfig
 from fvsc.ingest.vault_sync import VaultSyncConfig, sync_vault
+from fvsc.ingest.judgment_events import JUDGMENT_EVENT_EXTRACTOR
 from fvsc.runtime.vault_cache import load_vault_cache
 
 
@@ -118,3 +119,34 @@ def test_additional_exclusions_extend_scanner_defaults(tmp_path) -> None:
     result = sync_vault(tmp_path, config=config, sync_time=20.0)
 
     assert set(result.cache.source_revisions) == {"keep/note.md"}
+
+
+def test_exact_judgments_are_opt_in_and_persist_in_the_same_ledger(tmp_path) -> None:
+    _write(
+        tmp_path / "thought.md",
+        "Свобода требует ответственности.",
+        mtime=10.0,
+    )
+    base = _config()
+    config = VaultSyncConfig(
+        parser_config=base.parser_config,
+        materializer_dim=base.materializer_dim,
+        enable_russian_judgments=True,
+    )
+
+    result = sync_vault(tmp_path, config=config, sync_time=20.0)
+    exact = tuple(
+        event
+        for event in result.ledger.active_events
+        if event.extractor == JUDGMENT_EVENT_EXTRACTOR
+    )
+
+    assert exact
+    assert exact[0].source_id == "thought.md"
+    assert exact[0].context["source_span"]["text_sha256"]
+    restored = load_vault_cache(result.cache_path)
+    assert restored.ledger.digest == result.ledger.digest
+    assert any(
+        event.extractor == JUDGMENT_EVENT_EXTRACTOR
+        for event in restored.ledger.active_events
+    )

@@ -37,12 +37,21 @@ def _default_parser_config() -> ParseConfig:
     )
 
 
+def _russian_judgment_extractor():
+    # Keep the morphology dictionary lazy for callers that only need the
+    # language-agnostic compatibility path.
+    from .russian_judgments import RussianJudgmentExtractor
+
+    return RussianJudgmentExtractor()
+
+
 @dataclass(frozen=True)
 class VaultSyncConfig:
     parser_config: ParseConfig = field(default_factory=_default_parser_config)
     materializer_dim: int = 64
     exclude_dirs: frozenset[str] = frozenset()
     min_clean_chars: int = 0
+    enable_russian_judgments: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.parser_config, ParseConfig):
@@ -59,6 +68,8 @@ class VaultSyncConfig:
             or self.min_clean_chars < 0
         ):
             raise ValueError("min_clean_chars must be a non-negative integer")
+        if not isinstance(self.enable_russian_judgments, bool):
+            raise TypeError("enable_russian_judgments must be a bool")
         object.__setattr__(
             self,
             "exclude_dirs",
@@ -123,6 +134,11 @@ def sync_vault(
         scan.documents,
         config=settings.parser_config,
         adapter=OBSIDIAN_VAULT_ADAPTER,
+        judgment_extractor=(
+            _russian_judgment_extractor()
+            if settings.enable_russian_judgments
+            else None
+        ),
     )
     lifecycle = reconcile_evidence_batch(ledger, batch, sync_time=sync_time)
     snapshot = materialize_evidence_ledger(ledger, dim=settings.materializer_dim)
@@ -171,6 +187,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-concepts", type=int, default=1200, help="Maximum concepts")
     parser.add_argument("--min-clean-chars", type=int, default=0)
     parser.add_argument(
+        "--exact-judgments",
+        action="store_true",
+        help="Add defeasible pymorphy3 exact-relation judgments",
+    )
+    parser.add_argument(
         "--exclude",
         action="append",
         default=[],
@@ -199,6 +220,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             materializer_dim=args.dim,
             exclude_dirs=frozenset(args.exclude),
             min_clean_chars=args.min_clean_chars,
+            enable_russian_judgments=args.exact_judgments,
         ),
     )
     print(
