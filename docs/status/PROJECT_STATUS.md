@@ -11,8 +11,9 @@
   states (not history) in logical blocks into the `src/fvsc/` layout.
   - Rebuild progress: Stage 0 (scaffold) ✅, Stage 1 foundation ✅, Stage 3
     representations ✅, Stage 4a–4c ingest foundation ✅, Stage 4d vault ingest ✅,
-    Stage 4d.1 real-data ingest correction ✅, and Stage 4e real-data semantic
-    evaluation ✅ locally (remote CI pending explicit push authorization).
+    Stage 4d.1 real-data ingest correction ✅, Stage 4e real-data semantic
+    evaluation ✅, Stage 4f cited interpretation ✅, and Stage 4g thin local
+    transports/Obsidian ✅ locally (remote CI pending explicit push authorization).
   - Working vault chain: `Obsidian Markdown -> SourceDocument -> EvidenceLedger ->
     MaterializedSnapshot -> atomic JSON cache`. Source replacement/deletion is
     append-only; source kinds remain explicit; cache stores no raw note body or absolute
@@ -33,8 +34,17 @@
     judgment-only is **0.2611/0.3778** and both tested fusions are worse than lexical.
     Exact structure is retained for explanation and feedback, but lexical remains the
     default source retriever. Semantic superiority is **not demonstrated**.
-  - Next: Stage 4f source-cited L2 interpretation proposals and owner scoring, then
-    restore FastAPI/chat/Ollama/Obsidian as thin transports over accepted contracts.
+  - Stage 4f/4g adds content-addressed citations, independently reviewable L2/L3
+    claims, forbidden-link evaluation, an atomic proposal/assessment journal, a
+    strict loopback Ollama adapter, `VaultRuntime`, thin FastAPI routes, and a native
+    Obsidian source/search/interpret/review view. Antourage output remains outside
+    EvidenceLedger. Full local suite: **229 passed / 2 skipped / 11 deselected**;
+    boundary check and production TypeScript build green.
+  - The private Gold 001–015 retrieval rerun is unchanged: lexical remains default,
+    no exact/hybrid arm is promoted, and negative hits remain zero.
+  - Next: run actual Ollama proposals over Gold 001–015 and collect owner claim-level
+    assessments. This is the first test of interpretation usefulness, not another
+    architecture-building stage.
 
 ## Settled decisions (ADRs)
 
@@ -63,6 +73,8 @@ C5 validation is required before any promotion claim.
 - Do not change / merge `main`; do not merge PR #1; do not delete the security branch.
 - Do not claim density proven better; do not hide negative results.
 - Do not auto-record LLM / Antourage output as owner evidence.
+- Owner assessment of an Antourage claim is journaled separately; it does not mutate
+  the original source or silently become an EvidenceEvent.
 - Distinguish `dream_report` / `owner_reflection` / external fact.
 - Do not claim semantic superiority from source retrieval alone; the owner must validate
   open interpretations and evidence links on a real-data gold set.

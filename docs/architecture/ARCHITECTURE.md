@@ -21,6 +21,10 @@
 | Path | Responsibility |
 |---|---|
 | `evidence/` | events, ledger, provenance, lifecycle |
+| `ingest/` | source adapters, source lifecycle, co-occurrence fallback, exact judgments |
+| `retrieval/` | transient lexical floor, exact evidence lookup, experimental fusion |
+| `evaluation/` | open-meaning gold mechanics and retrieval/interpretation metrics |
+| `interpretation/` | cited L2/L3 proposals, owner assessments, separate local journal |
 | `semantic/graph/` | graph baseline representation + materializer |
 | `semantic/containers/` | ContainerCore (experimental) |
 | `semantic/density/` | density-matrix optional local backend |
@@ -30,6 +34,7 @@
 | `antourage/assets/` | Gardener, Proxy, Safeguard, Trace, Dreamer, Narrator |
 | `antourage/sandbox/` | sandbox branches + simulations (dream/narrative) |
 | `integrations/obsidian/` | Obsidian plugin bridge |
+| `integrations/ollama.py` | strict local structured-interpretation backend |
 | `service/` | HTTP service + routers |
 | `legacy/` | quarantined superseded modules (new code must not import) |
 
@@ -39,6 +44,11 @@
   `scripts/check_no_legacy_imports.py` in CI.
 - Antourage outputs are typed and never auto-become owner evidence [ADR-004]; only an
   explicit confirmation flow produces an `EvidenceEvent`.
+- Current claim assessments are durable owner review metadata outside EvidenceLedger.
+  Promotion into canonical evidence is deliberately not automatic.
+- Original source text remains canonical. Lexical retrieval operates transiently over
+  current `SourceDocument` objects; proposal journals store generated claims and hashes,
+  not copies of source bodies.
 - Dream / narrative generation runs in sandbox branches, never in canonical memory
   [ADR-005].
 

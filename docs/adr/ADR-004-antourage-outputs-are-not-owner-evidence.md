@@ -14,6 +14,11 @@ Antourage has **wide** rights to compute / simulate / generate / act, but **narr
 rights to change the EvidenceLedger. Only an explicit user confirmation flow may produce
 an `EvidenceEvent`. Outputs carry a type and a support level.
 
+A claim-level review (`accepted`, `partially_accepted`, `rejected`, or
+`needs_revision`) is durable calibration metadata, not automatic promotion. If a future
+workflow turns an accepted interpretation into canonical owner evidence, that must be a
+separate explicit action with retained proposal origin and source citations.
+
 - **Types:** `evidence_reference`, `deterministic_computation`, `interpretation`,
   `owner_simulation`, `proposal`, `counterfactual`, `creative_artifact`, `action_request`.
 - **Support levels:** `evidence_bound`, `partially_supported`, `free_generation`.

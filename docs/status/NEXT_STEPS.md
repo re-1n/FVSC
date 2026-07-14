@@ -30,23 +30,28 @@ Migration order (foundation-first; each commit must build and pass tests):
      Judgments, source spans, policy-controlled layers, feedback, temporal
      contradictions, private Gold 001–015, and lexical/exact/fusion comparison.
      Lexical wins (MRR@10 0.5262 vs 0.2611 exact); no semantic arm is promoted.
-   - **Next: Stage 4f — source-cited interpretation proposals** — retrieve original
-     evidence with the accepted lexical floor; produce typed L2 proposals with exact
-     citations and forbidden-link checks; score against free-form owner meaning; never
-     auto-record a proposal as owner evidence.
-   - **Then: FastAPI + chat/Ollama** — thin transports over accepted ingest/evaluation
-     contracts; no ingest or evaluation logic in routers.
-   - Visualization + Obsidian bridge.
+   - ✅ **Stage 4f — source-cited interpretation proposals** — typed L2/L3 claims,
+     revision/hash citations, forbidden-link checks, claim-level owner assessment,
+     and a separate atomic interpretation journal. No automatic owner evidence.
+   - ✅ **Stage 4g — FastAPI + Ollama + Obsidian** — clean `VaultRuntime`, thin local
+     HTTP routes, strict loopback JSON Ollama adapter, native lexical source search,
+     cited interpretation, source opening, and claim review in Obsidian.
+   - **Next: Stage 4h — owner-scored live interpretation test** — run the configured
+     local model over Gold 001–015, review every claim and citation, measure forbidden
+     composites/abstention/latency, and decide from evidence what must be rebuilt.
    Keep HTTP, plugin, and LLM dependencies outside the ingest layer. Do not commit
    vault data, voice data, or generated folders.
-5. **Verify** — unit, persistence/restart, synthetic voice, plugin build, ContainerCore
-   fixtures, registered benchmarks. Then open a new small PR and close PR #1 as
-  `superseded`.
+5. **Verify** — current local checkpoint: **229 passed / 2 skipped / 11 deselected**,
+   legacy boundary green, Obsidian production build green, private retrieval result
+   reproduced. Remote CI requires explicit push authorization. Do not open or merge a
+   PR without a separate user instruction.
 
 ## Follow-ups (not blocking)
 
 - Track `obsidian-plugin/package-lock.json` so CI can use `npm ci` (reproducible builds)
-  and restore the `typecheck` job.
+  and restore the `typecheck` job. It remains intentionally ignored in this checkpoint.
+- Profile the plugin's debounced full-vault reconciliation and add a source-scoped
+  endpoint only if live vault latency warrants the extra lifecycle surface.
 - Port `core.viability_benchmark` and the `natural-language-live.yml` workflow once the
   benchmark modules are ported (Stage 5).
 - **`benchmarks/results/` is absent on this branch** despite ADR-002 ("Negative results
