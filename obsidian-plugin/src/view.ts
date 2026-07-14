@@ -69,6 +69,14 @@ interface InterpretationProposal {
   defeasible: boolean;
 }
 
+interface ProposalAssessment {
+  assessment_id: string;
+  proposal_id: string;
+  verdict: "accepted" | "partially_accepted" | "rejected" | "needs_revision";
+  accepted_claim_ids: string[];
+  rejected_claim_ids: string[];
+}
+
 const STATUS_POLL_MS = 5_000;
 
 export class AntourageView extends ItemView {
@@ -383,8 +391,12 @@ export class AntourageView extends ItemView {
 
     const citations = new Map(proposal.citations.map((citation) => [citation.citation_id, citation]));
     const list = this.resultEl.createDiv({ cls: "fvsc-claims" });
+    const accepted = new Set<string>();
+    const rejected = new Set<string>();
+    const claimCards = new Map<string, HTMLElement>();
     for (const claim of proposal.claims) {
       const card = list.createDiv({ cls: "fvsc-claim-card" });
+      claimCards.set(claim.claim_id, card);
       const support = card.createSpan({
         text: this.supportLabel(claim.support_level),
         cls: `fvsc-support fvsc-support-${claim.support_level}`,
@@ -402,12 +414,79 @@ export class AntourageView extends ItemView {
       if (claim.citation_ids.length === 0) {
         links.createSpan({ text: "без источника" });
       }
+      const actions = card.createDiv({ cls: "fvsc-claim-actions" });
+      const accept = actions.createEl("button", { text: "Принять" });
+      const reject = actions.createEl("button", { text: "Отклонить" });
+      accept.onclick = () => {
+        accepted.add(claim.claim_id);
+        rejected.delete(claim.claim_id);
+        this.markClaimDecision(card, "accepted");
+      };
+      reject.onclick = () => {
+        rejected.add(claim.claim_id);
+        accepted.delete(claim.claim_id);
+        this.markClaimDecision(card, "rejected");
+      };
     }
+    const review = this.resultEl.createDiv({ cls: "fvsc-review" });
+    const save = review.createEl("button", { text: "Сохранить мою оценку", cls: "mod-cta" });
+    const reviewStatus = review.createSpan({ cls: "fvsc-review-status" });
+    save.onclick = async () => {
+      save.disabled = true;
+      try {
+        const all = proposal.claims.length;
+        const verdict =
+          accepted.size === all ? "accepted"
+          : rejected.size === all ? "rejected"
+          : accepted.size > 0 ? "partially_accepted"
+          : "needs_revision";
+        const assessment = await this.fetchJson<ProposalAssessment>("/v1/interpret/assess", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            proposal_id: proposal.proposal_id,
+            case_id: `interactive:${proposal.proposal_id.slice(0, 16)}`,
+            verdict,
+            accepted_claim_ids: Array.from(accepted),
+            rejected_claim_ids: Array.from(rejected),
+            reason_tags: ["owner-reviewed"],
+          }),
+        });
+        reviewStatus.setText(`Сохранено: ${this.verdictLabel(assessment.verdict)}`);
+        for (const claimId of assessment.accepted_claim_ids) {
+          const card = claimCards.get(claimId);
+          if (card) this.markClaimDecision(card, "accepted");
+        }
+        for (const claimId of assessment.rejected_claim_ids) {
+          const card = claimCards.get(claimId);
+          if (card) this.markClaimDecision(card, "rejected");
+        }
+      } catch (error) {
+        reviewStatus.setText(`Не сохранено: ${String(error)}`);
+      } finally {
+        save.disabled = false;
+      }
+    };
     const foot = this.resultEl.createDiv({ cls: "fvsc-proposal-foot" });
     foot.setText(
       "Это предложение Антуража, не запись в вашей канонической памяти. " +
-      "Открывайте цитаты и принимайте или отвергайте claims отдельно.",
+      "Оценка claims хранится отдельно и не переписывает исходники.",
     );
+  }
+
+  private markClaimDecision(
+    card: HTMLElement,
+    decision: "accepted" | "rejected",
+  ): void {
+    card.removeClass("fvsc-claim-accepted", "fvsc-claim-rejected");
+    card.addClass(`fvsc-claim-${decision}`);
+  }
+
+  private verdictLabel(verdict: ProposalAssessment["verdict"]): string {
+    if (verdict === "accepted") return "всё принято";
+    if (verdict === "partially_accepted") return "принято частично";
+    if (verdict === "rejected") return "всё отклонено";
+    return "нужна пересборка";
   }
 
   private supportLabel(level: ProposalClaim["support_level"]): string {
