@@ -4,8 +4,10 @@ import hashlib
 
 from fvsc.evidence import EvidenceEvent, EvidenceLedger
 from fvsc.ingest import (
+    JUDGMENT_EVENT_EXTRACTOR,
     OBSIDIAN_VAULT_ADAPTER,
     ParseConfig,
+    RussianJudgmentExtractor,
     SourceDocument,
     TELEGRAM_EXPORT_ADAPTER,
 )
@@ -107,6 +109,38 @@ def test_batch_builds_parser_events_with_relative_provenance_and_source_kinds() 
         assert event.provenance["source_revision"] == event.source_revision
         assert 0.0 <= event.modality <= 1.0
         assert 0.0 <= event.intensity <= 1.0
+
+
+def test_optional_judgment_extractor_adds_exact_relations_beside_fallback() -> None:
+    document = _document(
+        "note.md",
+        "Свобода не требует подчинения.",
+        observed_at=10.0,
+        source_kind="owner_reflection",
+    )
+
+    batch = build_evidence_batch(
+        [document],
+        config=_config(),
+        judgment_extractor=RussianJudgmentExtractor(),
+    )
+    exact = [
+        event for event in batch.events if event.extractor == JUDGMENT_EVENT_EXTRACTOR
+    ]
+
+    assert exact
+    assert any(
+        (event.subject, event.relation, event.object)
+        == ("свобода", "требовать", "подчинение")
+        for event in exact
+    )
+    relation = next(event for event in exact if event.relation == "требовать")
+    assert relation.polarity == -1.0
+    assert relation.context["judgment"]["defeasible"] is True
+    assert relation.context["source_span"]["start"] == 0
+    assert relation.provenance["managed_by"] == "fvsc-document-ingest-v1"
+    assert relation.provenance["source_assertion_key"]
+    assert any(event.relation == FVSC_CONTAINS_RELATION for event in batch.events)
 
 
 def test_unchanged_reconciliation_is_idempotent() -> None:

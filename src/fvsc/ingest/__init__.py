@@ -33,6 +33,7 @@ from .judgment_events import (
 )
 from .russian_judgments import (
     JudgmentCandidate,
+    JudgmentExtractor,
     MorphAnalysis,
     Morphology,
     Pymorphy3Morphology,
@@ -66,6 +67,7 @@ __all__ = [
     "JUDGMENT_EVENT_EXTRACTOR",
     "JUDGMENT_EVENT_EXTRACTOR_VERSION",
     "JudgmentCandidate",
+    "JudgmentExtractor",
     "MorphAnalysis",
     "Morphology",
     "OBSIDIAN_VAULT_ADAPTER",

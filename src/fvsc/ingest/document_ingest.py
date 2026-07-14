@@ -18,6 +18,11 @@ from ..runtime.materializer import (
     materialize_ledger,
 )
 from .parser import ParseConfig, text_to_semantic_input
+from .judgment_events import (
+    JUDGMENT_EVENT_EXTRACTOR,
+    judgment_to_evidence_event,
+)
+from .russian_judgments import JudgmentExtractor
 from .vault_ingest import SourceDocument, SourceKind
 
 
@@ -378,12 +383,15 @@ def build_evidence_batch(
     *,
     config: ParseConfig | None = None,
     adapter: str | None = None,
+    judgment_extractor: JudgmentExtractor | None = None,
 ) -> EvidenceBatch:
     """Build parser-derived assertions with per-document provenance.
 
     Parsing remains a global corpus pass so vocabulary and containment weights
     match the research pipeline. A second per-file provenance pass partitions
-    every assertion back to relative source ids.
+    every assertion back to relative source ids. When supplied, a judgment
+    extractor adds exact-relation L1 events beside (not instead of) that stable
+    language-agnostic baseline.
     """
     ordered = tuple(sorted(documents, key=lambda document: document.source_id))
     source_ids = tuple(document.source_id for document in ordered)
@@ -415,6 +423,19 @@ def build_evidence_batch(
     events: list[EvidenceEvent] = []
     for document in ordered:
         events.extend(_structural_events_for_document(document))
+        if judgment_extractor is not None and document.text:
+            for candidate in judgment_extractor.extract(document):
+                events.append(
+                    judgment_to_evidence_event(
+                        candidate.judgment,
+                        document=document,
+                        source_span=candidate.source_span,
+                        extractor=JUDGMENT_EVENT_EXTRACTOR,
+                        extractor_version=judgment_extractor.version,
+                        managed_by=DOCUMENT_INGEST_MANAGER,
+                        provenance={"judgment_extractor": judgment_extractor.version},
+                    )
+                )
     for concept in sorted(semantic_input):
         specification = semantic_input[concept]
         parser_weight = float(specification.get("weight", 1.0))

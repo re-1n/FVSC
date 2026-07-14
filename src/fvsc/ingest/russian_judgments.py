@@ -142,6 +142,12 @@ class JudgmentCandidate:
     source_span: SourceSpan
 
 
+class JudgmentExtractor(Protocol):
+    version: str
+
+    def extract(self, document: SourceDocument) -> tuple[JudgmentCandidate, ...]: ...
+
+
 def _sentence_spans(text: str) -> Iterable[tuple[int, int]]:
     for match in _SENTENCE_RE.finditer(text):
         start, end = match.span()
@@ -536,6 +542,7 @@ class RussianJudgmentExtractor:
 
 __all__ = [
     "JudgmentCandidate",
+    "JudgmentExtractor",
     "MorphAnalysis",
     "Morphology",
     "Pymorphy3Morphology",
