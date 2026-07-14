@@ -31,6 +31,13 @@ from .judgment_events import (
     SourceSpan,
     judgment_to_evidence_event,
 )
+from .russian_judgments import (
+    JudgmentCandidate,
+    MorphAnalysis,
+    Morphology,
+    Pymorphy3Morphology,
+    RussianJudgmentExtractor,
+)
 from .semantic_input import (
     ConceptDef,
     SemanticInput,
@@ -58,7 +65,12 @@ __all__ = [
     "JUDGMENT_DERIVATION",
     "JUDGMENT_EVENT_EXTRACTOR",
     "JUDGMENT_EVENT_EXTRACTOR_VERSION",
+    "JudgmentCandidate",
+    "MorphAnalysis",
+    "Morphology",
     "OBSIDIAN_VAULT_ADAPTER",
+    "Pymorphy3Morphology",
+    "RussianJudgmentExtractor",
     "SOURCE_KINDS",
     "SemanticInput",
     "SemanticInputParser",
