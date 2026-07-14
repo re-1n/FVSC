@@ -32,6 +32,10 @@ data/spaces/
 # Local vault-ingest state (derived from personal notes)
 .fvsc/
 
+# Owner-validated real-data gold and reports (personal semantic content)
+private_eval/
+data/private/
+
 # Large data files (download separately)
 data/conceptnet-assertions-5.7.0.csv.gz
 # RuWordNet XML (non-commercial license, request from louk_nat@mail.ru)
