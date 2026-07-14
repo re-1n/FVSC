@@ -94,11 +94,7 @@ export default class FvscPlugin extends Plugin {
         void this.startOllamaIfAvailable();
         void this.backend.start().then(() => {
           if (this.backend.getStatus() === "up") {
-            // Backend reports "up" the moment uvicorn's port opens, but
-            // /viz/status may still 500 for a beat while the router warms
-            // (lazy load of vault cache, conceptnet prior, etc.). Retry the
-            // first-time-build check up to ~10s so the modal reliably appears
-            // for new users instead of "через раз".
+            // Retry the first-sync check while the local runtime loads cache.
             void this.scheduleBootstrapCheck();
           }
         });
@@ -129,7 +125,7 @@ export default class FvscPlugin extends Plugin {
     for (let i = 0; i < 10; i++) {
       await new Promise((r) => window.setTimeout(r, 1000));
       try {
-        const r = await fetch(`${this.backend.baseUrl()}/viz/status`);
+        const r = await fetch(`${this.backend.baseUrl()}/health`);
         if (r.ok) {
           void BootstrapModal.maybeShow(this, this.backend, () => this.reloadOpenAntourageViews());
           return;
@@ -143,10 +139,7 @@ export default class FvscPlugin extends Plugin {
       try { await this.watcher.flush(); } catch { /* ignore */ }
       this.watcher.stop();
     }
-    if (this.backend?.getStatus() === "up") {
-      // Best-effort: ask backend to persist any unsaved live ingests.
-      try { await fetch(`${this.backend.baseUrl()}/viz/save_cache`, { method: "POST" }); } catch { /* ignore */ }
-    }
+    // Every reconciliation is atomically persisted by the clean service.
     await this.backend?.stop();
     this.app.workspace.detachLeavesOfType(ANTOURAGE_VIEW_TYPE);
   }
