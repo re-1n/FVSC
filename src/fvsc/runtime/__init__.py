@@ -6,6 +6,7 @@ from .materializer import (
     EvidenceEncoder,
     MaterializedConcept,
     MaterializedSnapshot,
+    PolicyEvidenceEncoder,
     materialize_ledger,
 )
 from .snapshots import (
@@ -23,6 +24,7 @@ __all__ = [
     "EvidenceEncoder",
     "MaterializedConcept",
     "MaterializedSnapshot",
+    "PolicyEvidenceEncoder",
     "SemanticSnapshot",
     "SnapshotConcept",
     "StateDelta",

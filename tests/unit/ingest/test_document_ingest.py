@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 
-from fvsc.evidence import EvidenceEvent, EvidenceLedger
+from fvsc.evidence import EvidenceEvent, EvidenceLedger, EvidencePolicy
 from fvsc.ingest import (
     JUDGMENT_EVENT_EXTRACTOR,
     OBSIDIAN_VAULT_ADAPTER,
@@ -141,6 +141,51 @@ def test_optional_judgment_extractor_adds_exact_relations_beside_fallback() -> N
     assert relation.provenance["managed_by"] == "fvsc-document-ingest-v1"
     assert relation.provenance["source_assertion_key"]
     assert any(event.relation == FVSC_CONTAINS_RELATION for event in batch.events)
+
+
+def test_policy_materializes_owner_exact_view_without_participant_contamination() -> None:
+    owner = _document(
+        "owner.md",
+        "Свобода требует ответственности.",
+        observed_at=10.0,
+        source_kind="owner_reflection",
+    )
+    participant = _document(
+        "participant.md",
+        "Тьма поглощает свет.",
+        observed_at=20.0,
+        source_kind="unknown",
+    )
+    batch = build_evidence_batch(
+        [owner, participant],
+        config=_config(),
+        judgment_extractor=RussianJudgmentExtractor(),
+    )
+    ledger = EvidenceLedger(batch.events)
+    policy = EvidencePolicy(
+        source_kinds=frozenset({"owner_reflection"}),
+        extractors=frozenset({JUDGMENT_EVENT_EXTRACTOR}),
+        derivations=frozenset({"linguistic-judgment"}),
+        max_interpretation_layer=1,
+    )
+
+    snapshot = materialize_evidence_ledger(ledger, dim=16, policy=policy)
+    syntax_only = materialize_evidence_ledger(
+        ledger,
+        dim=16,
+        policy=EvidencePolicy(
+            source_kinds=frozenset({"owner_reflection"}),
+            extractors=frozenset({JUDGMENT_EVENT_EXTRACTOR}),
+            max_interpretation_layer=0,
+        ),
+    )
+
+    assert snapshot.get("свобода") is not None
+    assert snapshot.get("требовать") is not None
+    assert snapshot.get("ответственность") is not None
+    assert snapshot.get("тьма") is None
+    assert snapshot.get("поглощать") is None
+    assert syntax_only.concept_count == 0
 
 
 def test_unchanged_reconciliation_is_idempotent() -> None:

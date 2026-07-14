@@ -2,6 +2,7 @@
 
 from .events import EvidenceEvent, EventKind
 from .ledger import EvidenceLedger
+from .policy import EvidencePolicy
 from .provenance import (
     ProvenanceMap,
     SilentPool,
@@ -13,6 +14,7 @@ __all__ = [
     "EventKind",
     "EvidenceEvent",
     "EvidenceLedger",
+    "EvidencePolicy",
     "ProvenanceMap",
     "SilentPool",
     "build_provenance",

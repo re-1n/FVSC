@@ -15,7 +15,7 @@ from typing import Protocol
 
 import numpy as np
 
-from ..evidence import EvidenceEvent, EvidenceLedger
+from ..evidence import EvidenceEvent, EvidenceLedger, EvidencePolicy
 from ..semantic import SemanticState
 
 
@@ -63,6 +63,27 @@ class EvidenceEncoder(Protocol):
     version: str
 
     def encode(self, event: EvidenceEvent) -> tuple[Contribution, ...]: ...
+
+
+@dataclass(frozen=True)
+class PolicyEvidenceEncoder:
+    """Apply a deterministic evidence-view policy before local encoding."""
+
+    encoder: EvidenceEncoder
+    policy: EvidencePolicy
+
+    @property
+    def dim(self) -> int:
+        return self.encoder.dim
+
+    @property
+    def version(self) -> str:
+        return f"{self.encoder.version}|policy:{self.policy.fingerprint}"
+
+    def encode(self, event: EvidenceEvent) -> tuple[Contribution, ...]:
+        if not self.policy.allows(event):
+            return ()
+        return self.encoder.encode(event)
 
 
 @lru_cache(maxsize=2048)

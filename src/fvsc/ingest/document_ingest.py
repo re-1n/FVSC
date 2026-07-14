@@ -10,11 +10,13 @@ import time
 from typing import Iterable, Mapping
 
 from ..evidence.events import EvidenceEvent
+from ..evidence.policy import EvidencePolicy
 from ..evidence.ledger import EvidenceLedger
 from ..evidence.provenance import SilentPool, build_provenance_and_silent
 from ..runtime.materializer import (
     DeterministicEvidenceEncoder,
     MaterializedSnapshot,
+    PolicyEvidenceEncoder,
     materialize_ledger,
 )
 from .parser import ParseConfig, text_to_semantic_input
@@ -632,6 +634,7 @@ def materialize_evidence_ledger(
     ledger: EvidenceLedger,
     *,
     dim: int = 64,
+    policy: EvidencePolicy | None = None,
 ) -> MaterializedSnapshot:
     """Build the deterministic semantic-space view without relation pseudo-nodes."""
     encoder = DeterministicEvidenceEncoder(
@@ -639,7 +642,12 @@ def materialize_evidence_ledger(
         excluded_terms=frozenset({FVSC_SELF_RELATION, FVSC_CONTAINS_RELATION}),
         excluded_relations=STRUCTURAL_RELATIONS,
     )
-    return materialize_ledger(ledger, encoder=encoder)
+    selected_encoder = (
+        PolicyEvidenceEncoder(encoder=encoder, policy=policy)
+        if policy is not None
+        else encoder
+    )
+    return materialize_ledger(ledger, encoder=selected_encoder)
 
 
 __all__ = [
