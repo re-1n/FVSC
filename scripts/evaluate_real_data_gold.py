@@ -18,9 +18,9 @@ from fvsc.ingest import (
 )
 from fvsc.ingest.document_ingest import build_evidence_batch
 from fvsc.retrieval import (
+    JudgmentSearchIndex,
+    LexicalSearchIndex,
     reciprocal_rank_fusion,
-    search_documents,
-    search_judgment_evidence,
 )
 
 
@@ -98,6 +98,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         derivations=frozenset({"linguistic-judgment"}),
         max_interpretation_layer=1,
     )
+    index_started = time.perf_counter()
+    lexical_index = LexicalSearchIndex(
+        export.documents,
+        owner_adopted_only=True,
+    )
+    judgment_index = JudgmentSearchIndex(
+        ledger,
+        morphology=extractor.morphology,
+        policy=policy,
+    )
+    index_seconds = time.perf_counter() - index_started
 
     lexical_rankings: list[RankedSources] = []
     judgment_rankings: list[RankedSources] = []
@@ -107,20 +118,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     for case in gold.cases:
         lexical_ids = tuple(
             hit.source_id
-            for hit in search_documents(
-                export.documents,
+            for hit in lexical_index.search(
                 case.question,
                 top_k=args.candidate_k,
-                owner_adopted_only=True,
             )
         )
         judgment_ids = tuple(
             hit.source_id
-            for hit in search_judgment_evidence(
-                ledger,
+            for hit in judgment_index.search(
                 case.question,
-                morphology=extractor.morphology,
-                policy=policy,
                 top_k=args.candidate_k,
             )
         )
@@ -190,6 +196,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         },
         "timing_seconds": {
             "ingest": round(ingest_seconds, 6),
+            "index": round(index_seconds, 6),
             "search_all_arms": round(search_seconds, 6),
         },
     }
