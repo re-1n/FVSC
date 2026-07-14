@@ -18,6 +18,10 @@ from ..integrations import (
     OllamaInterpretationBackend,
 )
 from ..interpretation import InterpretationBackend
+from ..interpretation import (
+    DEFAULT_INTERPRETATION_JOURNAL_RELATIVE_PATH,
+    InterpretationStore,
+)
 from .models import (
     FeedbackRequest,
     FeedbackResponse,
@@ -25,6 +29,8 @@ from .models import (
     InterpretRequest,
     InterpretationBackendStatusResponse,
     InterpretationProposalResponse,
+    ProposalAssessmentRequest,
+    ProposalAssessmentResponse,
     SearchHitResponse,
     SearchRequest,
     SearchResponse,
@@ -52,6 +58,7 @@ def _runtime_from_environment() -> VaultRuntime | None:
 
 _RUNTIME_UNSET = object()
 _BACKEND_UNSET = object()
+_STORE_UNSET = object()
 
 
 def _backend_from_environment() -> OllamaInterpretationBackend:
@@ -65,6 +72,7 @@ def create_app(
     runtime: VaultRuntime | None | object = _RUNTIME_UNSET,
     *,
     interpretation_backend: InterpretationBackend | None | object = _BACKEND_UNSET,
+    interpretation_store: InterpretationStore | None | object = _STORE_UNSET,
     auto_load: bool = True,
 ) -> FastAPI:
     selected_runtime = (
@@ -77,6 +85,14 @@ def create_app(
         if interpretation_backend is _BACKEND_UNSET
         else cast(InterpretationBackend | None, interpretation_backend)
     )
+    store_enabled = interpretation_store is not None
+    store_state: dict[str, InterpretationStore | None] = {
+        "store": (
+            None
+            if interpretation_store is _STORE_UNSET
+            else cast(InterpretationStore | None, interpretation_store)
+        )
+    }
     startup_state: dict[str, str | None] = {"error": None}
 
     @asynccontextmanager
@@ -116,6 +132,32 @@ def create_app(
                 detail="FVSC_VAULT_PATH is not configured",
             )
         return selected_runtime
+
+    def require_interpretation_store() -> InterpretationStore:
+        if not store_enabled:
+            raise HTTPException(
+                status_code=503,
+                detail="interpretation journal is not configured",
+            )
+        existing = store_state["store"]
+        if existing is not None:
+            return existing
+        runtime_value = require_runtime()
+        raw_path = os.environ.get("FVSC_INTERPRETATION_JOURNAL_PATH", "").strip()
+        path = (
+            Path(raw_path)
+            if raw_path
+            else runtime_value.vault_dir / DEFAULT_INTERPRETATION_JOURNAL_RELATIVE_PATH
+        )
+        try:
+            created = InterpretationStore(path)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="interpretation journal failed validation",
+            ) from exc
+        store_state["store"] = created
+        return created
 
     @application.exception_handler(RuntimeNotLoadedError)
     async def runtime_not_loaded_handler(_, exc: RuntimeNotLoadedError):
@@ -198,7 +240,11 @@ def create_app(
                 detail="interpretation backend is not configured",
             )
         try:
-            proposal = VaultInterpreter(runtime_value, selected_backend).interpret(
+            proposal = VaultInterpreter(
+                runtime_value,
+                selected_backend,
+                store=require_interpretation_store(),
+            ).interpret(
                 request.question,
                 top_k=request.top_k,
                 context_depth=request.context_depth,
@@ -208,6 +254,38 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return InterpretationProposalResponse.from_proposal(proposal)
+
+    @application.post(
+        "/v1/interpret/assess",
+        response_model=ProposalAssessmentResponse,
+    )
+    def assess_proposal(
+        request: ProposalAssessmentRequest,
+    ) -> ProposalAssessmentResponse:
+        recorded_at = time.time() if request.recorded_at is None else request.recorded_at
+        try:
+            assessment = require_interpretation_store().record_assessment(
+                proposal_id=request.proposal_id,
+                case_id=request.case_id,
+                verdict=request.verdict,
+                accepted_claim_ids=tuple(request.accepted_claim_ids),
+                rejected_claim_ids=tuple(request.rejected_claim_ids),
+                reason_tags=tuple(request.reason_tags),
+                recorded_at=recorded_at,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return ProposalAssessmentResponse.from_assessment(assessment)
+
+    @application.get(
+        "/v1/interpret/{proposal_id}/assessment",
+        response_model=ProposalAssessmentResponse,
+    )
+    def latest_assessment(proposal_id: str) -> ProposalAssessmentResponse:
+        assessment = require_interpretation_store().latest_assessment(proposal_id)
+        if assessment is None:
+            raise HTTPException(status_code=404, detail="proposal assessment not found")
+        return ProposalAssessmentResponse.from_assessment(assessment)
 
     @application.get("/v1/source", response_model=SourceResponse)
     def source(

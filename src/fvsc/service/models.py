@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from ..interpretation import InterpretationProposal
+from ..interpretation import InterpretationProposal, OwnerProposalAssessment
 from .runtime import RuntimeSearchHit, RuntimeStatus
 
 
@@ -143,6 +143,35 @@ class InterpretationBackendStatusResponse(_StrictModel):
     local_models: list[str]
 
 
+class ProposalAssessmentRequest(_StrictModel):
+    proposal_id: str = Field(min_length=64, max_length=64)
+    case_id: str = Field(min_length=1, max_length=512)
+    verdict: Literal["accepted", "partially_accepted", "rejected", "needs_revision"]
+    accepted_claim_ids: list[str] = Field(default_factory=list, max_length=128)
+    rejected_claim_ids: list[str] = Field(default_factory=list, max_length=128)
+    reason_tags: list[str] = Field(default_factory=list, max_length=64)
+    recorded_at: float | None = None
+
+
+class ProposalAssessmentResponse(_StrictModel):
+    assessment_id: str
+    proposal_id: str
+    case_id: str
+    verdict: str
+    accepted_claim_ids: list[str]
+    rejected_claim_ids: list[str]
+    reason_tags: list[str]
+    recorded_at: float
+    assessor_role: str
+
+    @classmethod
+    def from_assessment(
+        cls,
+        assessment: OwnerProposalAssessment,
+    ) -> "ProposalAssessmentResponse":
+        return cls(**assessment.to_dict())
+
+
 __all__ = [
     "FeedbackRequest",
     "FeedbackResponse",
@@ -152,6 +181,8 @@ __all__ = [
     "InterpretationProposalResponse",
     "ProposalCitationResponse",
     "ProposalClaimResponse",
+    "ProposalAssessmentRequest",
+    "ProposalAssessmentResponse",
     "SearchHitResponse",
     "SearchRequest",
     "SearchResponse",

@@ -8,6 +8,7 @@ import time
 from ..interpretation import (
     InterpretationBackend,
     InterpretationProposal,
+    InterpretationStore,
     generate_interpretation_proposal,
 )
 from .runtime import VaultRuntime
@@ -16,9 +17,16 @@ from .runtime import VaultRuntime
 class VaultInterpreter:
     """Compose accepted retrieval and proposal contracts without persistence."""
 
-    def __init__(self, runtime: VaultRuntime, backend: InterpretationBackend) -> None:
+    def __init__(
+        self,
+        runtime: VaultRuntime,
+        backend: InterpretationBackend,
+        *,
+        store: InterpretationStore | None = None,
+    ) -> None:
         self.runtime = runtime
         self.backend = backend
+        self.store = store
 
     def interpret(
         self,
@@ -44,7 +52,7 @@ class VaultInterpreter:
             )
             for document in documents
         }
-        return generate_interpretation_proposal(
+        proposal = generate_interpretation_proposal(
             question=question,
             documents=documents,
             backend=self.backend,
@@ -52,6 +60,9 @@ class VaultInterpreter:
             retrieval_method="lexical-char-ngram-v1",
             evidence_event_ids_by_source=event_ids,
         )
+        if self.store is not None:
+            self.store.append_proposal(proposal)
+        return proposal
 
 
 __all__ = ["VaultInterpreter"]

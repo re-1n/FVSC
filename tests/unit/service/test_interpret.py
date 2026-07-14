@@ -6,7 +6,11 @@ import pytest
 
 from fvsc.ingest import ParseConfig
 from fvsc.ingest.vault_sync import VaultSyncConfig
-from fvsc.interpretation import GeneratedClaim, GeneratedInterpretation
+from fvsc.interpretation import (
+    GeneratedClaim,
+    GeneratedInterpretation,
+    InterpretationStore,
+)
 from fvsc.service import VaultInterpreter, VaultRuntime
 
 
@@ -53,7 +57,8 @@ def _runtime(tmp_path) -> VaultRuntime:
 def test_vault_interpreter_uses_lexical_sources_and_attaches_exact_provenance(tmp_path) -> None:
     runtime = _runtime(tmp_path)
     backend = _Backend()
-    interpreter = VaultInterpreter(runtime, backend)
+    store = InterpretationStore(tmp_path / ".fvsc" / "interpretations.json")
+    interpreter = VaultInterpreter(runtime, backend, store=store)
 
     proposal = interpreter.interpret(
         "роль паразитов во внимании",
@@ -67,6 +72,7 @@ def test_vault_interpreter_uses_lexical_sources_and_attaches_exact_provenance(tm
     assert proposal.cited_source_ids == ("parasites.md",)
     assert proposal.citations[0].evidence_event_ids
     assert proposal.interpretation_layer == 3
+    assert store.get_proposal(proposal.proposal_id) == proposal
 
 
 def test_vault_interpreter_abstains_when_lexical_retrieval_has_no_context(tmp_path) -> None:

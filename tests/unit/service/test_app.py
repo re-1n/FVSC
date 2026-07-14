@@ -83,6 +83,19 @@ def test_http_transport_delegates_sync_search_source_interpretation_and_feedback
         assert proposal.status_code == 200
         assert proposal.json()["citations"][0]["source_id"] == "note.md"
         assert proposal.json()["defeasible"] is True
+        proposal_body = proposal.json()
+        assessment = client.post(
+            "/v1/interpret/assess",
+            json={
+                "proposal_id": proposal_body["proposal_id"],
+                "case_id": "interactive-1",
+                "verdict": "accepted",
+                "accepted_claim_ids": [proposal_body["claims"][0]["claim_id"]],
+                "recorded_at": 40.0,
+            },
+        )
+        assert assessment.status_code == 200
+        assert assessment.json()["verdict"] == "accepted"
 
         target = next(iter(runtime.ledger.active_events))
         feedback = client.post(
