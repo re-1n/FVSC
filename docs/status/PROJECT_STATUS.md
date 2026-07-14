@@ -11,7 +11,8 @@
   states (not history) in logical blocks into the `src/fvsc/` layout.
   - Rebuild progress: Stage 0 (scaffold) ✅, Stage 1 foundation ✅, Stage 3
     representations ✅, Stage 4a–4c ingest foundation ✅, Stage 4d vault ingest ✅,
-    and Stage 4d.1 real-data ingest correction ✅.
+    Stage 4d.1 real-data ingest correction ✅, and Stage 4e real-data semantic
+    evaluation ✅ locally (remote CI pending explicit push authorization).
   - Working vault chain: `Obsidian Markdown -> SourceDocument -> EvidenceLedger ->
     MaterializedSnapshot -> atomic JSON cache`. Source replacement/deletion is
     append-only; source kinds remain explicit; cache stores no raw note body or absolute
@@ -24,9 +25,16 @@
   - The first gold query retrieves its primary message first with the lexical baseline
     and expands to the correct three-message context. The semantic snapshot misses the
     rare metaphor term, so semantic superiority is **not demonstrated**.
-  - Next: Stage 4e real-data semantic evaluation. Validate the first gold interpretation,
-    add more owner questions, and compare source-cited semantic answers against the
-    lexical floor before spending another stage on FastAPI/chat/UI transport.
+  - Stage 4e restores portable exact-relation Judgments, source-span citations,
+    user-controlled interpretation views, feedback overlays, temporal contradictions,
+    Gold 001–015, and reusable evaluation indexes. Full local suite:
+    **193 passed / 1 skipped / 11 deselected**; boundary check green.
+  - Across all 15 owner questions, lexical MRR@10/recall@10 is **0.5262/0.6389**;
+    judgment-only is **0.2611/0.3778** and both tested fusions are worse than lexical.
+    Exact structure is retained for explanation and feedback, but lexical remains the
+    default source retriever. Semantic superiority is **not demonstrated**.
+  - Next: Stage 4f source-cited L2 interpretation proposals and owner scoring, then
+    restore FastAPI/chat/Ollama/Obsidian as thin transports over accepted contracts.
 
 ## Settled decisions (ADRs)
 
@@ -43,6 +51,8 @@
   graph ΔAUC −0.0079, paired CI95 [−0.049, +0.029] → `container_model_competitive`
   (no statistical superiority).
 - Prior density-only bakeoff: `no_demonstrated_added_value`.
+- Owner Gold 001–015: exact Judgment and hybrid retrieval do not beat the lexical
+  source floor. No semantic arm is promoted.
 
 These are **not** proof that density / containers are useless — only that the current
 static materializer + shape metric did not earn their complexity for parser-edge ranking.

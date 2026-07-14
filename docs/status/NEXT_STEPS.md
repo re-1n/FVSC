@@ -26,9 +26,14 @@ Migration order (foundation-first; each commit must build and pass tests):
      evidence excluded from semantic concepts, and a character n-gram lexical floor.
      Commits `1bea6d7` `f6f4389` `48f9916` `7a7b175`; **160 passed / 1 skipped /
      11 deselected** and GitHub CI green.
-   - **Next: Stage 4e — real-data semantic evaluation** — owner-validated open gold
-     interpretations with message citations, more natural-language gold questions, and
-     a comparison against the lexical floor. Retrieval alone is not a superiority claim.
+   - ✅ **Stage 4e — real-data semantic evaluation** — portable exact-relation
+     Judgments, source spans, policy-controlled layers, feedback, temporal
+     contradictions, private Gold 001–015, and lexical/exact/fusion comparison.
+     Lexical wins (MRR@10 0.5262 vs 0.2611 exact); no semantic arm is promoted.
+   - **Next: Stage 4f — source-cited interpretation proposals** — retrieve original
+     evidence with the accepted lexical floor; produce typed L2 proposals with exact
+     citations and forbidden-link checks; score against free-form owner meaning; never
+     auto-record a proposal as owner evidence.
    - **Then: FastAPI + chat/Ollama** — thin transports over accepted ingest/evaluation
      contracts; no ingest or evaluation logic in routers.
    - Visualization + Obsidian bridge.
