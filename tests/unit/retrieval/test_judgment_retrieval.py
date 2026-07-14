@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Tests for source-cited judgment retrieval."""
+
 import pytest
 
 from fvsc.evidence import (
