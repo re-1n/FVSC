@@ -13,7 +13,8 @@
     representations ✅, Stage 4a–4c ingest foundation ✅, Stage 4d vault ingest ✅,
     Stage 4d.1 real-data ingest correction ✅, Stage 4e real-data semantic
     evaluation ✅, Stage 4f cited interpretation ✅, and Stage 4g thin local
-    transports/Obsidian ✅ locally (remote CI pending explicit push authorization).
+    transports/Obsidian ✅. Checkpoint `e8a6d91` is pushed; GitHub Actions run 221 is
+    green.
   - Working vault chain: `Obsidian Markdown -> SourceDocument -> EvidenceLedger ->
     MaterializedSnapshot -> atomic JSON cache`. Source replacement/deletion is
     append-only; source kinds remain explicit; cache stores no raw note body or absolute
@@ -54,6 +55,7 @@
 - ADR-003 Density is an optional local state, not canonical.
 - ADR-004 Antourage outputs are not owner evidence.
 - ADR-005 Dream and narrative assets use sandbox branches.
+- ADR-006 Semantic compression is referentially reversible, not text-invertible.
 
 ## Honest results on record
 
@@ -78,3 +80,5 @@ C5 validation is required before any promotion claim.
 - Distinguish `dream_report` / `owner_reflection` / external fact.
 - Do not claim semantic superiority from source retrieval alone; the owner must validate
   open interpretations and evidence links on a real-data gold set.
+- Do not describe generated prose as text recovered from a semantic map. Exact wording
+  is resolved from retained source revisions; map unfolding is a cited interpretation.

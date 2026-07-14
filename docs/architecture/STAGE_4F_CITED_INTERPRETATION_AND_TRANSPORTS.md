@@ -1,8 +1,7 @@
 # Stage 4f/4g — cited interpretation and thin transports
 
-**Status:** implemented locally on `integration/fvsc-core-v1` (2026-07-14).
-Remote CI covers the previous pushed checkpoint `cc1a6ae`; the current local
-checkpoint requires explicit push authorization before GitHub can test it.
+**Status:** implemented and pushed on `integration/fvsc-core-v1` (2026-07-14).
+Checkpoint `e8a6d91` passed GitHub Actions run 221.
 
 ## Purpose
 

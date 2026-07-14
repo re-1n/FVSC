@@ -43,8 +43,8 @@ Migration order (foundation-first; each commit must build and pass tests):
    vault data, voice data, or generated folders.
 5. **Verify** — current local checkpoint: **229 passed / 2 skipped / 11 deselected**,
    legacy boundary green, Obsidian production build green, private retrieval result
-   reproduced. Remote CI requires explicit push authorization. Do not open or merge a
-   PR without a separate user instruction.
+   reproduced. Checkpoint `e8a6d91` is pushed and GitHub Actions run 221 is green. Do
+   not open or merge a PR without a separate user instruction.
 
 ## Follow-ups (not blocking)
 
