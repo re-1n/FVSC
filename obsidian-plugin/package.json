@@ -1,7 +1,7 @@
 {
   "name": "fvsc-antourage",
   "version": "0.1.0",
-  "description": "Obsidian plugin frontend for FVSC Antourage.",
+  "description": "Source-cited Obsidian frontend for FVSC Antourage.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
