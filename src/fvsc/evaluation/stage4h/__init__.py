@@ -24,6 +24,13 @@ from .candidates import (
     corpus_digest,
     freeze_stage4h_candidates,
 )
+from .runner import (
+    Stage4hArmResult,
+    Stage4hGenerationTelemetry,
+    Stage4hRunResultBundle,
+    run_local_stage4h,
+    validate_local_backend,
+)
 
 __all__ = [
     "STAGE4H_REQUIRED_ARMS",
@@ -33,11 +40,14 @@ __all__ = [
     "FrozenCandidateBundle",
     "FrozenCandidateSet",
     "Stage4hArm",
+    "Stage4hArmResult",
     "Stage4hCitationReview",
     "Stage4hClaimReview",
     "Stage4hModelConfig",
+    "Stage4hGenerationTelemetry",
     "Stage4hOwnerReview",
     "Stage4hRunSpec",
+    "Stage4hRunResultBundle",
     "Stage4hThresholds",
     "StructuralSearchIndex",
     "candidate_bundle_json",
@@ -46,4 +56,6 @@ __all__ = [
     "corpus_digest",
     "file_sha256",
     "freeze_stage4h_candidates",
+    "run_local_stage4h",
+    "validate_local_backend",
 ]
