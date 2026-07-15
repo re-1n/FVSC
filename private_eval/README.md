@@ -23,11 +23,33 @@ Other files created under `private_eval/`, including `interpretation_journal.jso
 generated reports, remain ignored unless the owner authorizes a separate reviewed
 release.
 
+## Stage 4h challenge addendum
+
+`fvsc_stage4h_challenge_001_002.json` is a separate two-case addendum. It does not
+rewrite Gold 001–015 or the retrieval numbers already reported on that frozen seed.
+The cases pin the two severe errors found by the earlier blind probe:
+
+- a participant comment must not become evidence about the owner's wellbeing;
+- a poetic source that does not establish whether its referent is real or fictional
+  requires an explicit source-grounded abstention.
+
+The referent case deliberately does not publish or pass a hidden real/fictional truth
+label to the interpreter. It tests whether the system respects what the cited source
+can establish. The addendum follows the same source-body-free publication boundary as
+Gold 001–015.
+
 ## Frozen identity
 
 - schema: `1`
 - cases: `15`
 - SHA-256: `609f92d2696490369c3dfaae9eeb598fde0c1b1e8bb3e2977e16ef5dca0a37e1`
+- publication authorization: owner, 2026-07-15
+
+Challenge addendum identity:
+
+- schema: `1`
+- cases: `2`
+- SHA-256: `9fb043a20199d774aef9c2fcd3764aedaa70a724b74c15dd22043130e71ff665`
 - publication authorization: owner, 2026-07-15
 
 Any change to the JSON creates a new evaluation revision and must update the digest,

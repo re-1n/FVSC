@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -102,3 +103,23 @@ def test_schema_rejects_duplicate_refs_unknown_links_and_invalid_rankings() -> N
         )
     with pytest.raises(ValueError, match="abstained"):
         RankedSources(case_id="x", source_ids=("a",), abstained=True)
+
+
+def test_stage4h_challenge_addendum_pins_authorship_and_referent_boundaries() -> None:
+    root = Path(__file__).resolve().parents[3]
+    challenge = load_gold_set(
+        root / "private_eval" / "fvsc_stage4h_challenge_001_002.json"
+    )
+
+    assert tuple(case.case_id for case in challenge.cases) == (
+        "stage4h-challenge-001",
+        "stage4h-challenge-002",
+    )
+    wellbeing, referent = challenge.cases
+    assert wellbeing.negative_source_ids == (
+        "telegram/private-diary/messages/message-770.json",
+    )
+    assert "другой участник" in wellbeing.owner_interpretation
+    assert referent.decision == "open"
+    assert "не утверждать" in referent.owner_interpretation
+    assert len(referent.rejected_interpretations) == 2

@@ -37,6 +37,7 @@ data/spaces/
 private_eval/*
 !private_eval/README.md
 !private_eval/fvsc_gold_001_015.json
+!private_eval/fvsc_stage4h_challenge_001_002.json
 data/private/
 
 # Large data files (download separately)
