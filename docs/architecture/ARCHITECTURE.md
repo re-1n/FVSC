@@ -7,16 +7,27 @@
 
 ## Three layers
 
-1. **EvidenceLedger** — append-only canonical memory (statements, episodes, sources,
-   time, retraction, supersession, provenance). Source of truth. [ADR-001]
-2. **ContainerCore** — explicit asymmetric containers + directed nestings (A←B ≠ B←A).
-   Semantic-structure layer. **Experimental.** [ADR-002]
-3. **Local state** — swappable backend: facet distribution / graph / density matrix /
-   other operator backend. Density is **optional local state**, never canonical. [ADR-003]
+1. **Canonical evidence** — retained source revisions plus the append-only
+   `EvidenceLedger` (statements, episodes, authorship, time, retraction, supersession,
+   exact Judgments, and provenance). Source of truth. [ADR-001]
+2. **Derived semantic atlas** — versioned, relation-conditioned views materialized from
+   canonical evidence: lexical and exact indexes, graph paths, temporal projections,
+   explicit containers, contextual vectors/regions, density state, and future
+   backends. No view is universally privileged. [ADR-007]
+3. **Cited interpretation and interaction** — query plans, defeasible L2/L3 proposals,
+   owner review, HTTP/Obsidian/Antourage clients, and sandbox output. Generated content
+   is not canonical owner evidence. [ADR-004, ADR-005]
 
-> EvidenceLedger stores history; ContainerCore stores compositional structure; density
-> matrices may store local contextual state of containers. Matrices are not canonical
-> memory.
+> EvidenceLedger stores history. The semantic atlas exposes selected computable
+> relations while every result remains resolvable to evidence. ContainerCore is one
+> experimental directed view [ADR-002]; density is one optional local-state view
+> [ADR-003]. Neither is the definition of meaning or canonical memory.
+
+The atlas preserves the whitepaper's existing typed relations, relation transforms,
+tensor-factor idea, graph view, contextual facets, recursive propagation, temporal
+traces, metaphor mappings, and L0–L3 policy. The correction is that these capabilities
+are not forced through one universal density operator. See
+[`SEMANTIC_ATLAS.md`](SEMANTIC_ATLAS.md).
 
 ## Compression and unfolding
 
@@ -74,6 +85,9 @@ The archive must not be confused with the semantic representation.
   not copies of source bodies.
 - Semantic projections are referentially reversible but not required to be
   text-invertible [ADR-006].
+- Semantic scores declare their relation, context/time/layer scope, view version, and
+  provenance. A universal distance or universal concept operator is not a core
+  contract [ADR-007].
 - Dream / narrative generation runs in sandbox branches, never in canonical memory
   [ADR-005].
 
@@ -83,3 +97,11 @@ The archive must not be confused with the semantic representation.
 - **Experimental runners** — `benchmarks/runners/` (ported later)
 - **Registered results** — `benchmarks/results/` (kept; evidence of negative results)
 - **Raw data** — `data/` (gitignored except small `fixtures/`)
+
+[ADR-001]: ../adr/ADR-001-evidence-ledger-is-canonical.md
+[ADR-002]: ../adr/ADR-002-containercore-is-experimental.md
+[ADR-003]: ../adr/ADR-003-density-is-optional-local-state.md
+[ADR-004]: ../adr/ADR-004-antourage-outputs-are-not-owner-evidence.md
+[ADR-005]: ../adr/ADR-005-dream-and-narrative-use-sandbox-branches.md
+[ADR-006]: ../adr/ADR-006-semantic-compression-is-referentially-reversible.md
+[ADR-007]: ../adr/ADR-007-semantic-atlas-uses-relation-conditioned-views.md

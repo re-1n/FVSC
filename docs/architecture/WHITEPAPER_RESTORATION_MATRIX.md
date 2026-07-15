@@ -17,6 +17,9 @@ The following contracts already work and must survive every restoration slice:
   committed or persisted in the derived cache;
 - density and ContainerCore remain optional views until a gold evaluation earns
   their complexity.
+- no scalar distance, density operator, container, graph, or embedding is treated as
+  the universal representation of personal meaning; views declare the relations and
+  operations they support [ADR-007].
 
 ## Delta from the whitepaper
 
@@ -31,6 +34,7 @@ The following contracts already work and must survive every restoration slice:
 | Metaphor, image, dream, and open meaning | Source kind and sandbox ADRs exist; no canonical topic taxonomy | Represent mappings as open, evidence-linked proposals; keep imagery and literal claims distinct |
 | Evaluation | Stage 4d.1 established source fidelity and a lexical floor | Use private Gold 001-015, including negative/split decisions, to compare exact, graph, container, and density views |
 | Chat/Ollama/Obsidian | Main contains an older MVP; clean service folders are mostly empty | Restore thin transports only after the evidence/evaluation contracts are accepted |
+| One density space as the universal semantic substrate | Density, explicit containers, graph, relation transforms, tensor factors, temporal state, and metaphor mappings all occur in the whitepaper; density was incorrectly privileged as the sole structural object | Preserve those operations as a provenance-grounded atlas of relation-conditioned views; promote one view at a time on its own owner-gold task |
 
 ## Restoration order
 
@@ -39,9 +43,15 @@ The following contracts already work and must survive every restoration slice:
    a cheap fallback and comparison arm.
 3. Layered proposals, owner feedback, and temporal/contradiction views.
 4. Private gold evaluator with citations, negative links, and abstention scoring.
-5. Promote only the representation that beats the lexical floor on owner-validated
-   meaning; otherwise keep lexical retrieval and expose the failure.
+5. Promote only a registered view that beats the relevant simple baseline on its
+   owner-validated relation/query family while preserving citations; otherwise keep
+   the baseline and expose the failure.
 6. Restore service, chat/Ollama, visualization, and Obsidian as thin clients.
+
+The restoration order does not require implementing every candidate geometry. The
+owner-scored interpretation test classifies the next failure first; only then is one
+matching view (for example contextual retrieval, directed inclusion, hierarchy,
+temporal trajectory, or ambiguity state) selected for an ablation.
 
 ## New real-data constraints
 
