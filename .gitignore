@@ -32,8 +32,11 @@ data/spaces/
 # Local vault-ingest state (derived from personal notes)
 .fvsc/
 
-# Owner-validated real-data gold and reports (personal semantic content)
-private_eval/
+# Owner-validated real-data evaluation. Keep runtime journals/reports local; publish
+# only the explicitly owner-authorized, source-body-free Gold seed and its README.
+private_eval/*
+!private_eval/README.md
+!private_eval/fvsc_gold_001_015.json
 data/private/
 
 # Large data files (download separately)
