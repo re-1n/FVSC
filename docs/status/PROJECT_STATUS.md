@@ -1,4 +1,4 @@
-# Project status — 2026-07-14
+# Project status — 2026-07-15
 
 ## Where we are
 
@@ -12,9 +12,10 @@
   - Rebuild progress: Stage 0 (scaffold) ✅, Stage 1 foundation ✅, Stage 3
     representations ✅, Stage 4a–4c ingest foundation ✅, Stage 4d vault ingest ✅,
     Stage 4d.1 real-data ingest correction ✅, Stage 4e real-data semantic
-    evaluation ✅, Stage 4f cited interpretation ✅, and Stage 4g thin local
-    transports/Obsidian ✅. Checkpoint `e8a6d91` is pushed; GitHub Actions run 221 is
-    green.
+    evaluation ✅, Stage 4f cited interpretation ✅, Stage 4g thin local
+    transports/Obsidian ✅, and the semantic-representation audit ✅. The last remote
+    checkpoint before that documentation slice is `25c6839`; draft PR #2 tests every
+    pushed branch head.
   - Working vault chain: `Obsidian Markdown -> SourceDocument -> EvidenceLedger ->
     MaterializedSnapshot -> atomic JSON cache`. Source replacement/deletion is
     append-only; source kinds remain explicit; cache stores no raw note body or absolute
@@ -43,9 +44,21 @@
     boundary check and production TypeScript build green.
   - The private Gold 001–015 retrieval rerun is unchanged: lexical remains default,
     no exact/hybrid arm is promoted, and negative hits remain zero.
-  - Next: run actual Ollama proposals over Gold 001–015 and collect owner claim-level
-    assessments. This is the first test of interpretation usefulness, not another
-    architecture-building stage.
+  - A conversational blind-question probe over the private diary produced useful
+    interpretations and substantial owner agreement, but also exposed a false owner
+    attribution and an unsupported real-person assumption for a fictional referent.
+    The probe did not log a frozen candidate set, model/version, output, or ablation
+    through the FVSC runtime. It is qualitative design evidence, **not** a benchmark and
+    not proof that FVSC rather than the strong surrounding model produced the result.
+  - The whitepaper representation audit preserves its exact Judgments, directed
+    containers, relation transforms, tensor factors, graph view, recursive propagation,
+    temporal traces, metaphor mappings, and L0–L3 policy. ADR-007 removes only the
+    unsupported privilege of one universal density space and organizes those existing
+    constructs as a provenance-grounded atlas of relation-conditioned views.
+  - Next: run the controlled Stage 4h attribution test. Compare the configured local
+    model and a declared reference arm on frozen cited candidate sets; separate
+    retrieval, interpretation, and source-attribution errors. Use the result to select
+    at most one next view experiment rather than building another universal map.
 
 ## Settled decisions (ADRs)
 
@@ -56,6 +69,8 @@
 - ADR-004 Antourage outputs are not owner evidence.
 - ADR-005 Dream and narrative assets use sandbox branches.
 - ADR-006 Semantic compression is referentially reversible, not text-invertible.
+- ADR-007 Semantic computation uses a provenance-grounded atlas of
+  relation-conditioned views; no derived representation is universally privileged.
 
 ## Honest results on record
 
@@ -65,10 +80,15 @@
 - Prior density-only bakeoff: `no_demonstrated_added_value`.
 - Owner Gold 001–015: exact Judgment and hybrid retrieval do not beat the lexical
   source floor. No semantic arm is promoted.
+- The conversational owner probe suggests that cited synthesis can be useful, but it
+  cannot yet separate the contribution of retrieval/structure from the capability of
+  the surrounding model. Two corrected failure modes—authorship and fictional/real
+  referent status—are required Stage 4h checks.
 
-These are **not** proof that density / containers are useless — only that the current
-static materializer + shape metric did not earn their complexity for parser-edge ranking.
-C5 validation is required before any promotion claim.
+These are **not** proof that density / containers are useless or that a unified tensor
+representation is impossible. They show that the current materializers and operations
+did not earn universal status or added complexity on their registered tasks. Each
+future view requires a relation-specific validation before promotion.
 
 ## Hard constraints
 
@@ -82,3 +102,6 @@ C5 validation is required before any promotion claim.
   open interpretations and evidence links on a real-data gold set.
 - Do not describe generated prose as text recovered from a semantic map. Exact wording
   is resolved from retained source revisions; map unfolding is a cited interpretation.
+- Do not describe one distance, matrix, embedding, graph, or container as the complete
+  representation of personal meaning. Preserve whitepaper constructs as candidate
+  views and promote only measured operations.

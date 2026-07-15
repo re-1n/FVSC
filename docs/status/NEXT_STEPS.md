@@ -36,15 +36,31 @@ Migration order (foundation-first; each commit must build and pass tests):
    - ✅ **Stage 4g — FastAPI + Ollama + Obsidian** — clean `VaultRuntime`, thin local
      HTTP routes, strict loopback JSON Ollama adapter, native lexical source search,
      cited interpretation, source opening, and claim review in Obsidian.
-   - **Next: Stage 4h — owner-scored live interpretation test** — run the configured
-     local model over Gold 001–015, review every claim and citation, measure forbidden
-     composites/abstention/latency, and decide from evidence what must be rebuilt.
+   - ✅ **Semantic-representation audit** — ADR-007 and the semantic-atlas architecture
+     preserve the whitepaper's Judgment, container, relation-transform, tensor-factor,
+     graph, recursive, temporal, metaphor, and L0–L3 work while demoting density from a
+     universal substrate to an optional local view. The audit also corrects the legacy
+     unbounded containment ratio, eigenvector/facet overclaim, non-unique matrix
+     decomposition, and unproven fractal/convergence claims.
+   - **Next: Stage 4h — controlled owner-scored interpretation attribution test** —
+     freeze Gold questions and candidate source sets; run the configured local model
+     with logged model/version/parameters; include a declared reference-model arm on
+     the same evidence where privacy permits; review every claim/citation; measure false
+     authorship, fictional-vs-real referent assumptions, forbidden composites,
+     abstention, latency, and cost. Separate retrieval failure from interpretation
+     failure and model-capacity failure.
+   - **Decision after Stage 4h** — choose at most one relation-conditioned view whose
+     inductive bias matches the dominant error (for example contextual usage retrieval,
+     directed inclusion, temporal trajectory, or ambiguity state). Register a baseline
+     and ablation before implementation. Do not build the full research menu.
+     Protocol: [`STAGE_4H_CONTROLLED_ATTRIBUTION_TEST.md`](../architecture/STAGE_4H_CONTROLLED_ATTRIBUTION_TEST.md).
    Keep HTTP, plugin, and LLM dependencies outside the ingest layer. Do not commit
    vault data, voice data, or generated folders.
-5. **Verify** — current local checkpoint: **229 passed / 2 skipped / 11 deselected**,
+5. **Verify** — implementation checkpoint: **229 passed / 2 skipped / 11 deselected**,
    legacy boundary green, Obsidian production build green, private retrieval result
-   reproduced. Checkpoint `e8a6d91` is pushed and GitHub Actions run 221 is green. Do
-   not open or merge a PR without a separate user instruction.
+   reproduced. Remote checkpoint `25c6839` passed GitHub Actions run 222. Draft PR #2
+   already exists and validates each pushed `integration/fvsc-core-v1` head; do not
+   create or merge another PR without separate user instruction.
 
 ## Follow-ups (not blocking)
 
