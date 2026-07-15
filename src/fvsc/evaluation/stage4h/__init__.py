@@ -2,11 +2,13 @@
 
 from .contracts import (
     STAGE4H_REQUIRED_ARMS,
+    MIN_STAGE4H_CONFIRMATORY_CASES,
     CandidateRole,
     ClaimReviewVerdict,
     FrozenCandidate,
     FrozenCandidateSet,
     Stage4hArm,
+    Stage4hEvaluationMode,
     Stage4hCitationReview,
     Stage4hClaimReview,
     Stage4hModelConfig,
@@ -42,9 +44,18 @@ from .review_pack import (
     review_pack_json,
     review_pack_markdown,
 )
+from .scoring import (
+    Stage4hArmSummary,
+    Stage4hAttributionReport,
+    Stage4hPairedSummary,
+    Stage4hRetrievalSummary,
+    attribution_report_json,
+    score_stage4h_attribution,
+)
 
 __all__ = [
     "STAGE4H_REQUIRED_ARMS",
+    "MIN_STAGE4H_CONFIRMATORY_CASES",
     "CandidateRole",
     "ClaimReviewVerdict",
     "FrozenCandidate",
@@ -53,7 +64,10 @@ __all__ = [
     "BlindedReviewItem",
     "BlindedSourceExcerpt",
     "Stage4hArm",
+    "Stage4hEvaluationMode",
     "Stage4hArmResult",
+    "Stage4hArmSummary",
+    "Stage4hAttributionReport",
     "Stage4hBlindMap",
     "Stage4hBlindMapEntry",
     "Stage4hCitationReview",
@@ -61,13 +75,16 @@ __all__ = [
     "Stage4hModelConfig",
     "Stage4hGenerationTelemetry",
     "Stage4hOwnerReview",
+    "Stage4hPairedSummary",
     "Stage4hRunSpec",
     "Stage4hRunResultBundle",
     "Stage4hReviewPack",
+    "Stage4hRetrievalSummary",
     "Stage4hThresholds",
     "StructuralSearchIndex",
     "candidate_bundle_json",
     "build_blinded_review_pack",
+    "attribution_report_json",
     "canonical_json",
     "content_digest",
     "corpus_digest",
@@ -77,5 +94,6 @@ __all__ = [
     "review_pack_json",
     "review_pack_markdown",
     "run_local_stage4h",
+    "score_stage4h_attribution",
     "validate_local_backend",
 ]

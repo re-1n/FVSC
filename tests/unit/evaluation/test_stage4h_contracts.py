@@ -48,6 +48,7 @@ def test_run_spec_is_content_addressed_and_round_trips() -> None:
     assert len(spec.run_id) == 64
     assert spec.model.temperature == 0.0
     assert spec.model.seed == 42
+    assert spec.evaluation_mode == "pilot"
     assert spec.thresholds.max_severe_errors == 0
 
     changed = dict(spec.to_dict())
@@ -69,6 +70,11 @@ def test_run_spec_requires_all_local_arms_and_explicit_a3_scope() -> None:
         external_reference_scope="owner-approved selected source bodies",
     )
     assert "A3" in enabled.arms
+
+    with pytest.raises(ValueError, match="evaluation mode"):
+        _spec(evaluation_mode="marketing")
+    with pytest.raises(ValueError, match="at least 17"):
+        _spec(evaluation_mode="confirmatory")
 
 
 def test_frozen_candidates_bind_rank_revision_and_method_without_source_text() -> None:

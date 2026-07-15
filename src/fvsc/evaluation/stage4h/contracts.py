@@ -18,6 +18,7 @@ from typing import Any, Literal, Mapping, Sequence
 
 
 Stage4hArm = Literal["A0", "A1", "A2", "A3", "A4"]
+Stage4hEvaluationMode = Literal["pilot", "confirmatory"]
 CandidateRole = Literal["ranked", "context", "oracle"]
 ClaimReviewVerdict = Literal[
     "accepted",
@@ -28,7 +29,9 @@ ClaimReviewVerdict = Literal[
 CitationReviewVerdict = Literal["supports", "partial", "unsupported"]
 
 _STAGE4H_ARMS = frozenset({"A0", "A1", "A2", "A3", "A4"})
+_STAGE4H_EVALUATION_MODES = frozenset({"pilot", "confirmatory"})
 STAGE4H_REQUIRED_ARMS = frozenset({"A0", "A1", "A2", "A4"})
+MIN_STAGE4H_CONFIRMATORY_CASES = 17
 _CANDIDATE_ROLES = frozenset({"ranked", "context", "oracle"})
 _CLAIM_REVIEW_VERDICTS = frozenset(
     {"accepted", "partially_accepted", "rejected", "needs_revision"}
@@ -297,6 +300,7 @@ class Stage4hRunSpec:
     prompt_source_cap: int = 12
     context_depth: int = 1
     external_reference_scope: str | None = None
+    evaluation_mode: Stage4hEvaluationMode = "pilot"
     schema_version: int = 1
     protocol_version: str = "stage4h-v1"
 
@@ -305,6 +309,8 @@ class Stage4hRunSpec:
             raise ValueError("unsupported Stage 4h run schema version")
         if self.protocol_version != "stage4h-v1":
             raise ValueError("unsupported Stage 4h protocol version")
+        if self.evaluation_mode not in _STAGE4H_EVALUATION_MODES:
+            raise ValueError("unknown Stage 4h evaluation mode")
         object.__setattr__(self, "gold_sha256", _digest(self.gold_sha256, field="gold_sha256"))
         object.__setattr__(
             self,
@@ -317,6 +323,14 @@ class Stage4hRunSpec:
             _digest(self.corpus_sha256, field="corpus_sha256"),
         )
         object.__setattr__(self, "case_ids", _unique_strings(self.case_ids, field="case_id"))
+        if (
+            self.evaluation_mode == "confirmatory"
+            and len(self.case_ids) < MIN_STAGE4H_CONFIRMATORY_CASES
+        ):
+            raise ValueError(
+                "confirmatory Stage 4h requires at least "
+                f"{MIN_STAGE4H_CONFIRMATORY_CASES} cases"
+            )
         arms = tuple(str(value).strip() for value in self.arms)
         if len(arms) != len(set(arms)) or any(value not in _STAGE4H_ARMS for value in arms):
             raise ValueError("Stage 4h arms must be unique known arm ids")
@@ -361,6 +375,7 @@ class Stage4hRunSpec:
             "corpus_sha256": self.corpus_sha256,
             "created_at": self.created_at,
             "external_reference_scope": self.external_reference_scope,
+            "evaluation_mode": self.evaluation_mode,
             "gold_sha256": self.gold_sha256,
             "model": self.model.to_dict(),
             "prompt_source_cap": self.prompt_source_cap,
@@ -402,6 +417,7 @@ class Stage4hRunSpec:
             prompt_source_cap=value.get("prompt_source_cap", 12),
             context_depth=value.get("context_depth", 1),
             external_reference_scope=value.get("external_reference_scope"),
+            evaluation_mode=value.get("evaluation_mode", "pilot"),
             schema_version=value.get("schema_version", 0),
             protocol_version=value.get("protocol_version", ""),
         )
@@ -789,6 +805,7 @@ def load_run_spec(path: Path) -> Stage4hRunSpec:
 
 __all__ = [
     "MAX_STAGE4H_CONTRACT_BYTES",
+    "MIN_STAGE4H_CONFIRMATORY_CASES",
     "STAGE4H_REQUIRED_ARMS",
     "CandidateRole",
     "CitationReviewVerdict",
@@ -796,6 +813,7 @@ __all__ = [
     "FrozenCandidate",
     "FrozenCandidateSet",
     "Stage4hArm",
+    "Stage4hEvaluationMode",
     "Stage4hCitationReview",
     "Stage4hClaimReview",
     "Stage4hModelConfig",
