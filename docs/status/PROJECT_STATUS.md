@@ -14,7 +14,8 @@
     Stage 4d.1 real-data ingest correction ✅, Stage 4e real-data semantic
     evaluation ✅, Stage 4f cited interpretation ✅, Stage 4g thin local
     transports/Obsidian ✅, and the semantic-representation audit ✅. Audit checkpoint
-    `f5cdefa` passed GitHub Actions run 223; draft PR #2 tests every pushed branch head.
+    `f5cdefa` passed GitHub Actions run 223. Stage 4h harness checkpoint `2fc1c66`
+    passed GitHub Actions run 225; draft PR #2 tests every pushed branch head.
   - Working vault chain: `Obsidian Markdown -> SourceDocument -> EvidenceLedger ->
     MaterializedSnapshot -> atomic JSON cache`. Source replacement/deletion is
     append-only; source kinds remain explicit; cache stores no raw note body or absolute
@@ -78,6 +79,7 @@
     quality, citation, safety, confidence, and latency gate.
   - Current local verification after the Stage 4h harness: **255 passed / 1 skipped /
     11 deselected**, legacy-boundary check green, Obsidian production build green.
+    Remote checkpoint `2fc1c66` passed GitHub Actions run 225.
     This execution environment has no installed/running Ollama model, so the actual
     owner-scored pilot is the next runtime action rather than a fabricated benchmark
     result.

@@ -62,10 +62,9 @@ Migration order (foundation-first; each commit must build and pass tests):
    vault data, voice data, or generated folders.
 5. **Verify** — current local checkpoint: **255 passed / 1 skipped / 11 deselected**,
    legacy boundary green, Obsidian production build green, frozen Gold/addendum digests
-   unchanged. Remote checkpoint `b425b03` passed GitHub Actions run 224; the new Stage
-   4h commits await their branch-head CI run. Draft PR #2 already exists and validates
-   each pushed `integration/fvsc-core-v1` head; do not create or merge another PR
-   without separate user instruction.
+   unchanged. Stage 4h harness checkpoint `2fc1c66` passed GitHub Actions run 225.
+   Draft PR #2 already exists and validates each pushed `integration/fvsc-core-v1`
+   head; do not create or merge another PR without separate user instruction.
 
 ## Follow-ups (not blocking)
 
