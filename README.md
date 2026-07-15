@@ -28,6 +28,14 @@ exact source revision and span that supports it. Natural-language expansion of a
 a new, cited, defeasible interpretation, never the recovered original. See
 [ADR-006](./docs/adr/ADR-006-semantic-compression-is-referentially-reversible.md).
 
+The computational map is a **provenance-grounded semantic atlas**, not one mandatory
+embedding, graph, container, or density matrix. Existing whitepaper ideas—typed
+Judgments, directed containers, relation transforms, tensor factors, contextual
+facets, graph traversal, time, metaphor mappings, and L0–L3 policy—remain, but each is
+a relation-conditioned view that must earn its complexity on an owner-validated task.
+See [ADR-007](./docs/adr/ADR-007-semantic-atlas-uses-relation-conditioned-views.md) and
+the [semantic-atlas design](./docs/architecture/SEMANTIC_ATLAS.md).
+
 ## What works now
 
 - Obsidian Markdown and Telegram JSON become revisioned `SourceDocument` records.
@@ -52,7 +60,7 @@ a new, cited, defeasible interpretation, never the recovered original. See
 flowchart TD
     A["Original sources"] --> B["EvidenceLedger"]
     A --> C["Lexical retrieval"]
-    B --> D["Exact / structural views"]
+    B --> D["Relation-conditioned atlas views"]
     C --> E["Cited L2/L3 proposal"]
     D --> E
     E --> F["Owner claim review"]
