@@ -126,3 +126,74 @@ def test_model_listing_is_deterministic_and_transport_failures_are_safe() -> Non
 
     broken = OllamaInterpretationBackend(opener=Broken())
     assert broken.ping() is False
+
+
+def test_stage4h_options_identity_and_generation_telemetry_are_explicit() -> None:
+    digest = "d" * 64
+    model_content = {
+        "answer": "Образ описывает захват внимания.",
+        "claims": [
+            {
+                "text": "Внимание представлено захваченным ресурсом.",
+                "citations": ["S1"],
+                "support_level": "evidence_bound",
+            }
+        ],
+    }
+    opener = _Opener(
+        responses=[
+            {
+                "models": [
+                    {
+                        "name": "qwen:test",
+                        "model": "qwen:test",
+                        "digest": digest,
+                        "size": 123,
+                    }
+                ]
+            },
+            {
+                "model": "qwen:test",
+                "message": {"content": json.dumps(model_content, ensure_ascii=False)},
+                "done": True,
+                "done_reason": "stop",
+                "total_duration": 10,
+                "load_duration": 1,
+                "prompt_eval_count": 20,
+                "prompt_eval_duration": 2,
+                "eval_count": 8,
+                "eval_duration": 7,
+            },
+        ]
+    )
+    backend = OllamaInterpretationBackend(
+        model="qwen:test",
+        model_digest=digest,
+        temperature=0.0,
+        seed=42,
+        num_ctx=8_192,
+        opener=opener,
+    )
+
+    identity = backend.model_identity()
+    assert identity is not None
+    assert identity.digest == digest
+    backend.generate("Какова роль паразитов?", (_source(),))
+
+    request = opener.requests[1][0]
+    sent = json.loads(request.data.decode("utf-8"))
+    assert sent["options"] == {"temperature": 0.0, "num_ctx": 8_192, "seed": 42}
+    telemetry = backend.last_generation_telemetry
+    assert telemetry is not None
+    assert telemetry.model_digest == digest
+    assert telemetry.prompt_eval_count == 20
+    assert telemetry.eval_count == 8
+    assert telemetry.source_count == 1
+    assert telemetry.prompt_chars > len(_source().text)
+
+
+def test_stage4h_seed_and_model_digest_validation_fail_closed() -> None:
+    with pytest.raises(ValueError, match="seed"):
+        OllamaInterpretationBackend(seed=-1, opener=_Opener())
+    with pytest.raises(ValueError, match="model_digest"):
+        OllamaInterpretationBackend(model_digest="not-a-digest", opener=_Opener())

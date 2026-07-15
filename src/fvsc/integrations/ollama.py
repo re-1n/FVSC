@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import ipaddress
 import json
 import math
 import re
+import time
 from typing import Any
 import urllib.error
 import urllib.request
@@ -22,6 +24,7 @@ DEFAULT_OLLAMA_HOST = "http://127.0.0.1:11434"
 DEFAULT_OLLAMA_MODEL = "qwen2.5:7b-instruct-q4_K_M"
 OLLAMA_PROMPT_VERSION = "source-cited-json-v1"
 _MODEL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}")
+_DIGEST_RE = re.compile(r"[0-9a-f]{64}")
 
 _SYSTEM_PROMPT = """Ты — слой L3 персональной семантической системы FVSC.
 Твоя задача — предложить интерпретацию только по переданным исходным фрагментам.
@@ -42,6 +45,152 @@ _SYSTEM_PROMPT = """Ты — слой L3 персональной семанти
 
 class OllamaIntegrationError(RuntimeError):
     """Safe transport or schema failure without echoing private prompt text."""
+
+
+def _optional_counter(value: Any, *, field: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise OllamaIntegrationError(f"Ollama returned an invalid {field}")
+    return value
+
+
+@dataclass(frozen=True)
+class OllamaModelIdentity:
+    """Exact installed model tag and content digest reported by ``/api/tags``."""
+
+    name: str
+    model: str
+    digest: str
+    size: int
+
+    def __post_init__(self) -> None:
+        name = str(self.name).strip()
+        model = str(self.model).strip()
+        digest = str(self.digest).strip()
+        if _MODEL_RE.fullmatch(name) is None or _MODEL_RE.fullmatch(model) is None:
+            raise ValueError("Ollama model identity contains an invalid name")
+        if _DIGEST_RE.fullmatch(digest) is None:
+            raise ValueError("Ollama model identity requires a SHA-256 digest")
+        if isinstance(self.size, bool) or not isinstance(self.size, int) or self.size < 0:
+            raise ValueError("Ollama model size must be a non-negative integer")
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "model", model)
+        object.__setattr__(self, "digest", digest)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "digest": self.digest,
+            "model": self.model,
+            "name": self.name,
+            "size": self.size,
+        }
+
+
+@dataclass(frozen=True)
+class OllamaGenerationTelemetry:
+    """Non-text generation telemetry returned by Ollama plus measured wall time."""
+
+    model: str
+    model_digest: str | None
+    prompt_version: str
+    temperature: float
+    seed: int | None
+    num_ctx: int
+    source_count: int
+    prompt_chars: int
+    wall_seconds: float
+    total_duration_ns: int | None = None
+    load_duration_ns: int | None = None
+    prompt_eval_count: int | None = None
+    prompt_eval_duration_ns: int | None = None
+    eval_count: int | None = None
+    eval_duration_ns: int | None = None
+    done_reason: str | None = None
+
+    def __post_init__(self) -> None:
+        if _MODEL_RE.fullmatch(str(self.model).strip()) is None:
+            raise ValueError("Ollama telemetry model is invalid")
+        if self.model_digest is not None and _DIGEST_RE.fullmatch(self.model_digest) is None:
+            raise ValueError("Ollama telemetry model_digest is invalid")
+        for field in ("source_count", "prompt_chars"):
+            value = getattr(self, field)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"Ollama telemetry {field} must be non-negative")
+        wall = float(self.wall_seconds)
+        if not math.isfinite(wall) or wall < 0.0:
+            raise ValueError("Ollama telemetry wall_seconds must be finite and non-negative")
+        object.__setattr__(self, "wall_seconds", wall)
+
+    @classmethod
+    def from_envelope(
+        cls,
+        envelope: dict[str, Any],
+        *,
+        configured_model: str,
+        model_digest: str | None,
+        temperature: float,
+        seed: int | None,
+        num_ctx: int,
+        source_count: int,
+        prompt_chars: int,
+        wall_seconds: float,
+    ) -> "OllamaGenerationTelemetry":
+        returned_model = str(envelope.get("model", configured_model)).strip()
+        if _MODEL_RE.fullmatch(returned_model) is None:
+            raise OllamaIntegrationError("Ollama returned an invalid model identity")
+        done_reason = envelope.get("done_reason")
+        if done_reason is not None and not isinstance(done_reason, str):
+            raise OllamaIntegrationError("Ollama returned an invalid done_reason")
+        return cls(
+            model=returned_model,
+            model_digest=model_digest,
+            prompt_version=OLLAMA_PROMPT_VERSION,
+            temperature=temperature,
+            seed=seed,
+            num_ctx=num_ctx,
+            source_count=source_count,
+            prompt_chars=prompt_chars,
+            wall_seconds=wall_seconds,
+            total_duration_ns=_optional_counter(
+                envelope.get("total_duration"), field="total_duration"
+            ),
+            load_duration_ns=_optional_counter(
+                envelope.get("load_duration"), field="load_duration"
+            ),
+            prompt_eval_count=_optional_counter(
+                envelope.get("prompt_eval_count"), field="prompt_eval_count"
+            ),
+            prompt_eval_duration_ns=_optional_counter(
+                envelope.get("prompt_eval_duration"),
+                field="prompt_eval_duration",
+            ),
+            eval_count=_optional_counter(envelope.get("eval_count"), field="eval_count"),
+            eval_duration_ns=_optional_counter(
+                envelope.get("eval_duration"), field="eval_duration"
+            ),
+            done_reason=done_reason.strip() if isinstance(done_reason, str) else None,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "done_reason": self.done_reason,
+            "eval_count": self.eval_count,
+            "eval_duration_ns": self.eval_duration_ns,
+            "load_duration_ns": self.load_duration_ns,
+            "model": self.model,
+            "model_digest": self.model_digest,
+            "num_ctx": self.num_ctx,
+            "prompt_chars": self.prompt_chars,
+            "prompt_eval_count": self.prompt_eval_count,
+            "prompt_eval_duration_ns": self.prompt_eval_duration_ns,
+            "prompt_version": self.prompt_version,
+            "seed": self.seed,
+            "source_count": self.source_count,
+            "temperature": self.temperature,
+            "total_duration_ns": self.total_duration_ns,
+            "wall_seconds": self.wall_seconds,
+        }
 
 
 def _validate_local_host(host: str) -> str:
@@ -105,7 +254,9 @@ class OllamaInterpretationBackend:
         model: str = DEFAULT_OLLAMA_MODEL,
         host: str = DEFAULT_OLLAMA_HOST,
         temperature: float = 0.2,
+        seed: int | None = None,
         num_ctx: int = 8_192,
+        model_digest: str | None = None,
         timeout: float = 180.0,
         max_response_bytes: int = 2 * 1024 * 1024,
         max_prompt_chars: int = 300_000,
@@ -116,6 +267,14 @@ class OllamaInterpretationBackend:
             raise ValueError("Ollama model name contains unsupported characters")
         if isinstance(num_ctx, bool) or not isinstance(num_ctx, int) or not 256 <= num_ctx <= 1_048_576:
             raise ValueError("num_ctx must be an integer in [256, 1048576]")
+        if seed is not None and (
+            isinstance(seed, bool)
+            or not isinstance(seed, int)
+            or not 0 <= seed <= 2**31 - 1
+        ):
+            raise ValueError("seed must be an integer in [0, 2147483647] or None")
+        if model_digest is not None and _DIGEST_RE.fullmatch(str(model_digest).strip()) is None:
+            raise ValueError("model_digest must be a lowercase SHA-256 digest or None")
         if (
             isinstance(max_response_bytes, bool)
             or not isinstance(max_response_bytes, int)
@@ -136,10 +295,13 @@ class OllamaInterpretationBackend:
             lower=0.0,
             upper=2.0,
         )
+        self.seed = seed
         self.num_ctx = num_ctx
+        self.model_digest = None if model_digest is None else str(model_digest).strip()
         self.timeout = _finite(timeout, field="timeout", lower=0.1, upper=3_600.0)
         self.max_response_bytes = max_response_bytes
         self.max_prompt_chars = max_prompt_chars
+        self.last_generation_telemetry: OllamaGenerationTelemetry | None = None
         # Explicitly bypass proxy environment variables for loopback traffic.
         self._opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -216,11 +378,47 @@ class OllamaInterpretationBackend:
         }
         return tuple(sorted(names))
 
+    def model_identity(self) -> OllamaModelIdentity | None:
+        """Return the exact configured local tag/digest, or ``None`` if unavailable."""
+        try:
+            value = self._request_json("/api/tags", timeout=min(self.timeout, 5.0))
+        except OllamaIntegrationError:
+            return None
+        raw_models = value.get("models", [])
+        if not isinstance(raw_models, list):
+            return None
+        matches: list[OllamaModelIdentity] = []
+        for item in raw_models:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name", "")).strip()
+            model = str(item.get("model", name)).strip()
+            digest = str(item.get("digest", "")).strip()
+            size = item.get("size", -1)
+            if self.model not in {name, model}:
+                continue
+            try:
+                matches.append(
+                    OllamaModelIdentity(
+                        name=name,
+                        model=model,
+                        digest=digest,
+                        size=size,
+                    )
+                )
+            except ValueError:
+                continue
+        if not matches:
+            return None
+        matches.sort(key=lambda item: (item.name != self.model, item.name, item.digest))
+        return matches[0]
+
     def generate(
         self,
         question: str,
         sources: tuple[PromptSource, ...],
     ) -> GeneratedInterpretation:
+        self.last_generation_telemetry = None
         if not sources:
             raise ValueError("Ollama interpretation requires source context")
         if len(sources) > 100:
@@ -242,6 +440,13 @@ class OllamaInterpretationBackend:
         )
         if len(user_payload) > self.max_prompt_chars:
             raise ValueError("Ollama interpretation prompt exceeds the configured size limit")
+        options: dict[str, Any] = {
+            "temperature": self.temperature,
+            "num_ctx": self.num_ctx,
+        }
+        if self.seed is not None:
+            options["seed"] = self.seed
+        started = time.perf_counter()
         envelope = self._request_json(
             "/api/chat",
             payload={
@@ -252,12 +457,10 @@ class OllamaInterpretationBackend:
                 ],
                 "format": "json",
                 "stream": False,
-                "options": {
-                    "temperature": self.temperature,
-                    "num_ctx": self.num_ctx,
-                },
+                "options": options,
             },
         )
+        wall_seconds = time.perf_counter() - started
         message = envelope.get("message")
         if not isinstance(message, dict) or not isinstance(message.get("content"), str):
             raise OllamaIntegrationError("Ollama chat response is missing message content")
@@ -299,15 +502,29 @@ class OllamaInterpretationBackend:
             except ValueError as exc:
                 raise OllamaIntegrationError("Ollama claim failed validation") from exc
         try:
-            return GeneratedInterpretation(answer=answer, claims=tuple(claims))
+            result = GeneratedInterpretation(answer=answer, claims=tuple(claims))
         except ValueError as exc:
             raise OllamaIntegrationError("Ollama interpretation failed validation") from exc
+        self.last_generation_telemetry = OllamaGenerationTelemetry.from_envelope(
+            envelope,
+            configured_model=self.model,
+            model_digest=self.model_digest,
+            temperature=self.temperature,
+            seed=self.seed,
+            num_ctx=self.num_ctx,
+            source_count=len(sources),
+            prompt_chars=len(_SYSTEM_PROMPT) + len(user_payload),
+            wall_seconds=wall_seconds,
+        )
+        return result
 
 
 __all__ = [
     "DEFAULT_OLLAMA_HOST",
     "DEFAULT_OLLAMA_MODEL",
     "OLLAMA_PROMPT_VERSION",
+    "OllamaGenerationTelemetry",
     "OllamaIntegrationError",
     "OllamaInterpretationBackend",
+    "OllamaModelIdentity",
 ]

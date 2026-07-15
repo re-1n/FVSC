@@ -153,7 +153,7 @@ class Stage4hModelConfig:
         object.__setattr__(
             self,
             "seed",
-            _integer(self.seed, field="seed", maximum=2**63 - 1),
+            _integer(self.seed, field="seed", maximum=2**31 - 1),
         )
         object.__setattr__(
             self,
