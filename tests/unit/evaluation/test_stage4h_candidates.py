@@ -1,0 +1,199 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from types import SimpleNamespace
+
+import pytest
+
+from fvsc.evaluation import (
+    EvidenceRef,
+    FrozenCandidateBundle,
+    GoldCase,
+    Stage4hModelConfig,
+    Stage4hRunSpec,
+    corpus_digest,
+    freeze_stage4h_candidates,
+)
+from fvsc.ingest import SourceDocument
+from fvsc.retrieval import LexicalSearchIndex
+
+
+def _document(
+    source_id: str,
+    text: str,
+    *,
+    observed_at: float,
+    reply_to_source_id: str | None = None,
+) -> SourceDocument:
+    return SourceDocument.create(
+        source_id=source_id,
+        source_revision=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        observed_at=observed_at,
+        text=text,
+        adapter="test",
+        source_kind="owner_reflection",
+        raw_chars=len(text),
+        metadata=(
+            {"reply_to_source_id": reply_to_source_id}
+            if reply_to_source_id is not None
+            else {}
+        ),
+    )
+
+
+class _StructuralIndex:
+    def __init__(self, hits=()):
+        self.hits = tuple(hits)
+
+    def search(self, query: str, *, top_k: int = 10):
+        return self.hits[:top_k]
+
+
+def _spec(documents, *, cases=("gold-001",), **changes) -> Stage4hRunSpec:
+    values = {
+        "gold_sha256": "a" * 64,
+        "challenge_sha256": "b" * 64,
+        "corpus_sha256": corpus_digest(documents),
+        "case_ids": cases,
+        "arms": ("A0", "A1", "A2", "A4"),
+        "model": Stage4hModelConfig(
+            backend_id="ollama.local",
+            model="test",
+            prompt_version="stage4h-v1",
+        ),
+        "created_at": 1.0,
+        "top_k": 1,
+        "prompt_source_cap": 2,
+        "context_depth": 1,
+    }
+    values.update(changes)
+    return Stage4hRunSpec(**values)
+
+
+def _case() -> GoldCase:
+    return GoldCase(
+        case_id="gold-001",
+        title="Metaphor",
+        question="Какую роль играют паразиты?",
+        decision="open",
+        evidence=(
+            EvidenceRef("Diary:1", "message-1", "primary"),
+            EvidenceRef("Diary:2", "message-2", "context"),
+            EvidenceRef("Diary:9", "message-9", "negative"),
+        ),
+        owner_interpretation="Скрытая интерпретация владельца не является prompt input.",
+    )
+
+
+def test_freeze_keeps_a0_a1_identical_and_excludes_gold_meaning_and_negatives() -> None:
+    documents = (
+        _document("message-1", "Паразиты захватывают внимание.", observed_at=1.0),
+        _document(
+            "message-2",
+            "Внимание становится чужим ресурсом.",
+            observed_at=2.0,
+            reply_to_source_id="message-1",
+        ),
+        _document("message-9", "Буквальный паразит.", observed_at=9.0),
+    )
+    spec = _spec(documents)
+    bundle = freeze_stage4h_candidates(
+        spec=spec,
+        cases=(_case(),),
+        documents=documents,
+        lexical_index=LexicalSearchIndex(documents),
+        structural_index=_StructuralIndex(),
+    )
+
+    a0 = bundle.for_case_arm("gold-001", "A0")
+    a1 = bundle.for_case_arm("gold-001", "A1")
+    assert [item.to_dict() for item in a0.candidates] == [
+        item.to_dict() for item in a1.candidates
+    ]
+    assert a1.candidates[0].source_id == "message-1"
+    assert a1.candidates[1].source_id == "message-2"
+    assert a1.candidates[1].expanded_from_source_id == "message-1"
+
+    oracle = bundle.for_case_arm("gold-001", "A2")
+    assert tuple(item.source_id for item in oracle.candidates) == (
+        "message-1",
+        "message-2",
+    )
+    encoded = json.dumps(bundle.to_dict(), ensure_ascii=False)
+    assert "Скрытая интерпретация" not in encoded
+    assert "message-9" not in tuple(item.source_id for item in oracle.candidates)
+    assert FrozenCandidateBundle.from_dict(json.loads(encoded)) == bundle
+
+
+def test_structural_arm_never_falls_back_to_lexical() -> None:
+    documents = (
+        _document("message-1", "Паразиты захватывают внимание.", observed_at=1.0),
+        _document("message-2", "Другой текст.", observed_at=2.0),
+        _document("message-9", "Негатив.", observed_at=9.0),
+    )
+    bundle = freeze_stage4h_candidates(
+        spec=_spec(documents),
+        cases=(_case(),),
+        documents=documents,
+        lexical_index=LexicalSearchIndex(documents),
+        structural_index=_StructuralIndex(),
+    )
+
+    assert bundle.for_case_arm("gold-001", "A1").candidates
+    assert bundle.for_case_arm("gold-001", "A4").candidates == ()
+    assert bundle.for_case_arm("gold-001", "A4").retrieval_method == (
+        "judgment-char-tfidf-v1"
+    )
+
+
+def test_structural_candidates_keep_event_ids_and_source_revisions() -> None:
+    documents = (
+        _document("message-1", "Паразиты захватывают внимание.", observed_at=1.0),
+        _document("message-2", "Контекст.", observed_at=2.0),
+        _document("message-9", "Негатив.", observed_at=9.0),
+    )
+    event_id = "e" * 64
+    hit = SimpleNamespace(
+        source_id="message-2",
+        score=0.8,
+        evidence_event_ids=(event_id,),
+    )
+    bundle = freeze_stage4h_candidates(
+        spec=_spec(documents),
+        cases=(_case(),),
+        documents=documents,
+        lexical_index=LexicalSearchIndex(documents),
+        structural_index=_StructuralIndex((hit,)),
+    )
+
+    frozen = bundle.for_case_arm("gold-001", "A4").candidates[0]
+    assert frozen.source_revision == documents[1].source_revision
+    assert frozen.evidence_event_ids == (event_id,)
+
+
+def test_freeze_fails_closed_on_corpus_drift_and_missing_oracle_source() -> None:
+    documents = (
+        _document("message-1", "Паразиты захватывают внимание.", observed_at=1.0),
+        _document("message-2", "Контекст.", observed_at=2.0),
+        _document("message-9", "Негатив.", observed_at=9.0),
+    )
+    spec = _spec(documents)
+    changed = documents + (_document("new", "Новый текст.", observed_at=10.0),)
+    with pytest.raises(ValueError, match="corpus"):
+        freeze_stage4h_candidates(
+            spec=spec,
+            cases=(_case(),),
+            documents=changed,
+            lexical_index=LexicalSearchIndex(changed),
+            structural_index=_StructuralIndex(),
+        )
+
+    with pytest.raises(ValueError, match="gold sources"):
+        freeze_stage4h_candidates(
+            spec=_spec(documents[:-1]),
+            cases=(_case(),),
+            documents=documents[:-1],
+            lexical_index=LexicalSearchIndex(documents[:-1]),
+            structural_index=_StructuralIndex(),
+        )
