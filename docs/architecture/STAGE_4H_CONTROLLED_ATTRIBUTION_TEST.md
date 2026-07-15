@@ -143,4 +143,67 @@ cost before implementation.
 If no view has a justified target, the correct next step is to improve the local
 interpreter or keep the lexical/exact system—not to add another semantic substrate.
 
+## Preregistered first pilot
+
+The first executable run is diagnostic, not confirmatory:
+
+- six questions: Gold 001 (parasites), Gold 008 (love/death/dissolution), Gold 010
+  (`Diary:605` continuation), Gold 013 (formalization versus living meaning), plus the
+  two separate Stage 4h challenge cases (wellbeing/authorship and unknown referent);
+- `A0`, `A1`, `A2`, and `A4`; `A3` is deferred and no source body may leave the local
+  machine under this pilot authorization;
+- lexical/structural `top_k=10`, final prompt cap `12`, reply/temporal context depth `1`;
+- one exact Ollama tag and digest for A1/A2/A4, `temperature=0`, `seed=42`, and
+  `num_ctx=8192` unless a different value is frozen in the manifest before generation;
+- zero tolerated fabricated/unsupported citations, false owner attribution,
+  unsupported referent assumptions, or forbidden composites;
+- A2 diagnostic target: accepted-or-partial claims `>=0.80`, citation precision
+  `>=0.90`, median meaning fidelity `>=3/4`.
+
+The manifest has `evaluation_mode=pilot`; code rejects promotion in that mode.
+`confirmatory` requires at least 17 frozen cases, a positive paired bootstrap lower
+bound, mean A4−A1 fidelity delta `>=0.5`, citation-precision drop `<=0.05`, no safety
+regression, and latency at most `2x` unless a new protocol is preregistered.
+
+## Local execution
+
+List exact local model tags:
+
+```bash
+PYTHONPATH=src python scripts/stage4h_pilot.py models
+```
+
+Run the six-case pilot (repeat `--owner-id` for every owner identity in the export):
+
+```bash
+PYTHONPATH=src python scripts/stage4h_pilot.py run \
+  --telegram "/path/to/result.json" \
+  --owner-id "OWNER_ACTOR_ID_1" \
+  --owner-id "OWNER_ACTOR_ID_2" \
+  --model "EXACT_TAG_FROM_OLLAMA_LIST"
+```
+
+The command resolves the installed model digest, freezes the corpus and every
+candidate rank/revision, runs the paired local arms, and writes one new directory under
+ignored `.fvsc/stage4h/<run-id>/`:
+
+- `manifest.json`, `candidates.json` — source-body-free run identity;
+- `results.json` — generated raw proposals and telemetry, local only;
+- `review-pack.json` / `review-pack.md` — arm-blinded claims and exact local excerpts;
+- `blind-map.json` — withheld arm mapping;
+- `reviews.template.json` — copy to `reviews.json` and replace every `null` only after
+  reviewing the blinded pack.
+
+Score a completed review file:
+
+```bash
+PYTHONPATH=src python scripts/stage4h_pilot.py score \
+  --run-dir ".fvsc/stage4h/<run-id>" \
+  --reviews ".fvsc/stage4h/<run-id>/reviews.json"
+```
+
+`report.json` contains aggregate/de-identified metrics and one diagnosis. Raw results,
+excerpts, blind mappings, and owner reviews remain ignored. Publishing any of them is a
+separate owner-reviewed action.
+
 [ADR-004]: ../adr/ADR-004-antourage-outputs-are-not-owner-evidence.md
