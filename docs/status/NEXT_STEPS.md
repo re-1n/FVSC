@@ -43,13 +43,16 @@ Migration order (foundation-first; each commit must build and pass tests):
      universal substrate to an optional local view. The audit also corrects the legacy
      unbounded containment ratio, eigenvector/facet overclaim, non-unique matrix
      decomposition, and unproven fractal/convergence claims.
-   - **Next: Stage 4h — controlled owner-scored interpretation attribution test** —
-     freeze Gold questions and candidate source sets; run the configured local model
-     with logged model/version/parameters; include a declared reference-model arm on
-     the same evidence where privacy permits; review every claim/citation; measure false
-     authorship, fictional-vs-real referent assumptions, forbidden composites,
-     abstention, latency, and cost. Separate retrieval failure from interpretation
-     failure and model-capacity failure.
+   - ✅ **Stage 4h harness** — immutable manifest and preregistered thresholds;
+     source-body-free challenge addendum; frozen A0/A1/A2/A4 candidates; exact local
+     model digest/seed/token/duration telemetry; paired local generation; keyed blinded
+     owner-review pack; paired scoring and conservative diagnosis. Raw proposals,
+     excerpts, arm map, and owner review stay under ignored `.fvsc/stage4h/`.
+   - **Next: execute the Stage 4h pilot on the owner's Ollama machine** — six frozen
+     questions, A0 automatic plus up to 18 blinded A1/A2/A4 variants. Review every
+     claim/citation and measure false authorship, unknown-referent assumptions,
+     forbidden composites, abstention, latency, and tokens. `A3` remains deferred until
+     a separate external-source privacy scope is explicitly authorized.
    - **Decision after Stage 4h** — choose at most one relation-conditioned view whose
      inductive bias matches the dominant error (for example contextual usage retrieval,
      directed inclusion, temporal trajectory, or ambiguity state). Register a baseline
@@ -57,11 +60,12 @@ Migration order (foundation-first; each commit must build and pass tests):
      Protocol: [`STAGE_4H_CONTROLLED_ATTRIBUTION_TEST.md`](../architecture/STAGE_4H_CONTROLLED_ATTRIBUTION_TEST.md).
    Keep HTTP, plugin, and LLM dependencies outside the ingest layer. Do not commit
    vault data, voice data, or generated folders.
-5. **Verify** — current checkpoint: **231 passed / 1 skipped / 11 deselected**,
-   legacy boundary green, Obsidian production build green, owner-gold retrieval result
-   reproduced. Remote checkpoint `f5cdefa` passed GitHub Actions run 223. Draft PR #2
-   already exists and validates each pushed `integration/fvsc-core-v1` head; do not
-   create or merge another PR without separate user instruction.
+5. **Verify** — current local checkpoint: **255 passed / 1 skipped / 11 deselected**,
+   legacy boundary green, Obsidian production build green, frozen Gold/addendum digests
+   unchanged. Remote checkpoint `b425b03` passed GitHub Actions run 224; the new Stage
+   4h commits await their branch-head CI run. Draft PR #2 already exists and validates
+   each pushed `integration/fvsc-core-v1` head; do not create or merge another PR
+   without separate user instruction.
 
 ## Follow-ups (not blocking)
 

@@ -46,6 +46,10 @@
     with explicit owner authorization. It contains questions, logical source locators,
     roles, owner interpretations, rejected readings, and link boundaries—not raw
     Telegram bodies, actor identities, the source corpus, or the interpretation journal.
+  - The separate source-body-free Stage 4h challenge addendum now freezes the two
+    severe blind-probe boundaries without rewriting Gold 001–015: a participant's
+    hope comment is negative evidence for owner wellbeing, and the text of
+    `Diary:747` licenses neither a real-person nor a fictional-person assertion.
   - The released Gold 001–015 retrieval rerun is unchanged: lexical remains default,
     no exact/hybrid arm is promoted, and negative hits remain zero.
   - A conversational blind-question probe over the private diary produced useful
@@ -59,10 +63,27 @@
     temporal traces, metaphor mappings, and L0–L3 policy. ADR-007 removes only the
     unsupported privilege of one universal density space and organizes those existing
     constructs as a provenance-grounded atlas of relation-conditioned views.
-  - Next: run the controlled Stage 4h attribution test. Compare the configured local
-    model and a declared reference arm on frozen cited candidate sets; separate
-    retrieval, interpretation, and source-attribution errors. Use the result to select
-    at most one next view experiment rather than building another universal map.
+  - Stage 4h execution infrastructure is implemented in eight independent commits:
+    content-addressed run/threshold contracts; a separate two-case challenge addendum;
+    corpus/candidate freezing for A0/A1/A2/A4; exact Ollama tag/digest, seed, token and
+    duration telemetry; one paired local runner; keyed arm-blinded owner-review packs;
+    paired scoring/diagnosis with safety gates; and the local `stage4h_pilot.py`
+    run/score workflow. Gold interpretations are never prompt input, A4 cannot fall
+    back to lexical, source revisions are rechecked immediately before generation,
+    and raw outputs/excerpts remain under ignored `.fvsc/stage4h/`.
+  - The preregistered first run is a six-question diagnostic pilot (18 possible
+    generative variants across A1/A2/A4; A0 is automatic). `A3` is deferred because no
+    external-source privacy scope has been authorized. Pilot mode cannot promote a
+    representation; confirmatory mode requires at least 17 cases and every registered
+    quality, citation, safety, confidence, and latency gate.
+  - Current local verification after the Stage 4h harness: **255 passed / 1 skipped /
+    11 deselected**, legacy-boundary check green, Obsidian production build green.
+    This execution environment has no installed/running Ollama model, so the actual
+    owner-scored pilot is the next runtime action rather than a fabricated benchmark
+    result.
+  - Next: run the controlled six-question pilot on the owner's local Ollama machine,
+    complete the blinded claim/citation review, and use the diagnosis to select at most
+    one next view experiment—or retain lexical/improve the interpreter.
 
 ## Settled decisions (ADRs)
 
