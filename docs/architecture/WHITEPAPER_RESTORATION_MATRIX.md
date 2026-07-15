@@ -15,8 +15,9 @@ The following contracts already work and must survive every restoration slice:
 - the character n-gram retriever remains the real-data floor;
 - raw diary/vault text, actor identities, and absolute personal paths are not
   committed or persisted in the derived cache;
-- density and ContainerCore remain optional views until a gold evaluation earns
-  their complexity.
+- density and ContainerCore are currently optional views; a gold evaluation must earn
+  their complexity, and a controlled negative comparison may retire them from active
+  query plans.
 - no scalar distance, density operator, container, graph, or embedding is treated as
   the universal representation of personal meaning; views declare the relations and
   operations they support [ADR-007].
@@ -34,7 +35,7 @@ The following contracts already work and must survive every restoration slice:
 | Metaphor, image, dream, and open meaning | Source kind and sandbox ADRs exist; no canonical topic taxonomy | Represent mappings as open, evidence-linked proposals; keep imagery and literal claims distinct |
 | Evaluation | Stage 4d.1 established source fidelity and a lexical floor | Use private Gold 001-015, including negative/split decisions, to compare exact, graph, container, and density views |
 | Chat/Ollama/Obsidian | Main contains an older MVP; clean service folders are mostly empty | Restore thin transports only after the evidence/evaluation contracts are accepted |
-| One density space as the universal semantic substrate | Density, explicit containers, graph, relation transforms, tensor factors, temporal state, and metaphor mappings all occur in the whitepaper; density was incorrectly privileged as the sole structural object | Preserve those operations as a provenance-grounded atlas of relation-conditioned views; promote one view at a time on its own owner-gold task |
+| One density space as the universal semantic substrate | Density, explicit containers, graph, relation transforms, tensor factors, temporal state, and metaphor mappings all occur in the whitepaper; density was incorrectly privileged as the sole structural object | Admit those operations as initial atlas candidates; promote, replace, or retire one view at a time on its own owner-gold task |
 
 ## Restoration order
 

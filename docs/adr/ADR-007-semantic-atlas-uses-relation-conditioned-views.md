@@ -69,16 +69,17 @@ different computable structure while retaining stable identity. This ADR does no
 claim that personal meaning is a smooth manifold or that transition maps between all
 views already exist.
 
-## Continuity with the whitepaper
+## Reuse and replacement of whitepaper work
 
-This is an incremental correction, not a restart:
+This decision begins with the whitepaper's existing work rather than restarting from
+an empty design. It does not grant any historical construct permanent status:
 
 - the Judgment and provenance contracts survive unchanged;
 - exact verbs, negation, modality, intensity, conditions, authorship, time, and
   interpretation layer remain first-class;
 - directed containers, relation transforms, tensor factorization, graph views,
-  recursive propagation, temporal decay/consolidation, and metaphor mappings remain
-  candidate operations;
+  recursive propagation, temporal decay/consolidation, and metaphor mappings enter
+  the atlas as candidate operations and may be corrected, replaced, or retired;
 - the whitepaper's `H_semantic x H_relational x H_contextual` proposal becomes one
   possible factorized chart rather than the mandatory universal substrate;
 - the existing density and ContainerCore implementations remain available for
@@ -97,6 +98,18 @@ A new view is implemented and promoted only for a registered query family with:
 
 Failure to beat the baseline is a valid result. It does not trigger a rewrite of the
 ledger and does not justify adding all other candidate geometries.
+
+For an incumbent and replacement evaluated on the same frozen protocol:
+
+- promote the replacement only for the operation and cost envelope it demonstrably
+  improves;
+- retain both only when each has a distinct measured use;
+- prefer the simpler implementation when results are tied within uncertainty;
+- deprecate a dominated view from active query plans while preserving its benchmark,
+  fixtures, and decision history.
+
+Whitepaper provenance is a reason to test a construct carefully, not a reason to keep
+it after controlled evidence favors a better design.
 
 ## Consequences
 

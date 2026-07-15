@@ -24,9 +24,11 @@ cheaply than a simpler baseline.
 
 ## What the whitepaper already contributed
 
-The atlas is an evolution of the whitepaper, not an imported replacement.
+The atlas starts from the whitepaper rather than discarding its work unread. This is
+not a compatibility promise: every construct below is retained, translated, replaced,
+or retired according to a registered comparison.
 
-| Existing whitepaper construct | Preserved interpretation | Correction |
+| Existing whitepaper construct | Retained or translated role | Correction |
 |---|---|---|
 | Exact `S -> V -> O` plus quality, modality, intensity, time, condition | Typed relational trace and common input to views | The trace and its source span are more stable than any coordinate encoding |
 | Concept as a container of usages and relations | Explicit directed-container view; operational account of personal use | A container is one lens on meaning, not an exhaustive definition of a concept |
@@ -179,6 +181,27 @@ No canonical data migration is required.
 4. Run the owner-scored cited-interpretation test already planned for Stage 4h.
 5. Use its error classes to choose **one** next view experiment. Do not implement the
    entire research menu.
+
+## View replacement and retirement
+
+Whitepaper ancestry is not a promotion criterion. For the same registered query
+family, compare an incumbent view and its proposed replacement on an identical frozen
+corpus, candidate budget, owner-gold set, citation policy, and hardware envelope. The
+decision records at least semantic quality, citation precision/recall, false
+composition and false-attribution rates, abstention, latency, update cost, storage,
+and implementation complexity.
+
+- **Promote** the replacement when it yields a material, repeatable task-level gain
+  without violating provenance or privacy invariants.
+- **Keep both** only when they win on different declared operations or cost envelopes.
+- **Keep the simpler incumbent** when quality is tied within uncertainty.
+- **Deprecate** a consistently dominated view and remove it from active query plans.
+- **Retire** implementation code only after its fixtures, benchmark result, and design
+  history remain reproducible; canonical evidence never depends on that code.
+
+No single metric decides every comparison. A quality gain can justify additional cost
+only if the target use case declares that trade-off in advance. Conversely, lower cost
+does not justify a measured loss of owner meaning or citation correctness.
 
 ## Falsification and publication threshold
 
