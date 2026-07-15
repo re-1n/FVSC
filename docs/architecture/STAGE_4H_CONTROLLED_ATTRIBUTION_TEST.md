@@ -20,13 +20,13 @@ not a benchmark result.
 - prove that FVSC stores every human meaning;
 - compare every possible geometry;
 - train a specialized model before establishing the failure class;
-- publish or commit private diary text, identities, gold answers, or model prompts that
-  reproduce private source bodies;
+- publish or commit raw diary bodies, actor identities, runtime journals, or model
+  prompts/outputs that reproduce source bodies without a separate reviewed release;
 - treat owner agreement as objective psychological truth.
 
 ## Frozen unit of evaluation
 
-Each private gold case contains:
+Each released owner-gold case contains:
 
 - `question_id` and the exact owner question;
 - allowed author/source-kind/time/layer scope;
@@ -40,6 +40,21 @@ Each private gold case contains:
 
 Raw source bodies are resolved locally at run time and excluded from committed results.
 Committed summaries contain aggregate metrics and de-identified error classes only.
+
+## Released evaluation seed
+
+The owner has explicitly authorized publication of
+[`private_eval/fvsc_gold_001_015.json`](../../private_eval/fvsc_gold_001_015.json),
+because its thoughts derive from publicly accessible owner channels. The release
+contains 15 questions, logical source locators and roles, owner interpretations,
+rejected interpretations, and pairwise composition boundaries. It contains no raw
+message bodies, actor identifiers/usernames, Telegram export metadata, model journal,
+or source corpus. The corpus continues to resolve locally at run time.
+
+The frozen release digest and boundary are documented in
+[`private_eval/README.md`](../../private_eval/README.md). Publishing this owner-gold
+annotation does not authorize future generated reports or journals automatically;
+each broader release remains separately reviewed.
 
 ## Questions
 

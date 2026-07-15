@@ -23,7 +23,8 @@ flowchart TD
 ```
 
 The lexical baseline determines source order. Exact Judgments can add event ids to
-citations, but cannot rerank sources. This preserves the private Gold 001–015 result:
+citations, but cannot rerank sources. This preserves the released owner-Gold 001–015
+result (with source bodies resolved locally):
 lexical MRR@10 is 0.5262, exact MRR@10 is 0.2611, and neither tested fusion is
 promoted.
 
@@ -87,7 +88,7 @@ live in memory.
 - Python: **229 passed / 2 skipped / 11 deselected**.
 - Legacy boundary: green (`src/fvsc` imports no legacy modules).
 - Obsidian production TypeScript build: green.
-- Private Gold 001–015 rerun: identical accepted decision — lexical remains default,
+- Released Gold 001–015 rerun: identical accepted decision — lexical remains default,
   no semantic/hybrid arm promoted, zero negative hits.
 - Remote `main` remains `ff703b7`; no PR was merged.
 

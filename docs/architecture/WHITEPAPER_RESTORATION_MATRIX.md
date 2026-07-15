@@ -33,7 +33,7 @@ The following contracts already work and must survive every restoration slice:
 | Contradiction and meaning over time | Ledger can retain competing active assertions and source history | Add temporal comparison as a derived view; never overwrite disagreement |
 | Owner correction | Retraction/supersession primitives exist; old feedback engine is quarantined | Add typed confirmation/rejection/contextualization commands over event ids |
 | Metaphor, image, dream, and open meaning | Source kind and sandbox ADRs exist; no canonical topic taxonomy | Represent mappings as open, evidence-linked proposals; keep imagery and literal claims distinct |
-| Evaluation | Stage 4d.1 established source fidelity and a lexical floor | Use private Gold 001-015, including negative/split decisions, to compare exact, graph, container, and density views |
+| Evaluation | Stage 4d.1 established source fidelity and a lexical floor | Use released owner-Gold 001-015 with locally resolved source bodies, including negative/split decisions, to compare exact, graph, container, and density views |
 | Chat/Ollama/Obsidian | Main contains an older MVP; clean service folders are mostly empty | Restore thin transports only after the evidence/evaluation contracts are accepted |
 | One density space as the universal semantic substrate | Density, explicit containers, graph, relation transforms, tensor factors, temporal state, and metaphor mappings all occur in the whitepaper; density was incorrectly privileged as the sole structural object | Admit those operations as initial atlas candidates; promote, replace, or retire one view at a time on its own owner-gold task |
 

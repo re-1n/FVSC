@@ -13,9 +13,8 @@
     representations ✅, Stage 4a–4c ingest foundation ✅, Stage 4d vault ingest ✅,
     Stage 4d.1 real-data ingest correction ✅, Stage 4e real-data semantic
     evaluation ✅, Stage 4f cited interpretation ✅, Stage 4g thin local
-    transports/Obsidian ✅, and the semantic-representation audit ✅. The last remote
-    checkpoint before that documentation slice is `25c6839`; draft PR #2 tests every
-    pushed branch head.
+    transports/Obsidian ✅, and the semantic-representation audit ✅. Audit checkpoint
+    `f5cdefa` passed GitHub Actions run 223; draft PR #2 tests every pushed branch head.
   - Working vault chain: `Obsidian Markdown -> SourceDocument -> EvidenceLedger ->
     MaterializedSnapshot -> atomic JSON cache`. Source replacement/deletion is
     append-only; source kinds remain explicit; cache stores no raw note body or absolute
@@ -42,7 +41,12 @@
     Obsidian source/search/interpret/review view. Antourage output remains outside
     EvidenceLedger. Full local suite: **229 passed / 2 skipped / 11 deselected**;
     boundary check and production TypeScript build green.
-  - The private Gold 001–015 retrieval rerun is unchanged: lexical remains default,
+  - Gold 001–015 is now released at
+    [`private_eval/fvsc_gold_001_015.json`](../../private_eval/fvsc_gold_001_015.json)
+    with explicit owner authorization. It contains questions, logical source locators,
+    roles, owner interpretations, rejected readings, and link boundaries—not raw
+    Telegram bodies, actor identities, the source corpus, or the interpretation journal.
+  - The released Gold 001–015 retrieval rerun is unchanged: lexical remains default,
     no exact/hybrid arm is promoted, and negative hits remain zero.
   - A conversational blind-question probe over the private diary produced useful
     interpretations and substantial owner agreement, but also exposed a false owner

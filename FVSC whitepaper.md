@@ -1388,8 +1388,9 @@ Sim(A, B) = Tr(ρ_A · ρ_B)
 
 Для trace-one PSD states это симметричный Hilbert–Schmidt overlap. Он сравнивает форму
 построенных состояний, но не является универсальной семантической близостью. На текущем
-private Gold lexical retrieval превосходит exact и fusion arms; density retrieval не
-продвигается без отдельного relation-specific результата.
+опубликованном owner-Gold (с локально разрешаемыми исходными текстами) lexical retrieval
+превосходит exact и fusion arms; density retrieval не продвигается без отдельного
+relation-specific результата.
 
 #### Практические параметры
 

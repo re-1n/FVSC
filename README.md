@@ -46,8 +46,8 @@ the [semantic-atlas design](./docs/architecture/SEMANTIC_ATLAS.md).
   raw-text index.
 - A lightweight `pymorphy3` adapter proposes exact Russian S→V→O/adjective relations,
   all marked defeasible and source-spanned.
-- Owner feedback, temporal contradiction views, interpretation-layer policies, and an
-  open-meaning private gold contract are implemented.
+- Owner feedback, temporal contradiction views, interpretation-layer policies, and a
+  [released open-meaning owner-gold seed](private_eval/README.md) are implemented.
 - Ollama can produce structured L3 claims. Every supported claim must cite transient
   `S1…Sn` sources that FVSC resolves into revision/hash citations.
 - Proposals and claim-level owner assessments are stored outside canonical evidence in
@@ -73,7 +73,7 @@ metadata but does not rewrite its source or silently insert model text into the 
 
 ## Honest real-data result
 
-On private owner-reviewed Gold 001–015 (`k=10`):
+On released owner-reviewed Gold 001–015 (`k=10`, source bodies resolved locally):
 
 | Retriever | MRR | Mean recall | Context recall | Negative hits |
 |---|---:|---:|---:|---:|
@@ -85,6 +85,10 @@ On private owner-reviewed Gold 001–015 (`k=10`):
 Lexical retrieval remains the default. Exact relations are useful for provenance,
 explanation, feedback, and temporal structure, but semantic superiority has not been
 demonstrated. Density and ContainerCore remain optional experimental views.
+
+The [Gold JSON](private_eval/fvsc_gold_001_015.json) publishes questions, evidence
+locators/roles, owner interpretations, rejected readings, and separation constraints.
+It intentionally excludes the raw Telegram corpus and runtime interpretation journal.
 
 ## Quick start
 

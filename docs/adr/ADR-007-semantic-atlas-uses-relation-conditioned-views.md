@@ -16,8 +16,8 @@ limits:
 
 - density and ContainerCore have not beaten simpler baselines on their registered
   tasks [ADR-002, ADR-003];
-- private Gold 001–015 retrieval favors the lexical floor over exact and fusion
-  arms;
+- released owner-Gold 001–015 retrieval, with source bodies resolved locally, favors
+  the lexical floor over exact and fusion arms;
 - different semantic relations require different inductive biases. Similarity,
   directed implication, hierarchy, temporal change, contradiction, and uncertainty
   do not in general share one useful metric.

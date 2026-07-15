@@ -28,7 +28,8 @@ Migration order (foundation-first; each commit must build and pass tests):
      11 deselected** and GitHub CI green.
    - ✅ **Stage 4e — real-data semantic evaluation** — portable exact-relation
      Judgments, source spans, policy-controlled layers, feedback, temporal
-     contradictions, private Gold 001–015, and lexical/exact/fusion comparison.
+     contradictions, released Gold 001–015 with locally resolved source bodies, and
+     lexical/exact/fusion comparison.
      Lexical wins (MRR@10 0.5262 vs 0.2611 exact); no semantic arm is promoted.
    - ✅ **Stage 4f — source-cited interpretation proposals** — typed L2/L3 claims,
      revision/hash citations, forbidden-link checks, claim-level owner assessment,
@@ -56,9 +57,9 @@ Migration order (foundation-first; each commit must build and pass tests):
      Protocol: [`STAGE_4H_CONTROLLED_ATTRIBUTION_TEST.md`](../architecture/STAGE_4H_CONTROLLED_ATTRIBUTION_TEST.md).
    Keep HTTP, plugin, and LLM dependencies outside the ingest layer. Do not commit
    vault data, voice data, or generated folders.
-5. **Verify** — implementation checkpoint: **229 passed / 2 skipped / 11 deselected**,
-   legacy boundary green, Obsidian production build green, private retrieval result
-   reproduced. Remote checkpoint `25c6839` passed GitHub Actions run 222. Draft PR #2
+5. **Verify** — current checkpoint: **231 passed / 1 skipped / 11 deselected**,
+   legacy boundary green, Obsidian production build green, owner-gold retrieval result
+   reproduced. Remote checkpoint `f5cdefa` passed GitHub Actions run 223. Draft PR #2
    already exists and validates each pushed `integration/fvsc-core-v1` head; do not
    create or merge another PR without separate user instruction.
 
