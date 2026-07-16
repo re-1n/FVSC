@@ -192,10 +192,16 @@ def test_stage4h_options_identity_and_generation_telemetry_are_explicit() -> Non
 
     request = opener.requests[1][0]
     sent = json.loads(request.data.decode("utf-8"))
-    assert sent["options"] == {"temperature": 0.0, "num_ctx": 8_192, "seed": 42}
+    assert sent["options"] == {
+        "temperature": 0.0,
+        "num_ctx": 8_192,
+        "num_predict": 768,
+        "seed": 42,
+    }
     telemetry = backend.last_generation_telemetry
     assert telemetry is not None
     assert telemetry.model_digest == digest
+    assert telemetry.num_predict == 768
     assert telemetry.prompt_eval_count == 20
     assert telemetry.eval_count == 8
     assert telemetry.source_count == 1
@@ -207,3 +213,5 @@ def test_stage4h_seed_and_model_digest_validation_fail_closed() -> None:
         OllamaInterpretationBackend(seed=-1, opener=_Opener())
     with pytest.raises(ValueError, match="model_digest"):
         OllamaInterpretationBackend(model_digest="not-a-digest", opener=_Opener())
+    with pytest.raises(ValueError, match="num_predict"):
+        OllamaInterpretationBackend(num_predict=0, opener=_Opener())

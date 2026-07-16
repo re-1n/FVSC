@@ -48,11 +48,16 @@ Migration order (foundation-first; each commit must build and pass tests):
      model digest/seed/token/duration telemetry; paired local generation; keyed blinded
      owner-review pack; paired scoring and conservative diagnosis. Raw proposals,
      excerpts, arm map, and owner review stay under ignored `.fvsc/stage4h/`.
-   - **Next: execute the Stage 4h pilot on the owner's Ollama machine** — six frozen
+   - **Next: execute the Stage 4h pilot on the owner's local Ollama machine** — six frozen
      questions, A0 automatic plus up to 18 blinded A1/A2/A4 variants. Review every
      claim/citation and measure false authorship, unknown-referent assumptions,
      forbidden composites, abstention, latency, and tokens. `A3` remains deferred until
      a separate external-source privacy scope is explicitly authorized.
+     Two CPU-only Codespace attempts produced no artifacts: the first exposed the
+     180-second transport limit; the second measured about 1.12 generated tokens/second
+     and exposed the missing output cap. The preregistered local retry therefore binds
+     `num_predict=768` and the concise prompt version in the manifest; use capable local
+     hardware rather than changing the retrieval arms around Codespace performance.
    - **Decision after Stage 4h** — choose at most one relation-conditioned view whose
      inductive bias matches the dominant error (for example contextual usage retrieval,
      directed inclusion, temporal trajectory, or ambiguity state). Register a baseline

@@ -43,6 +43,7 @@ from fvsc.ingest import (
 from fvsc.ingest.document_ingest import build_evidence_batch
 from fvsc.integrations import (
     DEFAULT_OLLAMA_HOST,
+    DEFAULT_OLLAMA_NUM_PREDICT,
     OllamaInterpretationBackend,
 )
 from fvsc.retrieval import JudgmentSearchIndex, LexicalSearchIndex
@@ -261,6 +262,7 @@ def _run(args: argparse.Namespace) -> int:
         temperature=0.0,
         seed=args.seed,
         num_ctx=args.num_ctx,
+        num_predict=args.num_predict,
         timeout=args.ollama_timeout,
     )
     identity = probe.model_identity()
@@ -277,6 +279,7 @@ def _run(args: argparse.Namespace) -> int:
         temperature=0.0,
         seed=args.seed,
         num_ctx=args.num_ctx,
+        num_predict=args.num_predict,
     )
     spec = Stage4hRunSpec(
         gold_sha256=file_sha256(args.gold),
@@ -305,6 +308,7 @@ def _run(args: argparse.Namespace) -> int:
         temperature=0.0,
         seed=args.seed,
         num_ctx=args.num_ctx,
+        num_predict=args.num_predict,
         timeout=args.ollama_timeout,
     )
     results = run_local_stage4h(
@@ -422,6 +426,12 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--ollama-host", default=DEFAULT_OLLAMA_HOST)
     run.add_argument("--seed", type=int, default=42)
     run.add_argument("--num-ctx", type=int, default=8_192)
+    run.add_argument(
+        "--num-predict",
+        type=int,
+        default=DEFAULT_OLLAMA_NUM_PREDICT,
+        help="maximum generated tokens per arm (default: 768)",
+    )
     run.add_argument(
         "--ollama-timeout",
         type=float,

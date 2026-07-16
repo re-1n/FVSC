@@ -135,6 +135,7 @@ def _fixture(*, mode: str):
                 temperature=model.temperature,
                 seed=model.seed,
                 num_ctx=model.num_ctx,
+                num_predict=model.num_predict,
                 source_count=1,
                 prompt_chars=100,
                 wall_seconds=wall,

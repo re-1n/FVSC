@@ -154,7 +154,9 @@ The first executable run is diagnostic, not confirmatory:
   machine under this pilot authorization;
 - lexical/structural `top_k=10`, final prompt cap `12`, reply/temporal context depth `1`;
 - one exact Ollama tag and digest for A1/A2/A4, `temperature=0`, `seed=42`, and
-  `num_ctx=8192` unless a different value is frozen in the manifest before generation;
+  `num_ctx=8192`, `num_predict=768`, and concise prompt version
+  `source-cited-json-v2-concise` unless different values are frozen in the manifest
+  before generation;
 - zero tolerated fabricated/unsupported citations, false owner attribution,
   unsupported referent assumptions, or forbidden composites;
 - A2 diagnostic target: accepted-or-partial claims `>=0.80`, citation precision
@@ -181,6 +183,7 @@ PYTHONPATH=src python scripts/stage4h_pilot.py run \
   --owner-id "OWNER_ACTOR_ID_1" \
   --owner-id "OWNER_ACTOR_ID_2" \
   --model "EXACT_TAG_FROM_OLLAMA_LIST" \
+  --num-predict 768 \
   --ollama-timeout 900
 ```
 
@@ -188,6 +191,14 @@ PYTHONPATH=src python scripts/stage4h_pilot.py run \
 The pilot defaults to 900 seconds because CPU-only local inference can exceed the
 general interactive adapter default of 180 seconds. Successful runs still record the
 actual wall time and Ollama token/duration telemetry for every generated arm.
+
+`--num-predict` is a manifest-bound output cap. It prevents an invalid or overly
+verbose JSON continuation from consuming the full context window. The first CPU-only
+attempt exposed the missing cap by decoding 572 tokens at about 1.12 tokens/second
+without completing before the 900-second transport timeout; it produced no result
+bundle and therefore did not enter owner scoring. Prompt v2 additionally requests one
+to three concise claims so the cap constrains runaway output rather than silently
+truncating the intended response shape.
 
 The command resolves the installed model digest, freezes the corpus and every
 candidate rank/revision, runs the paired local arms, and writes one new directory under

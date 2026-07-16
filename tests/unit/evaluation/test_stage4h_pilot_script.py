@@ -69,3 +69,4 @@ def test_pilot_cli_allows_slow_cpu_generation_timeout() -> None:
     )
 
     assert args.ollama_timeout == 900.0
+    assert args.num_predict == 768

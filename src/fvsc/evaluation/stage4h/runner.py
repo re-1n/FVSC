@@ -59,6 +59,7 @@ class Stage4hGenerationTelemetry:
     temperature: float
     seed: int
     num_ctx: int
+    num_predict: int
     source_count: int
     prompt_chars: int
     wall_seconds: float
@@ -81,6 +82,7 @@ class Stage4hGenerationTelemetry:
             temperature=self.temperature,
             seed=self.seed,
             num_ctx=self.num_ctx,
+            num_predict=self.num_predict,
         )
         object.__setattr__(self, "backend_id", normalized.backend_id)
         object.__setattr__(self, "model", normalized.model)
@@ -89,6 +91,7 @@ class Stage4hGenerationTelemetry:
         object.__setattr__(self, "temperature", normalized.temperature)
         object.__setattr__(self, "seed", normalized.seed)
         object.__setattr__(self, "num_ctx", normalized.num_ctx)
+        object.__setattr__(self, "num_predict", normalized.num_predict)
         for field in ("source_count", "prompt_chars"):
             value = getattr(self, field)
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -124,6 +127,7 @@ class Stage4hGenerationTelemetry:
             "model": self.model,
             "model_digest": self.model_digest,
             "num_ctx": self.num_ctx,
+            "num_predict": self.num_predict,
             "prompt_chars": self.prompt_chars,
             "prompt_eval_count": self.prompt_eval_count,
             "prompt_eval_duration_ns": self.prompt_eval_duration_ns,
@@ -145,6 +149,7 @@ class Stage4hGenerationTelemetry:
             temperature=value.get("temperature", float("nan")),
             seed=value.get("seed", -1),
             num_ctx=value.get("num_ctx", 0),
+            num_predict=value.get("num_predict", 768),
             source_count=value.get("source_count", -1),
             prompt_chars=value.get("prompt_chars", -1),
             wall_seconds=value.get("wall_seconds", float("nan")),
@@ -384,6 +389,7 @@ def validate_local_backend(spec: Stage4hRunSpec, backend: InterpretationBackend)
         "temperature": getattr(backend, "temperature", None),
         "seed": getattr(backend, "seed", None),
         "num_ctx": getattr(backend, "num_ctx", None),
+        "num_predict": getattr(backend, "num_predict", None),
         "model_digest": getattr(backend, "model_digest", None),
     }
     for name, actual in fields.items():
@@ -422,6 +428,7 @@ def _telemetry(
         temperature=spec.model.temperature,
         seed=spec.model.seed,
         num_ctx=spec.model.num_ctx,
+        num_predict=spec.model.num_predict,
         source_count=source_count,
         prompt_chars=value(
             "prompt_chars",

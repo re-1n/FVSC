@@ -48,6 +48,7 @@ def test_run_spec_is_content_addressed_and_round_trips() -> None:
     assert len(spec.run_id) == 64
     assert spec.model.temperature == 0.0
     assert spec.model.seed == 42
+    assert spec.model.num_predict == 768
     assert spec.evaluation_mode == "pilot"
     assert spec.thresholds.max_severe_errors == 0
 

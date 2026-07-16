@@ -138,6 +138,7 @@ class Stage4hModelConfig:
     temperature: float = 0.0
     seed: int = 42
     num_ctx: int = 8_192
+    num_predict: int = 768
     model_digest: str | None = None
 
     def __post_init__(self) -> None:
@@ -163,6 +164,16 @@ class Stage4hModelConfig:
             "num_ctx",
             _integer(self.num_ctx, field="num_ctx", minimum=256, maximum=1_048_576),
         )
+        object.__setattr__(
+            self,
+            "num_predict",
+            _integer(
+                self.num_predict,
+                field="num_predict",
+                minimum=1,
+                maximum=32_768,
+            ),
+        )
         if self.model_digest is not None:
             object.__setattr__(
                 self,
@@ -176,6 +187,7 @@ class Stage4hModelConfig:
             "model": self.model,
             "model_digest": self.model_digest,
             "num_ctx": self.num_ctx,
+            "num_predict": self.num_predict,
             "prompt_version": self.prompt_version,
             "seed": self.seed,
             "temperature": self.temperature,
@@ -188,6 +200,7 @@ class Stage4hModelConfig:
             model=value.get("model", ""),
             model_digest=value.get("model_digest"),
             num_ctx=value.get("num_ctx", 8_192),
+            num_predict=value.get("num_predict", 768),
             prompt_version=value.get("prompt_version", ""),
             seed=value.get("seed", 42),
             temperature=value.get("temperature", 0.0),

@@ -46,6 +46,7 @@ class _Backend:
     temperature = 0.0
     seed = 42
     num_ctx = 8_192
+    num_predict = 768
 
     def __init__(self) -> None:
         self.calls = []
