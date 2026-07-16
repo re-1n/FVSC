@@ -180,8 +180,14 @@ PYTHONPATH=src python scripts/stage4h_pilot.py run \
   --telegram "/path/to/result.json" \
   --owner-id "OWNER_ACTOR_ID_1" \
   --owner-id "OWNER_ACTOR_ID_2" \
-  --model "EXACT_TAG_FROM_OLLAMA_LIST"
+  --model "EXACT_TAG_FROM_OLLAMA_LIST" \
+  --ollama-timeout 900
 ```
+
+`--ollama-timeout` is a per-generation transport limit, not a model sampling option.
+The pilot defaults to 900 seconds because CPU-only local inference can exceed the
+general interactive adapter default of 180 seconds. Successful runs still record the
+actual wall time and Ollama token/duration telemetry for every generated arm.
 
 The command resolves the installed model digest, freezes the corpus and every
 candidate rank/revision, runs the paired local arms, and writes one new directory under

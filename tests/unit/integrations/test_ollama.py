@@ -128,6 +128,16 @@ def test_model_listing_is_deterministic_and_transport_failures_are_safe() -> Non
     assert broken.ping() is False
 
 
+def test_generation_timeout_is_reported_separately_from_connection_failure() -> None:
+    class TimedOut:
+        def open(self, request, timeout):
+            raise TimeoutError
+
+    backend = OllamaInterpretationBackend(opener=TimedOut(), timeout=12.5)
+    with pytest.raises(OllamaIntegrationError, match="timed out after 12.5 seconds"):
+        backend.generate("Question", (_source(),))
+
+
 def test_stage4h_options_identity_and_generation_telemetry_are_explicit() -> None:
     digest = "d" * 64
     model_content = {

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from scripts.stage4h_pilot import _load_reviews, _review_template
+from scripts.stage4h_pilot import _load_reviews, _parser, _review_template
 
 
 def _pack():
@@ -53,3 +53,19 @@ def test_unfilled_review_template_fails_closed(tmp_path) -> None:
     path.write_text(json.dumps(value), encoding="utf-8")
     with pytest.raises(ValueError, match="does not match"):
         _load_reviews(path, expected_pack_id=_pack().pack_id)
+
+
+def test_pilot_cli_allows_slow_cpu_generation_timeout() -> None:
+    args = _parser().parse_args(
+        [
+            "run",
+            "--telegram",
+            "result.json",
+            "--owner-id",
+            "owner",
+            "--model",
+            "qwen:test",
+        ]
+    )
+
+    assert args.ollama_timeout == 900.0

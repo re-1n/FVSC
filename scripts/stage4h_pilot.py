@@ -57,6 +57,7 @@ PILOT_CASE_IDS = (
     "stage4h-challenge-002",
 )
 MAX_LOCAL_ARTIFACT_BYTES = 64 * 1024 * 1024
+DEFAULT_PILOT_OLLAMA_TIMEOUT = 900.0
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -260,6 +261,7 @@ def _run(args: argparse.Namespace) -> int:
         temperature=0.0,
         seed=args.seed,
         num_ctx=args.num_ctx,
+        timeout=args.ollama_timeout,
     )
     identity = probe.model_identity()
     if identity is None:
@@ -303,6 +305,7 @@ def _run(args: argparse.Namespace) -> int:
         temperature=0.0,
         seed=args.seed,
         num_ctx=args.num_ctx,
+        timeout=args.ollama_timeout,
     )
     results = run_local_stage4h(
         spec=spec,
@@ -419,6 +422,12 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--ollama-host", default=DEFAULT_OLLAMA_HOST)
     run.add_argument("--seed", type=int, default=42)
     run.add_argument("--num-ctx", type=int, default=8_192)
+    run.add_argument(
+        "--ollama-timeout",
+        type=float,
+        default=DEFAULT_PILOT_OLLAMA_TIMEOUT,
+        help="per-generation Ollama timeout in seconds (default: 900)",
+    )
     run.add_argument("--namespace", default="private-diary")
     run.add_argument("--timezone", default="Europe/Moscow")
     run.add_argument(

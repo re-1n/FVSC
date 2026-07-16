@@ -336,15 +336,20 @@ class OllamaInterpretationBackend:
             headers=headers,
             method=method,
         )
+        request_timeout = self.timeout if timeout is None else timeout
         try:
             with self._opener.open(
                 request,
-                timeout=self.timeout if timeout is None else timeout,
+                timeout=request_timeout,
             ) as response:
                 raw = self._read_response(response)
         except urllib.error.HTTPError as exc:
             raise OllamaIntegrationError(f"Ollama request failed with HTTP {exc.code}") from exc
-        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
+        except TimeoutError as exc:
+            raise OllamaIntegrationError(
+                f"Ollama request timed out after {request_timeout:g} seconds"
+            ) from exc
+        except (urllib.error.URLError, ConnectionError, OSError) as exc:
             raise OllamaIntegrationError("Cannot reach the configured local Ollama daemon") from exc
         try:
             decoded = json.loads(raw.decode("utf-8"))
