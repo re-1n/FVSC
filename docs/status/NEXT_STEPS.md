@@ -58,6 +58,10 @@ Migration order (foundation-first; each commit must build and pass tests):
      directed inclusion, temporal trajectory, or ambiguity state). Register a baseline
      and ablation before implementation. Do not build the full research menu.
      Protocol: [`STAGE_4H_CONTROLLED_ATTRIBUTION_TEST.md`](../architecture/STAGE_4H_CONTROLLED_ATTRIBUTION_TEST.md).
+     The whitepaper subsection **«Заимствуемые паттерны MAGMA и MemMachine»** records
+     five bounded candidates (M1–M3, MM1–MM2), their FVSC guardrails, and the required
+     ablations. Treat them as post-pilot options and baselines, not as an authorized
+     dependency or simultaneous implementation plan.
    Keep HTTP, plugin, and LLM dependencies outside the ingest layer. Do not commit
    vault data, voice data, or generated folders.
 5. **Verify** — current local checkpoint: **255 passed / 1 skipped / 11 deselected**,

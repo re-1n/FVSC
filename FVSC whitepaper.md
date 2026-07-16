@@ -3,7 +3,7 @@
 > Каноническая исчерпывающая формулировка назначения, инвариантов, критериев успеха и
 > non-goals проекта: [`docs/PROJECT_PURPOSE.md`](docs/PROJECT_PURPOSE.md).
 
-## Статус документа и пересмотр 2026-07-15
+## Статус документа и пересмотр 2026-07-16
 
 Этот whitepaper сохраняет полный ход исследовательского замысла FVSC: точные
 суждения, контейнерную модель, density semantics, рекурсивную композицию, временную
@@ -2363,6 +2363,162 @@ accumulation обеспечивает этот инвариант напряму
 | Kelly (1955) | Ручное заполнение, не из текста |
 | PKM (Obsidian, Roam) | Ручные связи, без автоматического анализа |
 | Knowledge Graphs (Wikidata) | Объективные, без субъективности |
+
+### Заимствуемые паттерны MAGMA и MemMachine: кандидаты, а не зависимости
+
+MAGMA и MemMachine решают соседнюю, но не тождественную задачу: дают LLM-агенту
+долговременную память и релевантный recall. FVSC строит source-grounded модель
+выраженной человеком смысловой организации и должен сравнивать такие модели между
+людьми. Поэтому эти системы рассматриваются как источники инфраструктурных паттернов,
+абляционных baselines и отрицательных примеров, но не как готовые семантические ядра.
+
+Основные источники для воспроизводимого рассмотрения:
+
+- [MAGMA: A Multi-Graph based Agentic Memory Architecture for AI Agents
+  (Jiang et al., 2026)](https://arxiv.org/abs/2601.03236) и
+  [референсная реализация](https://github.com/FredJiang0324/MAGMA);
+- [MemMachine: A Ground-Truth-Preserving Memory System for Personalized AI Agents
+  (2026)](https://arxiv.org/abs/2604.04853) и
+  [референсная реализация](https://github.com/MemMachine/MemMachine).
+
+Ни один паттерн ниже не принимается только потому, что он улучшил long-conversation
+QA в исходной статье. Продвижение в активную архитектуру FVSC требует owner-gold
+абляции на одной и той же версии корпуса, при одинаковых candidate/token budgets,
+модели-вербализаторе и citation policy.
+
+#### Кандидат M1: intent-aware маршрутизация по relation-conditioned views
+
+**Что заимствуется из MAGMA.** MAGMA разделяет temporal, semantic, causal и entity
+представления событий, а тип запроса определяет, какие рёбра и пути важнее. Это
+поддерживает уже принятое в FVSC решение: не искать все ответы одной универсальной
+дистанцией, а компилировать вопрос в план по подходящим views.
+
+**Адаптация к FVSC.** Query planner должен сначала фиксировать author/adoption scope,
+time, context и допустимый L0–L3 layer, затем объявлять используемые views и их роли:
+nomination, expansion или verification. Например, временной вопрос может предпочесть
+temporal trajectory, вопрос о метафоре — evidence-linked metaphor mappings, а вопрос о
+различии двух людей — два персональных typed-relation subgraphs и alignment между ними.
+Маршрут и веса становятся частью воспроизводимой run telemetry.
+
+**Что не переносится.** Четыре графа MAGMA не являются закрытым универсальным набором.
+Semantic-similarity edge только номинирует кандидатов и не означает персонального
+значения. Автоматически предложенная LLM причинная или entity-связь хранится как
+цитируемый defeasible `InterpretationClaim` с model/method/layer, но не становится
+`EvidenceEvent` или owner belief без review.
+
+**Тест M1.** На замороженных вопросах разных семейств сравнить:
+
+1. lexical/exact floor;
+2. одинаковую для всех вопросов fixed fusion;
+3. intent-routed plan с тем же candidate и token budget.
+
+Измерять claim-level owner agreement, citation precision/recall, false attribution,
+forbidden composition, abstention, latency и route stability. Маршрутизация
+продвигается только при повторяемом task-level выигрыше; красивое объяснение маршрута
+не является отдельным доказательством качества.
+
+#### Кандидат M2: anchor-first bounded graph traversal
+
+**Что заимствуется из MAGMA.** Сначала дешёвый поиск находит несколько anchor events,
+после чего система ограниченно расширяет их по отношениям, соответствующим запросу.
+Это может сократить контекст и сделать multi-hop путь наблюдаемым.
+
+**Адаптация к FVSC.** Anchors разрешаются в точные source revisions/spans. Каждый шаг
+обхода обязан назвать typed relation, направление, derivation и evidence. Reply/time
+adjacency может добавлять контекст, но сама по себе не доказывает смысловую связь.
+Глубина, ширина, edge policy и причины остановки регистрируются. Полученный путь —
+proposal для проверки, а не скрытая цепочка рассуждения и не новый источник.
+
+**Тест M2.** Для temporal, metaphor, contradiction и cross-person questions сравнить
+top-k retrieval без обхода с bounded traversal глубины 1–3. Проверять не только recall,
+но и ложные композиции, потерю направления, число неподтверждённых промежуточных
+рёбер, citation completeness и стоимость. Если обход добавляет больше правдоподобных,
+но неверных связей, остаётся прямой retrieval.
+
+#### Кандидат M3: быстрый canonical ingest и медленная derived consolidation
+
+**Что заимствуется из MAGMA.** Source event записывается немедленно, а более дорогие
+entity, causal, cluster или summary links могут достраиваться асинхронно.
+
+**Адаптация к FVSC.** Быстрый поток заканчивается только после сохранения точного
+`SourceDocument`/`EvidenceEvent`, revision hash, actor, time и adoption metadata.
+Медленный поток запускает versioned materializers семантического атласа. Он может быть
+повторён, отменён или заменён без изменения ledger. Пока materializer не завершён,
+query contract явно сообщает stale/missing view и использует детерминированный floor.
+
+**Тест M3.** Сравнить полностью синхронный ingest и ledger-first asynchronous
+materialization по p50/p95 ingest latency, времени до query-ready state, идентичности
+восстановленного snapshot, устойчивости к прерыванию/повтору и стоимости. Это
+engineering-кандидат: он не получает статус semantic improvement только за ускорение.
+
+#### Кандидат MM1: ground-truth episode и nucleus-plus-neighborhood retrieval
+
+**Что заимствуется из MemMachine.** Полный исходный эпизод остаётся ground truth;
+поисковый индекс хранит производные фрагменты со ссылкой назад. После нахождения
+релевантного «ядра» retrieval может вернуть соседние реплики, восстанавливая локальный
+контекст, который потерялся при chunking.
+
+**Адаптация к FVSC.** Этот принцип уже частично реализован через `SourceDocument`,
+message-level evidence и revision citations. Новый кандидат — только policy
+контекстного расширения: reply-chain, соседние сообщения одного source thread,
+ограниченное time window и явно связанные discourse units. Participant, forward,
+author и owner-adoption границы сохраняются на каждом элементе; соседство не объединяет
+несколько голосов в один.
+
+**Тест MM1.** На одинаковых anchors сравнить: source-only, reply expansion, temporal
+window и смешанную policy. Измерять owner meaning fidelity, unknown-referent errors,
+false authorship, forbidden composites, citation completeness, полезный контекст на
+токен и latency. Расширение принимается отдельно для каждого source kind, если польза
+выше риска ложной композиции.
+
+#### Кандидат MM2: working / episodic / profile как разные жизненные циклы
+
+**Что заимствуется из MemMachine.** Текущий session context, исторические эпизоды и
+устойчивые пользовательские обобщения не должны иметь одинаковый срок жизни и способ
+обновления.
+
+**Адаптация к FVSC.** `Working` — эфемерное состояние запроса; `episodic` — canonical
+source/evidence history; `profile` — только versioned materialized view из цитируемых
+claims и owner reviews. Profile не является новой канонической памятью, не перезаписывает
+противоречия, не превращает частое высказывание в убеждение и не смешивает автора,
+участника, цитату и принятую внешнюю формулировку. Для персональных смыслов профиль
+должен хранить typed relation, context, time range, evidence set и uncertainty, а не
+только плоское «пользователь любит X».
+
+**Тест MM2.** Сравнить ledger retrieval, автоматически сжатый profile и owner-reviewed
+profile на вопросах об устойчивом значении и изменении значения во времени. Измерять
+meaning fidelity, stale-profile rate, contradiction loss, citation reachability,
+исправляемость и maintenance cost. Profile допускается как cache/view только если
+ускоряет или улучшает ответы без потери значимых различий.
+
+#### Отложенная инфраструктура и итоговый сравнительный baseline
+
+Конкретные хранилища, серверы и SDK MAGMA/MemMachine не заимствуются до измеренного
+узкого места. Neo4j/PostgreSQL или отдельный memory service не являются условием
+проверки перечисленных паттернов: сначала они реализуются поверх текущих FVSC
+contracts минимальным сменяемым адаптером.
+
+После однопользовательской проверки Stage 4h целевой cross-person experiment должен
+сравнить четыре режима на согласованном или деидентифицированном корпусе двух людей:
+
+1. raw-context LLM;
+2. MemMachine-like episodic/profile memory;
+3. MAGMA-like multi-view event retrieval;
+4. FVSC provenance-grounded personal atlases с relation-conditioned alignment.
+
+Задача — не вывести один процент «похожести», а правильно показать подтверждённые
+общности, различия, асимметрии и области недостатка evidence. Основные метрики:
+раздельное owner agreement обоих людей, citation correctness, attribution/adoption
+correctness, forbidden interpretation rate, сохранение временных противоречий,
+abstention и вычислительная стоимость. Таким экспериментом определяется, добавляет ли
+FVSC ценность сверх качественной памяти агента.
+
+**Порядок рассмотрения:** сначала завершить Stage 4h; затем выбрать ровно один кандидат
+по наблюдаемому классу ошибок. Наиболее дешёвый первый кандидат — MM1 context expansion,
+если пилот покажет потерю локального контекста; M1/M2 нужны при ошибках маршрутизации и
+multi-hop; MM2 — только при измеренной повторной стоимости построения устойчивых
+обобщений; M3 — при измеренной ingest latency. Одновременная реализация всего списка
+запрещена, поскольку не позволит приписать выигрыш конкретному паттерну.
 
 ---
 
