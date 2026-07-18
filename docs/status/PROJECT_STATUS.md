@@ -1,4 +1,4 @@
-# Project status — 2026-07-15
+# Project status — 2026-07-18
 
 ## Where we are
 
@@ -72,18 +72,27 @@
     run/score workflow. Gold interpretations are never prompt input, A4 cannot fall
     back to lexical, source revisions are rechecked immediately before generation,
     and raw outputs/excerpts remain under ignored `.fvsc/stage4h/`.
+  - Runtime hardening now binds a 900-second per-request timeout and
+    `num_predict=768`. The first capable-GPU attempt at `0c2b2dd` then exposed one
+    pre-scoring candidate defect: Gold 008/A4 context expansion admitted adjacent
+    media-only `message-697` with an empty body. The fail-closed guard stopped the run
+    before any artifact or blind map was written, so this is not a pilot result.
+    Checkpoint `94e7730` retains the media record in corpus topology but excludes it
+    from the text-only prompt view, preflights every frozen source before generation,
+    and versions the corrected retrieval identifiers. On the exact 645-document local
+    corpus, all 24 frozen case/arm sets now contain zero empty prompt candidates.
   - The preregistered first run is a six-question diagnostic pilot (18 possible
     generative variants across A1/A2/A4; A0 is automatic). `A3` is deferred because no
     external-source privacy scope has been authorized. Pilot mode cannot promote a
     representation; confirmatory mode requires at least 17 cases and every registered
     quality, citation, safety, confidence, and latency gate.
-  - Current local verification after the Stage 4h harness: **255 passed / 1 skipped /
-    11 deselected**, legacy-boundary check green, Obsidian production build green.
-    Remote checkpoint `2fc1c66` passed GitHub Actions run 225.
-    This execution environment has no installed/running Ollama model, so the actual
-    owner-scored pilot is the next runtime action rather than a fabricated benchmark
-    result.
-  - Next: run the controlled six-question pilot on the owner's local Ollama machine,
+  - Current local verification after the text-eligibility correction: **259 passed /
+    2 skipped / 11 deselected**. The earlier harness checkpoint `2fc1c66` passed GitHub
+    Actions run 225; each new integration head is rechecked by draft PR #2.
+    This repository-side environment does not run the owner-scored Ollama pilot; local
+    candidate construction and CI verify the harness while raw sources remain private.
+  - Next: retry the controlled six-question pilot on the owner's local Ollama machine
+    from `94e7730` or later,
     complete the blinded claim/citation review, and use the diagnosis to select at most
     one next view experiment—or retain lexical/improve the interpreter.
 

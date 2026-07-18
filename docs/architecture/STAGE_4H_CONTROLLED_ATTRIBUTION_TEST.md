@@ -167,6 +167,34 @@ The manifest has `evaluation_mode=pilot`; code rejects promotion in that mode.
 bound, mean A4−A1 fidelity delta `>=0.5`, citation-precision drop `<=0.05`, no safety
 regression, and latency at most `2x` unless a new protocol is preregistered.
 
+### Pre-scoring text-eligibility correction
+
+The first GPU execution at `0c2b2dd` produced no run directory, blind map, review, or
+score. Before the atomic artifact write, the fail-closed runner found one invalid
+prompt candidate: A4 context expansion for Gold 008 had retained adjacent
+`message-697`, whose `ingest_status=deferred_media` and text body is empty. The model,
+Ollama transport, and GPU were healthy; this was a deterministic corpus/candidate
+contract defect rather than an inference failure.
+
+Checkpoint `94e7730` corrects prompt eligibility without deleting evidence:
+
+- textless records remain in the corpus digest and reply/temporal topology;
+- optional context expansion skips records with no non-whitespace text in this
+  text-only pilot, while continuing deterministically to the next eligible context;
+- a direct lexical, structural, or owner-oracle candidate without text fails during
+  candidate freezing instead of being silently removed;
+- the runner resolves every frozen source and revision before the first model call, so
+  a late invalid arm cannot consume generation compute and then prevent artifact output;
+- retrieval identifiers now bind `text-context-v1` to distinguish the corrected
+  candidate view.
+
+This correction changes no question, gold decision, arm, ranker, threshold, model,
+seed, context depth, or output cap. Because the failed attempt created no result or
+owner-visible blinded output, the retry remains a diagnostic pilot rather than an
+outcome-conditioned rerun. Two support entries with `source_id=null` in Gold 012 and
+Gold 014 are intentionally unavailable locators, are excluded from oracle candidates,
+and are outside the six-case pilot; they are not this failure mode.
+
 ## Local execution
 
 List exact local model tags:
