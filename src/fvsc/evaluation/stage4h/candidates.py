@@ -60,6 +60,11 @@ def _document_index(
     return ordered, by_id
 
 
+def _has_prompt_text(document: SourceDocument) -> bool:
+    """Return whether one retained corpus record can enter a text-only prompt."""
+    return bool(document.text.strip())
+
+
 def _append_context(
     *,
     candidates: list[FrozenCandidate],
@@ -82,6 +87,11 @@ def _append_context(
                 continue
             if document.source_id not in by_id:
                 raise AssertionError("context expansion returned an unknown document")
+            # Textless records remain in the frozen corpus so reply/temporal topology
+            # and provenance do not change. They are not prompt candidates until a
+            # future media adapter materializes source text for this evaluation view.
+            if not _has_prompt_text(document):
+                continue
             candidates.append(
                 FrozenCandidate(
                     rank=len(candidates) + 1,
@@ -112,6 +122,8 @@ def _lexical_candidates(
             raise ValueError(
                 "lexical index does not match the preregistered Stage 4h corpus"
             )
+        if not _has_prompt_text(document):
+            raise ValueError("lexical retrieval returned a source without prompt text")
         candidates.append(
             FrozenCandidate(
                 rank=len(candidates) + 1,
@@ -161,6 +173,11 @@ def _oracle_candidates(
                 f"case {case.case_id} oracle source is absent from the frozen corpus: "
                 f"{source_id}"
             )
+        if not _has_prompt_text(document):
+            raise ValueError(
+                f"case {case.case_id} oracle source has no text for the text-only pilot: "
+                f"{source_id}"
+            )
         candidates.append(
             FrozenCandidate(
                 rank=len(candidates) + 1,
@@ -189,6 +206,8 @@ def _structural_candidates(
             raise ValueError(
                 f"structural retrieval returned source outside the corpus: {hit.source_id}"
             )
+        if not _has_prompt_text(document):
+            raise ValueError("structural retrieval returned a source without prompt text")
         candidates.append(
             FrozenCandidate(
                 rank=len(candidates) + 1,
@@ -295,8 +314,8 @@ def freeze_stage4h_candidates(
     documents: Iterable[SourceDocument],
     lexical_index: LexicalSearchIndex,
     structural_index: StructuralSearchIndex,
-    lexical_method: str = "lexical-char-tfidf-v1",
-    structural_method: str = "judgment-char-tfidf-v1",
+    lexical_method: str = "lexical-char-tfidf-v1+text-context-v1",
+    structural_method: str = "judgment-char-tfidf-v1+text-context-v1",
 ) -> FrozenCandidateBundle:
     """Freeze A0/A1/A2/A4 candidates with no hidden cross-arm fallback."""
     ordered_documents, by_id = _document_index(documents)

@@ -25,7 +25,13 @@ def _document(
     *,
     observed_at: float,
     reply_to_source_id: str | None = None,
+    ingest_status: str | None = None,
 ) -> SourceDocument:
+    metadata = {}
+    if reply_to_source_id is not None:
+        metadata["reply_to_source_id"] = reply_to_source_id
+    if ingest_status is not None:
+        metadata["ingest_status"] = ingest_status
     return SourceDocument.create(
         source_id=source_id,
         source_revision=hashlib.sha256(text.encode("utf-8")).hexdigest(),
@@ -34,11 +40,7 @@ def _document(
         adapter="test",
         source_kind="owner_reflection",
         raw_chars=len(text),
-        metadata=(
-            {"reply_to_source_id": reply_to_source_id}
-            if reply_to_source_id is not None
-            else {}
-        ),
+        metadata=metadata,
     )
 
 
@@ -143,7 +145,7 @@ def test_structural_arm_never_falls_back_to_lexical() -> None:
     assert bundle.for_case_arm("gold-001", "A1").candidates
     assert bundle.for_case_arm("gold-001", "A4").candidates == ()
     assert bundle.for_case_arm("gold-001", "A4").retrieval_method == (
-        "judgment-char-tfidf-v1"
+        "judgment-char-tfidf-v1+text-context-v1"
     )
 
 
@@ -170,6 +172,69 @@ def test_structural_candidates_keep_event_ids_and_source_revisions() -> None:
     frozen = bundle.for_case_arm("gold-001", "A4").candidates[0]
     assert frozen.source_revision == documents[1].source_revision
     assert frozen.evidence_event_ids == (event_id,)
+
+
+def test_freeze_skips_textless_context_without_removing_it_from_corpus() -> None:
+    documents = (
+        _document("message-1", "Паразиты захватывают внимание.", observed_at=1.0),
+        _document(
+            "message-media",
+            "",
+            observed_at=2.0,
+            reply_to_source_id="message-1",
+            ingest_status="deferred_media",
+        ),
+        _document(
+            "message-2",
+            "Контекст после изображения.",
+            observed_at=3.0,
+            reply_to_source_id="message-1",
+        ),
+        _document("message-9", "Негатив.", observed_at=9.0),
+    )
+    hit = SimpleNamespace(
+        source_id="message-1",
+        score=0.8,
+        evidence_event_ids=("e" * 64,),
+    )
+    bundle = freeze_stage4h_candidates(
+        spec=_spec(documents, prompt_source_cap=3),
+        cases=(_case(),),
+        documents=documents,
+        lexical_index=LexicalSearchIndex(documents),
+        structural_index=_StructuralIndex((hit,)),
+    )
+
+    assert "message-media" in {document.source_id for document in documents}
+    for arm in ("A1", "A4"):
+        candidates = bundle.for_case_arm("gold-001", arm).candidates
+        assert tuple(item.source_id for item in candidates) == (
+            "message-1",
+            "message-2",
+        )
+        assert tuple(item.rank for item in candidates) == (1, 2)
+
+
+def test_freeze_rejects_textless_direct_oracle_source() -> None:
+    documents = (
+        _document(
+            "message-1",
+            "",
+            observed_at=1.0,
+            ingest_status="deferred_media",
+        ),
+        _document("message-2", "Контекст.", observed_at=2.0),
+        _document("message-9", "Негатив.", observed_at=9.0),
+    )
+
+    with pytest.raises(ValueError, match="oracle source has no text"):
+        freeze_stage4h_candidates(
+            spec=_spec(documents),
+            cases=(_case(),),
+            documents=documents,
+            lexical_index=LexicalSearchIndex(documents),
+            structural_index=_StructuralIndex(),
+        )
 
 
 def test_freeze_fails_closed_on_corpus_drift_and_missing_oracle_source() -> None:

@@ -457,7 +457,7 @@ def _resolve_documents(
             raise ValueError("frozen candidate source is absent at generation time")
         if document.source_revision != candidate.source_revision:
             raise ValueError("frozen candidate source revision changed before generation")
-        if not document.text:
+        if not document.text.strip():
             raise ValueError("frozen candidate source body is empty at generation time")
         documents.append(document)
         event_ids[document.source_id] = candidate.evidence_event_ids
@@ -502,17 +502,32 @@ def run_local_stage4h(
     if len(by_document) != len(document_values):
         raise ValueError("Stage 4h source documents must have unique ids")
 
-    results: list[Stage4hArmResult] = []
+    resolved: dict[
+        tuple[str, Stage4hArm],
+        tuple[tuple[SourceDocument, ...], dict[str, tuple[str, ...]]],
+    ] = {}
+    # Resolve every frozen reference before the first model call. A late invalid
+    # candidate must not consume compute and then prevent the atomic result bundle.
     for case_id in spec.case_ids:
-        case = by_case.get(case_id)
-        if case is None:
-            raise ValueError(f"Stage 4h case is missing at run time: {case_id}")
         a0 = candidate_bundle.for_case_arm(case_id, "A0")
         a1 = candidate_bundle.for_case_arm(case_id, "A1")
         if [item.to_dict() for item in a0.candidates] != [
             item.to_dict() for item in a1.candidates
         ]:
             raise ValueError("A0 and A1 must use identical frozen lexical candidates")
+        for arm in spec.arms:
+            candidate_set = candidate_bundle.for_case_arm(case_id, arm)
+            if candidate_set.candidates:
+                resolved[(case_id, arm)] = _resolve_documents(
+                    candidate_set,
+                    by_document,
+                )
+
+    results: list[Stage4hArmResult] = []
+    for case_id in spec.case_ids:
+        case = by_case.get(case_id)
+        if case is None:
+            raise ValueError(f"Stage 4h case is missing at run time: {case_id}")
         for arm in spec.arms:
             candidate_set = candidate_bundle.for_case_arm(case_id, arm)
             generated_at = clock()
@@ -537,10 +552,7 @@ def run_local_stage4h(
                     )
                 )
                 continue
-            documents_for_prompt, event_ids = _resolve_documents(
-                candidate_set,
-                by_document,
-            )
+            documents_for_prompt, event_ids = resolved[(case_id, arm)]
             started = timer()
             proposal = generate_interpretation_proposal(
                 question=case.question,

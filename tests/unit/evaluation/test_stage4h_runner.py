@@ -205,6 +205,45 @@ def test_runner_refuses_backend_or_source_revision_drift() -> None:
         )
 
 
+def test_runner_fails_closed_on_whitespace_only_frozen_source() -> None:
+    document = _document("message-1", "   ")
+    spec = _spec((document,))
+
+    with pytest.raises(ValueError, match="source body is empty"):
+        run_local_stage4h(
+            spec=spec,
+            candidate_bundle=_bundle(spec, document),
+            cases=(_case(),),
+            documents=(document,),
+            backend=_Backend(),
+        )
+
+
+def test_runner_preflights_late_candidates_before_any_generation() -> None:
+    valid = _document("message-1", "Исходная версия.")
+    textless = _document("message-media", "")
+    spec = _spec((valid, textless))
+    candidate_bundle = FrozenCandidateBundle.create(
+        spec=spec,
+        candidate_sets=tuple(
+            _candidate_set(spec, textless if arm == "A4" else valid, arm)
+            for arm in spec.arms
+        ),
+    )
+    backend = _Backend()
+
+    with pytest.raises(ValueError, match="source body is empty"):
+        run_local_stage4h(
+            spec=spec,
+            candidate_bundle=candidate_bundle,
+            cases=(_case(),),
+            documents=(valid, textless),
+            backend=backend,
+        )
+
+    assert backend.calls == []
+
+
 def test_runner_requires_model_digest_and_never_accepts_a3() -> None:
     document = _document("message-1", "Исходная версия.")
     base = _spec((document,))
