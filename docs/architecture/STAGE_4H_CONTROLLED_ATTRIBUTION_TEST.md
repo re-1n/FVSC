@@ -195,6 +195,29 @@ outcome-conditioned rerun. Two support entries with `source_id=null` in Gold 012
 Gold 014 are intentionally unavailable locators, are excluded from oracle candidates,
 and are outside the six-case pilot; they are not this failure mode.
 
+### Pre-scoring Windows writer correction
+
+The next GPU execution at `ceb1995` completed all six cases and all configured arms,
+then failed before its first final artifact was written. The private atomic writer used
+POSIX-only `os.fchmod`; on Windows the resulting `AttributeError` left the `mkstemp`
+descriptor open, and the later `WinError 32` cleanup failure masked that primary error.
+The run left only a partial directory and temporary manifest file. It produced no valid
+manifest, result bundle, blind map, review pack, or owner score and is therefore not a
+pilot result.
+
+Checkpoint `e576224` makes the same atomic writer portable:
+
+- `0600` is still applied through `fchmod` on platforms that provide it;
+- platforms without `fchmod` retain the exclusive file created by `mkstemp` and continue;
+- descriptor ownership transfers explicitly to `fdopen`, while every pre-transfer
+  failure closes the raw descriptor before temporary-file cleanup;
+- cleanup failures cannot replace an already active primary exception.
+
+The change affects only local artifact persistence. It does not alter the corpus,
+candidates, prompts, model options, generated claims, blinding, or scoring contract.
+The Windows path is covered by a regression test that removes `fchmod` from the
+simulated platform before writing.
+
 ## Local execution
 
 List exact local model tags:

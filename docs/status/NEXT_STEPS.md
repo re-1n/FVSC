@@ -64,6 +64,12 @@ Migration order (foundation-first; each commit must build and pass tests):
      keeps that record in corpus topology, excludes it from the text-only prompt view,
      and preflights all frozen candidates before generation. Retry from that checkpoint
      or a later head; the failed execution is not an owner-scored result.
+     The subsequent Windows retry completed every generation but exposed a separate
+     POSIX-only persistence bug before final artifacts: `os.fchmod` was unavailable and
+     the open temporary descriptor caused `WinError 32` to mask the primary exception.
+     Checkpoint `e576224` makes the atomic writer platform-aware and closes every
+     descriptor before failure cleanup. The partial directory is not a valid run; retry
+     from `e576224` or later after removing that exact generated directory.
    - **Decision after Stage 4h** — choose at most one relation-conditioned view whose
      inductive bias matches the dominant error (for example contextual usage retrieval,
      directed inclusion, temporal trajectory, or ambiguity state). Register a baseline
@@ -75,7 +81,7 @@ Migration order (foundation-first; each commit must build and pass tests):
      dependency or simultaneous implementation plan.
    Keep HTTP, plugin, and LLM dependencies outside the ingest layer. Do not commit
    vault data, voice data, or generated folders.
-5. **Verify** — current local checkpoint: **259 passed / 2 skipped / 11 deselected**,
+5. **Verify** — current local checkpoint: **261 passed / 2 skipped / 11 deselected**,
    legacy boundary green, Obsidian production build green, frozen Gold/addendum digests
    unchanged. Stage 4h harness checkpoint `2fc1c66` passed GitHub Actions run 225.
    Draft PR #2 already exists and validates each pushed `integration/fvsc-core-v1`

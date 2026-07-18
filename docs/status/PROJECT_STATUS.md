@@ -81,18 +81,25 @@
     from the text-only prompt view, preflights every frozen source before generation,
     and versions the corrected retrieval identifiers. On the exact 645-document local
     corpus, all 24 frozen case/arm sets now contain zero empty prompt candidates.
+  - The following Windows GPU retry at `ceb1995` completed generation for the full
+    pilot, then exposed a separate POSIX-only artifact-writer defect before any final
+    file was saved: `os.fchmod` was unavailable and the open temporary descriptor made
+    cleanup mask the primary error with `WinError 32`. No review pack, blind map, or
+    score was produced, so the in-memory generation is not a pilot result. Checkpoint
+    `e576224` feature-detects `fchmod`, makes descriptor ownership explicit, preserves
+    primary exceptions, and regression-tests the Windows path.
   - The preregistered first run is a six-question diagnostic pilot (18 possible
     generative variants across A1/A2/A4; A0 is automatic). `A3` is deferred because no
     external-source privacy scope has been authorized. Pilot mode cannot promote a
     representation; confirmatory mode requires at least 17 cases and every registered
     quality, citation, safety, confidence, and latency gate.
-  - Current local verification after the text-eligibility correction: **259 passed /
+  - Current local verification after the Windows writer correction: **261 passed /
     2 skipped / 11 deselected**. The earlier harness checkpoint `2fc1c66` passed GitHub
     Actions run 225; each new integration head is rechecked by draft PR #2.
     This repository-side environment does not run the owner-scored Ollama pilot; local
     candidate construction and CI verify the harness while raw sources remain private.
   - Next: retry the controlled six-question pilot on the owner's local Ollama machine
-    from `94e7730` or later,
+    from `e576224` or later,
     complete the blinded claim/citation review, and use the diagnosis to select at most
     one next view experiment—or retain lexical/improve the interpreter.
 
