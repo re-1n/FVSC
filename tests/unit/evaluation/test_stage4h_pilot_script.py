@@ -5,7 +5,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from scripts.stage4h_pilot import _load_reviews, _parser, _review_template
+import scripts.stage4h_pilot as pilot
+from scripts.stage4h_pilot import (
+    _atomic_private_write,
+    _load_reviews,
+    _parser,
+    _review_template,
+)
 
 
 def _pack():
@@ -70,3 +76,37 @@ def test_pilot_cli_allows_slow_cpu_generation_timeout() -> None:
 
     assert args.ollama_timeout == 900.0
     assert args.num_predict == 768
+
+
+def test_atomic_private_write_works_without_posix_fchmod(tmp_path, monkeypatch) -> None:
+    monkeypatch.delattr(pilot.os, "fchmod", raising=False)
+    destination = tmp_path / "manifest.json"
+
+    _atomic_private_write(destination, '{"run": "windows"}\n')
+
+    assert destination.read_text(encoding="utf-8") == '{"run": "windows"}\n'
+    assert tuple(tmp_path.iterdir()) == (destination,)
+
+
+def test_atomic_private_write_closes_descriptor_when_permissions_fail(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    real_close = pilot.os.close
+    closed: list[int] = []
+
+    def close_and_record(descriptor: int) -> None:
+        closed.append(descriptor)
+        real_close(descriptor)
+
+    def fail_permissions(descriptor: int, mode: int) -> None:
+        raise PermissionError("simulated permission failure")
+
+    monkeypatch.setattr(pilot.os, "close", close_and_record)
+    monkeypatch.setattr(pilot.os, "fchmod", fail_permissions, raising=False)
+
+    with pytest.raises(PermissionError, match="simulated permission failure"):
+        _atomic_private_write(tmp_path / "manifest.json", "{}\n")
+
+    assert len(closed) == 1
+    assert tuple(tmp_path.iterdir()) == ()

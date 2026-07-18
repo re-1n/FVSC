@@ -104,16 +104,34 @@ def _atomic_private_write(path: Path, text: str) -> None:
         text=True,
     )
     temporary = Path(temporary_name)
+    descriptor_owner: int | None = descriptor
+    primary_error: BaseException | None = None
     try:
-        os.fchmod(descriptor, 0o600)
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        fchmod = getattr(os, "fchmod", None)
+        if fchmod is not None:
+            fchmod(descriptor_owner, 0o600)
+        handle = os.fdopen(descriptor_owner, "w", encoding="utf-8")
+        descriptor_owner = None  # The file object now owns and closes the descriptor.
+        with handle:
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
         temporary.replace(destination)
+    except BaseException as exc:
+        primary_error = exc
+        raise
     finally:
-        if temporary.exists():
-            temporary.unlink()
+        if descriptor_owner is not None:
+            try:
+                os.close(descriptor_owner)
+            except OSError:
+                if primary_error is None:
+                    raise
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            if primary_error is None:
+                raise
 
 
 def _selected_cases(gold_path: Path, challenge_path: Path) -> tuple[GoldCase, ...]:
