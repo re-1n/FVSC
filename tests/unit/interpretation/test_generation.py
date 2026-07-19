@@ -62,6 +62,10 @@ def test_generation_resolves_transient_labels_to_exact_source_citations() -> Non
     )
 
     assert tuple(item.label for item in backend.seen_sources) == ("S1", "S2")
+    assert all(
+        item.attribution.transport_author_role == "unknown"
+        for item in backend.seen_sources
+    )
     assert proposal.cited_source_ids == ("message-334", "message-335")
     assert proposal.interpretation_layer == 3
     assert proposal.defeasible is True

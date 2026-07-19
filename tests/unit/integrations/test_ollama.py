@@ -7,7 +7,7 @@ import urllib.error
 
 import pytest
 
-from fvsc.ingest import SourceDocument
+from fvsc.ingest import ExpressionSpan, SourceDocument, source_attribution
 from fvsc.integrations import OllamaIntegrationError, OllamaInterpretationBackend
 from fvsc.interpretation import PromptSource
 
@@ -36,6 +36,21 @@ class _Opener:
 
 def _source() -> PromptSource:
     text = "Паразиты превращают внимание в чужой ресурс."
+    span = ExpressionSpan.from_text(
+        text,
+        start=0,
+        end=len("Паразиты"),
+        kind="quotation",
+        owner_relation="adopted",
+        derivation="test:v1",
+    )
+    attribution = source_attribution(
+        transport_author_role="owner",
+        owner_adopted_expression=True,
+        forwarded=True,
+        forward_origin_role="non_owner",
+        expression_spans=(span,),
+    )
     document = SourceDocument.create(
         source_id="private/diary/message-334",
         source_revision=hashlib.sha256(text.encode("utf-8")).hexdigest(),
@@ -44,6 +59,17 @@ def _source() -> PromptSource:
         adapter="test",
         source_kind="owner_reflection",
         raw_chars=len(text),
+        metadata={
+            "display_time": "2026-01-01T03:00:00+03:00",
+            "message_id": "334",
+            "owner_adopted_expression": True,
+            "owner_authored": True,
+            "reply_to_source_id": "private/diary/message-333",
+            "source_attribution": attribution.to_dict(),
+            "temporal_context": {
+                "previous_source_id": "private/diary/message-333",
+            },
+        },
     )
     return PromptSource.from_document(document, label="S1")
 
@@ -71,7 +97,31 @@ def test_ollama_generates_strict_claims_without_exposing_source_ids_to_model() -
     sent = json.loads(request.data.decode("utf-8"))
     user_payload = sent["messages"][1]["content"]
     assert "private/diary/message-334" not in user_payload
+    assert "private/diary/message-333" not in user_payload
     assert "Паразиты" in user_payload
+    decoded_payload = json.loads(user_payload)
+    source = decoded_payload["sources"][0]
+    assert source["message_id"] == "334"
+    assert source["display_time"] == "2026-01-01T03:00:00+03:00"
+    assert source["reply_to"] == "outside_prompt"
+    assert source["temporal_previous"] == "outside_prompt"
+    assert source["attribution"] == {
+        "expression_spans": [
+            {
+                "end": len("Паразиты"),
+                "kind": "quotation",
+                "origin_status": "unresolved",
+                "owner_relation": "adopted",
+                "start": 0,
+            }
+        ],
+        "forward_origin_role": "non_owner",
+        "forwarded": True,
+        "owner_adopted_expression": True,
+        "schema_version": 1,
+        "text_origin_status": "unresolved",
+        "transport_author_role": "owner",
+    }
     assert sent["format"] == "json"
     assert sent["stream"] is False
 

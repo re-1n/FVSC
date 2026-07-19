@@ -7,6 +7,7 @@ import math
 import re
 from typing import Protocol
 
+from ..ingest.source_provenance import SourceAttribution
 from ..ingest.vault_ingest import SourceDocument, SourceKind
 from .proposals import (
     InterpretationClaim,
@@ -41,6 +42,11 @@ class PromptSource:
     source_kind: SourceKind
     text: str
     citation: SourceCitation
+    attribution: SourceAttribution
+    display_time: str | None = None
+    message_id: str | None = None
+    reply_to_source_id: str | None = None
+    temporal_previous_source_id: str | None = None
 
     def __post_init__(self) -> None:
         label = str(self.label).strip()
@@ -55,6 +61,19 @@ class PromptSource:
             raise ValueError("prompt source citation id does not match")
         if self.citation.source_revision != self.source_revision:
             raise ValueError("prompt source citation revision does not match")
+        self.attribution.verify(self.text)
+        for field in (
+            "display_time",
+            "message_id",
+            "reply_to_source_id",
+            "temporal_previous_source_id",
+        ):
+            value = getattr(self, field)
+            if value is not None:
+                normalized = str(value).strip()
+                if not normalized:
+                    raise ValueError(f"prompt source {field} must be non-empty or None")
+                object.__setattr__(self, field, normalized)
         object.__setattr__(self, "label", label)
         object.__setattr__(self, "observed_at", observed_at)
 
@@ -70,6 +89,11 @@ class PromptSource:
             document,
             evidence_event_ids=evidence_event_ids,
         )
+        metadata = document.metadata
+        temporal = metadata.get("temporal_context")
+        temporal_previous = (
+            temporal.get("previous_source_id") if isinstance(temporal, dict) else None
+        )
         return cls(
             label=label,
             source_id=document.source_id,
@@ -78,6 +102,13 @@ class PromptSource:
             source_kind=document.source_kind,
             text=document.text,
             citation=citation,
+            attribution=SourceAttribution.from_metadata(metadata),
+            display_time=metadata.get("display_time"),
+            message_id=(
+                str(metadata["message_id"]) if metadata.get("message_id") is not None else None
+            ),
+            reply_to_source_id=metadata.get("reply_to_source_id"),
+            temporal_previous_source_id=temporal_previous,
         )
 
 

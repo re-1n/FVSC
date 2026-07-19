@@ -155,8 +155,8 @@ The first executable run is diagnostic, not confirmatory:
 - lexical/structural `top_k=10`, final prompt cap `12`, reply/temporal context depth `1`;
 - one exact Ollama tag and digest for A1/A2/A4, `temperature=0`, `seed=42`, and
   `num_ctx=8192`, `num_predict=768`, and concise prompt version
-  `source-cited-json-v2-concise` unless different values are frozen in the manifest
-  before generation;
+  `source-cited-json-v2-concise` for the original pilot unless different values are
+  frozen in its manifest before generation;
 - zero tolerated fabricated/unsupported citations, false owner attribution,
   unsupported referent assumptions, or forbidden composites;
 - A2 diagnostic target: accepted-or-partial claims `>=0.80`, citation precision
@@ -217,6 +217,15 @@ The change affects only local artifact persistence. It does not alter the corpus
 candidates, prompts, model options, generated claims, blinding, or scoring contract.
 The Windows path is covered by a regression test that removes `fchmod` from the
 simulated platform before writing.
+
+### Post-review source-boundary amendment
+
+The successfully generated original review pack remains bound to
+`source-cited-json-v2-concise`. Preliminary owner review exposed that v2 did not show
+the interpreter safe source-attribution metadata. Any corrected Stage 4h.1 run must
+use `source-cited-json-v3-attribution`, a newly digested corpus and a new run id; it is
+not a continuation under the old manifest. See
+[`STAGE_4H1_SOURCE_BOUNDARIES.md`](STAGE_4H1_SOURCE_BOUNDARIES.md).
 
 ## Local execution
 
