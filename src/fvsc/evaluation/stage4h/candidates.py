@@ -7,7 +7,7 @@ import json
 from typing import Any, Iterable, Mapping, Protocol, Sequence
 
 from ...ingest import SourceDocument
-from ...retrieval import LexicalSearchIndex, expand_source_context
+from ...retrieval import LexicalSearchIndex, SourceLocatorIndex, expand_source_context
 from ..gold import GoldCase
 from .contracts import (
     FrozenCandidate,
@@ -65,6 +65,43 @@ def _has_prompt_text(document: SourceDocument) -> bool:
     return bool(document.text.strip())
 
 
+def _locator_anchors(
+    *,
+    case: GoldCase,
+    spec: Stage4hRunSpec,
+    locator_index: SourceLocatorIndex,
+) -> tuple[SourceDocument, ...]:
+    resolutions = locator_index.resolve_query(case.question)
+    if not resolutions:
+        return ()
+    invalid = tuple(item for item in resolutions if item.status != "resolved")
+    if invalid:
+        summary = ", ".join(f"{item.locator.raw}={item.status}" for item in invalid)
+        raise ValueError(f"case {case.case_id} has unresolved explicit locators: {summary}")
+    source_ids = tuple(item.source_id for item in resolutions)
+    if len(source_ids) != len(set(source_ids)):
+        raise ValueError(f"case {case.case_id} resolves repeated explicit source locators")
+    if len(source_ids) > spec.prompt_source_cap:
+        raise ValueError(f"case {case.case_id} explicit locators exceed prompt_source_cap")
+    documents = tuple(locator_index.document(source_id) for source_id in source_ids if source_id)
+    if any(not _has_prompt_text(document) for document in documents):
+        raise ValueError(f"case {case.case_id} explicit locator resolves to textless source")
+    return documents
+
+
+def _ranked_anchors(documents: tuple[SourceDocument, ...]) -> list[FrozenCandidate]:
+    return [
+        FrozenCandidate(
+            rank=index,
+            source_id=document.source_id,
+            source_revision=document.source_revision,
+            role="ranked",
+            score=1.0,
+        )
+        for index, document in enumerate(documents, start=1)
+    ]
+
+
 def _append_context(
     *,
     candidates: list[FrozenCandidate],
@@ -113,10 +150,16 @@ def _lexical_candidates(
     documents: tuple[SourceDocument, ...],
     by_id: Mapping[str, SourceDocument],
     index: LexicalSearchIndex,
+    anchors: tuple[SourceDocument, ...],
 ) -> tuple[FrozenCandidate, ...]:
     hits = index.search(case.question, top_k=spec.top_k)
-    candidates: list[FrozenCandidate] = []
+    candidates = _ranked_anchors(anchors)
+    known = {item.source_id for item in candidates}
     for hit in hits:
+        if len(candidates) >= spec.top_k:
+            break
+        if hit.source_id in known:
+            continue
         document = by_id.get(hit.source_id)
         if document is None or document.source_revision != hit.document.source_revision:
             raise ValueError(
@@ -133,9 +176,10 @@ def _lexical_candidates(
                 score=hit.score,
             )
         )
+        known.add(hit.source_id)
     _append_context(
         candidates=candidates,
-        ranked_source_ids=tuple(hit.source_id for hit in hits),
+        ranked_source_ids=tuple(item.source_id for item in candidates),
         documents=documents,
         by_id=by_id,
         max_depth=spec.context_depth,
@@ -197,10 +241,16 @@ def _structural_candidates(
     documents: tuple[SourceDocument, ...],
     by_id: Mapping[str, SourceDocument],
     index: StructuralSearchIndex,
+    anchors: tuple[SourceDocument, ...],
 ) -> tuple[FrozenCandidate, ...]:
     hits = tuple(index.search(case.question, top_k=spec.top_k))
-    candidates: list[FrozenCandidate] = []
+    candidates = _ranked_anchors(anchors)
+    known = {item.source_id for item in candidates}
     for hit in hits:
+        if len(candidates) >= spec.top_k:
+            break
+        if hit.source_id in known:
+            continue
         document = by_id.get(hit.source_id)
         if document is None:
             raise ValueError(
@@ -218,6 +268,7 @@ def _structural_candidates(
                 evidence_event_ids=tuple(hit.evidence_event_ids),
             )
         )
+        known.add(hit.source_id)
     ranked_source_ids = tuple(item.source_id for item in candidates)
     _append_context(
         candidates=candidates,
@@ -314,11 +365,12 @@ def freeze_stage4h_candidates(
     documents: Iterable[SourceDocument],
     lexical_index: LexicalSearchIndex,
     structural_index: StructuralSearchIndex,
-    lexical_method: str = "lexical-char-tfidf-v1+text-context-v1",
-    structural_method: str = "judgment-char-tfidf-v1+text-context-v1",
+    lexical_method: str = "source-locator-v1+lexical-char-tfidf-v1+text-context-v1",
+    structural_method: str = "source-locator-v1+judgment-char-tfidf-v1+text-context-v1",
 ) -> FrozenCandidateBundle:
     """Freeze A0/A1/A2/A4 candidates with no hidden cross-arm fallback."""
     ordered_documents, by_id = _document_index(documents)
+    locator_index = SourceLocatorIndex(ordered_documents)
     actual_corpus_digest = corpus_digest(ordered_documents)
     if actual_corpus_digest != spec.corpus_sha256:
         raise ValueError("Stage 4h corpus does not match the preregistered digest")
@@ -347,12 +399,14 @@ def freeze_stage4h_candidates(
 
     frozen: list[FrozenCandidateSet] = []
     for case in selected:
+        anchors = _locator_anchors(case=case, spec=spec, locator_index=locator_index)
         lexical = _lexical_candidates(
             case=case,
             spec=spec,
             documents=ordered_documents,
             by_id=by_id,
             index=lexical_index,
+            anchors=anchors,
         )
         oracle = _oracle_candidates(case=case, spec=spec, by_id=by_id)
         structural = _structural_candidates(
@@ -361,6 +415,7 @@ def freeze_stage4h_candidates(
             documents=ordered_documents,
             by_id=by_id,
             index=structural_index,
+            anchors=anchors,
         )
         candidates_by_arm = {
             "A0": (lexical_method, lexical),
