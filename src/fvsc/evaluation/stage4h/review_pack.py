@@ -6,11 +6,12 @@ from dataclasses import dataclass
 import hashlib
 import hmac
 import json
+import math
 import re
 import secrets
 from typing import Any, Iterable, Mapping
 
-from ...ingest import SourceDocument
+from ...ingest import SourceAttribution, SourceDocument
 from ...interpretation import InterpretationClaim
 from .contracts import Stage4hArm, content_digest
 from .runner import Stage4hArmResult, Stage4hRunResultBundle
@@ -42,6 +43,12 @@ class BlindedSourceExcerpt:
     end: int
     text_sha256: str
     excerpt: str
+    observed_at: float | None = None
+    display_time: str | None = None
+    message_id: str | None = None
+    reply_to_source_id: str | None = None
+    temporal_previous_source_id: str | None = None
+    attribution: SourceAttribution | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "citation_id", _digest(self.citation_id, field="citation_id"))
@@ -71,9 +78,26 @@ class BlindedSourceExcerpt:
             raise ValueError("blinded review excerpt length does not match its span")
         if hashlib.sha256(self.excerpt.encode("utf-8")).hexdigest() != self.text_sha256:
             raise ValueError("blinded review excerpt does not match its citation digest")
+        if self.observed_at is not None:
+            observed_at = float(self.observed_at)
+            if not math.isfinite(observed_at):
+                raise ValueError("blinded review observed_at must be finite or None")
+            object.__setattr__(self, "observed_at", observed_at)
+        for field in (
+            "display_time",
+            "message_id",
+            "reply_to_source_id",
+            "temporal_previous_source_id",
+        ):
+            value = getattr(self, field)
+            if value is not None:
+                normalized = str(value).strip()
+                if not normalized:
+                    raise ValueError(f"blinded review {field} must be non-empty or None")
+                object.__setattr__(self, field, normalized)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "citation_id": self.citation_id,
             "end": self.end,
             "excerpt": self.excerpt,
@@ -82,9 +106,22 @@ class BlindedSourceExcerpt:
             "start": self.start,
             "text_sha256": self.text_sha256,
         }
+        if self.attribution is not None:
+            payload["source_context"] = {
+                "attribution": self.attribution.to_dict(),
+                "display_time": self.display_time,
+                "message_id": self.message_id,
+                "observed_at": self.observed_at,
+                "reply_to_source_id": self.reply_to_source_id,
+                "temporal_previous_source_id": self.temporal_previous_source_id,
+            }
+        return payload
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "BlindedSourceExcerpt":
+        raw_context = value.get("source_context")
+        context = raw_context if isinstance(raw_context, dict) else {}
+        raw_attribution = context.get("attribution")
         return cls(
             citation_id=value.get("citation_id", ""),
             source_id=value.get("source_id", ""),
@@ -93,6 +130,16 @@ class BlindedSourceExcerpt:
             end=value.get("end", -1),
             text_sha256=value.get("text_sha256", ""),
             excerpt=value.get("excerpt", ""),
+            observed_at=context.get("observed_at"),
+            display_time=context.get("display_time"),
+            message_id=context.get("message_id"),
+            reply_to_source_id=context.get("reply_to_source_id"),
+            temporal_previous_source_id=context.get("temporal_previous_source_id"),
+            attribution=(
+                SourceAttribution.from_dict(raw_attribution)
+                if isinstance(raw_attribution, dict)
+                else None
+            ),
         )
 
 
@@ -385,6 +432,10 @@ def build_blinded_review_pack(
             if document is None:
                 raise ValueError("review citation source is absent")
             citation.verify(document)
+            metadata = document.metadata
+            attribution = SourceAttribution.from_metadata(metadata)
+            attribution.verify(document.text)
+            temporal = metadata.get("temporal_context")
             citations.append(
                 BlindedSourceExcerpt(
                     citation_id=citation.citation_id,
@@ -394,6 +445,20 @@ def build_blinded_review_pack(
                     end=citation.end,
                     text_sha256=citation.text_sha256,
                     excerpt=document.text[citation.start : citation.end],
+                    observed_at=document.observed_at,
+                    display_time=metadata.get("display_time"),
+                    message_id=(
+                        str(metadata["message_id"])
+                        if metadata.get("message_id") is not None
+                        else None
+                    ),
+                    reply_to_source_id=metadata.get("reply_to_source_id"),
+                    temporal_previous_source_id=(
+                        temporal.get("previous_source_id")
+                        if isinstance(temporal, dict)
+                        else None
+                    ),
+                    attribution=attribution,
                 )
             )
         blind_item_id = _blind_id(blinding_key, result)
@@ -447,6 +512,14 @@ def review_pack_markdown(pack: Stage4hReviewPack) -> str:
         "",
         "Arm, retrieval method, model and telemetry are intentionally hidden.",
         "Score each claim before the blind map is opened.",
+        "To find a Telegram source in result.json, search for its numeric message_id ",
+        "as an exact JSON id. Excerpts below are normalized text; source_id and ",
+        "source_revision identify the exact FVSC source revision.",
+        "",
+        "For each claim record: (1) accepted / partially_accepted / rejected / ",
+        "needs_revision and a correction; (2) supports / partial / unsupported for ",
+        "each citation. Then score the whole item: meaning fidelity 0–4 and usefulness ",
+        "0–4, and mark any safety/context flags.",
         "",
     ]
     for index, item in enumerate(pack.items, start=1):
@@ -480,6 +553,26 @@ def review_pack_markdown(pack: Stage4hReviewPack) -> str:
                 lines.extend(["Citations: none", ""])
             for citation_id in claim.citation_ids:
                 citation = citations[citation_id]
+                context_lines: list[str] = []
+                if citation.message_id is not None:
+                    context_lines.append(f"message_id=`{citation.message_id}`")
+                if citation.display_time is not None:
+                    context_lines.append(f"time=`{citation.display_time}`")
+                if citation.attribution is not None:
+                    attribution = citation.attribution
+                    context_lines.extend(
+                        [
+                            f"transport_author=`{attribution.transport_author_role}`",
+                            "owner_adopted="
+                            f"`{str(attribution.owner_adopted_expression).lower()}`",
+                            f"text_origin=`{attribution.text_origin_status}`",
+                            f"forwarded=`{str(attribution.forwarded).lower()}`",
+                        ]
+                    )
+                    if attribution.forward_origin_role is not None:
+                        context_lines.append(
+                            f"forward_origin=`{attribution.forward_origin_role}`"
+                        )
                 lines.extend(
                     [
                         f"- Citation `{citation.citation_id}` — "
@@ -489,6 +582,30 @@ def review_pack_markdown(pack: Stage4hReviewPack) -> str:
                         "",
                     ]
                 )
+                if context_lines:
+                    lines.extend([f"Source context: {', '.join(context_lines)}", ""])
+                if citation.reply_to_source_id is not None:
+                    lines.extend(
+                        [f"Reply target: `{citation.reply_to_source_id}`", ""]
+                    )
+                if citation.temporal_previous_source_id is not None:
+                    lines.extend(
+                        [
+                            "Temporal previous: "
+                            f"`{citation.temporal_previous_source_id}` (heuristic context)",
+                            "",
+                        ]
+                    )
+                if citation.attribution is not None:
+                    for span in citation.attribution.expression_spans:
+                        lines.extend(
+                            [
+                                f"Expression span [{span.start}:{span.end}]: "
+                                f"`{span.kind}`, origin=`{span.origin_status}`, "
+                                f"owner_relation=`{span.owner_relation}`",
+                                "",
+                            ]
+                        )
         lines.extend(
             [
                 "Review fields: claim verdict; citation support; meaning fidelity 0–4; "

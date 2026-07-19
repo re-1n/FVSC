@@ -21,8 +21,9 @@ from fvsc.evaluation import (
     build_blinded_review_pack,
     corpus_digest,
     review_pack_markdown,
+    content_digest,
 )
-from fvsc.ingest import SourceDocument
+from fvsc.ingest import ExpressionSpan, SourceDocument, source_attribution
 from fvsc.interpretation import (
     InterpretationClaim,
     InterpretationProposal,
@@ -31,6 +32,19 @@ from fvsc.interpretation import (
 
 
 def _document(text="Паразиты захватывают внимание.") -> SourceDocument:
+    span = ExpressionSpan.from_text(
+        text,
+        start=0,
+        end=len("Паразиты"),
+        kind="quotation",
+        owner_relation="adopted",
+        derivation="test:v1",
+    )
+    attribution = source_attribution(
+        transport_author_role="owner",
+        owner_adopted_expression=True,
+        expression_spans=(span,),
+    )
     return SourceDocument.create(
         source_id="message-1",
         source_revision=hashlib.sha256(text.encode("utf-8")).hexdigest(),
@@ -39,6 +53,13 @@ def _document(text="Паразиты захватывают внимание.") 
         adapter="test",
         source_kind="owner_reflection",
         raw_chars=len(text),
+        metadata={
+            "display_time": "2026-01-01T03:00:00+03:00",
+            "message_id": "1",
+            "owner_adopted_expression": True,
+            "owner_authored": True,
+            "source_attribution": attribution.to_dict(),
+        },
     )
 
 
@@ -156,6 +177,11 @@ def test_review_pack_hides_arm_model_method_and_telemetry_but_keeps_exact_excerp
     assert "wall_seconds" not in encoded
     assert '"arm"' not in encoded
     assert document.text in encoded
+    assert pack.items[0].citations[0].message_id == "1"
+    assert pack.items[0].citations[0].attribution is not None
+    assert (
+        pack.items[0].citations[0].attribution.transport_author_role == "owner"
+    )
     assert Stage4hReviewPack.from_dict(json.loads(encoded)) == pack
     assert Stage4hBlindMap.from_dict(mapping.to_dict()) == mapping
     assert all(mapping.resolve(item.blind_item_id).case_id == item.case_id for item in pack.items)
@@ -164,6 +190,34 @@ def test_review_pack_hides_arm_model_method_and_telemetry_but_keeps_exact_excerp
     assert document.text in markdown
     assert "A1" not in markdown
     assert "meaning fidelity 0–4" in markdown
+    assert "message_id=`1`" in markdown
+    assert "transport_author=`owner`" in markdown
+    assert "Expression span [0:8]" in markdown
+
+
+def test_schema_v1_pack_without_optional_source_context_remains_readable() -> None:
+    document = _document()
+    _, results = _artifacts(document)
+    pack, _ = build_blinded_review_pack(
+        result_bundle=results,
+        documents=(document,),
+        blinding_key=b"k" * 32,
+    )
+    legacy = pack.to_dict()
+    for item in legacy["items"]:
+        for citation in item["citations"]:
+            citation.pop("source_context")
+    legacy_payload = {key: value for key, value in legacy.items() if key != "pack_id"}
+    legacy["pack_id"] = content_digest(legacy_payload)
+
+    restored = Stage4hReviewPack.from_dict(legacy)
+
+    assert all(
+        citation.attribution is None
+        for item in restored.items
+        for citation in item.citations
+    )
+    assert restored.to_dict() == legacy
 
 
 def test_blind_ids_are_keyed_and_source_revision_is_verified() -> None:
