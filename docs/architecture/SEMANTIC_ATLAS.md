@@ -182,6 +182,11 @@ No canonical data migration is required.
 5. Use its error classes to choose **one** next view experiment. Do not implement the
    entire research menu.
 
+The concrete operation inventory, candidate structures and promotion gates are kept in
+the [semantic operation registry](SEMANTIC_OPERATION_REGISTRY.md). Stage 4h owner
+review selected a source-boundary foundation correction before any new view experiment;
+see [Stage 4h.1](STAGE_4H1_SOURCE_BOUNDARIES.md).
+
 ## View replacement and retirement
 
 Whitepaper ancestry is not a promotion criterion. For the same registered query
