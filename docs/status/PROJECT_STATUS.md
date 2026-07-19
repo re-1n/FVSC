@@ -1,4 +1,4 @@
-# Project status — 2026-07-18
+# Project status — 2026-07-20
 
 ## Where we are
 
@@ -93,15 +93,34 @@
     external-source privacy scope has been authorized. Pilot mode cannot promote a
     representation; confirmatory mode requires at least 17 cases and every registered
     quality, citation, safety, confidence, and latency gate.
-  - Current local verification after the Windows writer correction: **261 passed /
-    2 skipped / 11 deselected**. The earlier harness checkpoint `2fc1c66` passed GitHub
-    Actions run 225; each new integration head is rechecked by draft PR #2.
-    This repository-side environment does not run the owner-scored Ollama pilot; local
-    candidate construction and CI verify the harness while raw sources remain private.
-  - Next: retry the controlled six-question pilot on the owner's local Ollama machine
-    from `e576224` or later,
-    complete the blinded claim/citation review, and use the diagnosis to select at most
-    one next view experiment—or retain lexical/improve the interpreter.
+  - A later local GPU execution successfully produced the original blinded review
+    pack. Five of 18 generative items have preliminary qualitative owner review; the
+    remaining items are unscored and the blind map remains closed. No per-arm metric or
+    representation promotion is claimed from the incomplete review.
+  - Those five reviews already exposed an arm-independent boundary defect: the v2
+    prompt received text and `source_kind`, but not the safe author/forward/adoption
+    metadata held by ingest; explicit Telegram quotations were flattened into the
+    surrounding message; exact `Diary:747` identity was not anchored; and the review
+    pack lacked enough metadata for attribution auditing. These are foundation errors,
+    not evidence for a new geometry.
+  - Stage 4h.1 begins with the semantic-operation registry and five independent
+    checkpoints: `9bf4818` registers operation-level tests; `94301c6` adds a typed
+    source-attribution envelope and content-addressed expression spans; `cef2c30` gives
+    the local interpreter attribution/reply/time metadata under prompt v3; `754f48b`
+    exposes the same context in backward-compatible blinded review packs; and
+    `878a00b` anchors explicit logical locators before lexical/structural nomination.
+  - On the unchanged private 645-document corpus, explicit Telegram markup yields 61
+    verified `blockquote` spans without storing duplicate source bodies in metadata.
+    `Diary:747` now resolves first in A1, A2 and A4 even when lexical or structural
+    similarity nominates another source. Plain text remains `text_origin=unresolved`;
+    the system does not guess whether it is a lyric, AI output or owner composition.
+  - Current local verification: **275 passed / 1 skipped / 11 deselected**, legacy
+    boundary green, Obsidian production build green. The last pushed head before this
+    tranche, `8d5ac22`, passed GitHub Actions run 29662353646; the new commits still
+    require push/remote CI.
+  - Next: add a source-revision-bound owner annotation overlay for song/AI/quotation/
+    commentary spans, then preregister a new Stage 4h.1 run. The original v2 review pack
+    remains a historical diagnosis and may be completed without opening its blind map.
 
 ## Settled decisions (ADRs)
 

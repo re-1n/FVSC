@@ -90,3 +90,19 @@ generation it must prove:
 Only after a complete blind review can the project choose one next semantic operation
 from the [semantic operation registry](SEMANTIC_OPERATION_REGISTRY.md).
 
+## Implemented checkpoint
+
+Commits `94301c6`..`878a00b` now provide:
+
+- a typed, body-free attribution envelope that separates transport author, unresolved
+  text origin, forwarding and owner adoption;
+- content-addressed `ExpressionSpan` records for explicit Telegram block quotations;
+- prompt v3 with attribution, message id, local display time, reply and temporal
+  context labels;
+- backward-compatible blinded review packs with source context and concrete scoring
+  instructions;
+- deterministic source-locator resolution before lexical or structural nomination.
+
+The private 645-document acceptance corpus materializes 61 verified quotation spans.
+The remaining blocker is the owner annotation overlay for meaningful plain-text
+subregions whose origin cannot be read from Telegram transport markup.

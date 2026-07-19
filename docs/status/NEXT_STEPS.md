@@ -48,28 +48,22 @@ Migration order (foundation-first; each commit must build and pass tests):
      model digest/seed/token/duration telemetry; paired local generation; keyed blinded
      owner-review pack; paired scoring and conservative diagnosis. Raw proposals,
      excerpts, arm map, and owner review stay under ignored `.fvsc/stage4h/`.
-   - **Next: execute the Stage 4h pilot on the owner's local Ollama machine** — six frozen
-     questions, A0 automatic plus up to 18 blinded A1/A2/A4 variants. Review every
-     claim/citation and measure false authorship, unknown-referent assumptions,
+   - ✅ **Original Stage 4h generation** — after the recorded CPU timeout, empty-context
+     and Windows-writer corrections, the owner's GPU run produced all 18 blinded
+     A1/A2/A4 items. Five items have preliminary qualitative review; the blind map is
+     still closed, so no arm comparison or promotion is valid yet. Review every
+     remaining claim/citation and measure false authorship, unknown-referent assumptions,
      forbidden composites, abstention, latency, and tokens. `A3` remains deferred until
      a separate external-source privacy scope is explicitly authorized.
-     Two CPU-only Codespace attempts produced no artifacts: the first exposed the
-     180-second transport limit; the second measured about 1.12 generated tokens/second
-     and exposed the missing output cap. The preregistered local retry therefore binds
-     `num_predict=768` and the concise prompt version in the manifest; use capable local
-     hardware rather than changing the retrieval arms around Codespace performance.
-     The first GPU attempt confirmed healthy local inference at roughly 65–74 generated
-     tokens/second, then failed before artifact creation because Gold 008/A4 context
-     expansion admitted one `deferred_media` record with no text. Checkpoint `94e7730`
-     keeps that record in corpus topology, excludes it from the text-only prompt view,
-     and preflights all frozen candidates before generation. Retry from that checkpoint
-     or a later head; the failed execution is not an owner-scored result.
-     The subsequent Windows retry completed every generation but exposed a separate
-     POSIX-only persistence bug before final artifacts: `os.fchmod` was unavailable and
-     the open temporary descriptor caused `WinError 32` to mask the primary exception.
-     Checkpoint `e576224` makes the atomic writer platform-aware and closes every
-     descriptor before failure cleanup. The partial directory is not a valid run; retry
-     from `e576224` or later after removing that exact generated directory.
+   - **Stage 4h.1 source-boundary correction — in progress.** The operation registry,
+     typed transport-author/origin/adoption envelope, 61 verified Telegram blockquote
+     spans on the private corpus, attribution-aware prompt v3, auditable review-pack
+     context and deterministic explicit-locator anchoring are implemented in
+     `9bf4818`..`878a00b`. These are canonical-safety corrections, not a promoted
+     semantic view. Remaining before a corrected run: a revision-bound owner annotation
+     overlay for plain-text lyric/AI/translation/commentary spans and a new immutable
+     manifest/run id. Protocol:
+     [`STAGE_4H1_SOURCE_BOUNDARIES.md`](../architecture/STAGE_4H1_SOURCE_BOUNDARIES.md).
    - **Decision after Stage 4h** — choose at most one relation-conditioned view whose
      inductive bias matches the dominant error (for example contextual usage retrieval,
      directed inclusion, temporal trajectory, or ambiguity state). Register a baseline
@@ -81,9 +75,10 @@ Migration order (foundation-first; each commit must build and pass tests):
      dependency or simultaneous implementation plan.
    Keep HTTP, plugin, and LLM dependencies outside the ingest layer. Do not commit
    vault data, voice data, or generated folders.
-5. **Verify** — current local checkpoint: **261 passed / 2 skipped / 11 deselected**,
+5. **Verify** — current local checkpoint: **275 passed / 1 skipped / 11 deselected**,
    legacy boundary green, Obsidian production build green, frozen Gold/addendum digests
-   unchanged. Stage 4h harness checkpoint `2fc1c66` passed GitHub Actions run 225.
+   unchanged. The last pre-tranche head `8d5ac22` passed GitHub Actions run 29662353646;
+   remote CI for the new Stage 4h.1 checkpoints is pending push.
    Draft PR #2 already exists and validates each pushed `integration/fvsc-core-v1`
    head; do not create or merge another PR without separate user instruction.
 
