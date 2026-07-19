@@ -19,6 +19,7 @@ from typing import Any, Iterable
 import unicodedata
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from .source_provenance import ActorRole, ExpressionSpan, SourceAttribution, source_attribution
 from .vault_ingest import SOURCE_KINDS, SourceDocument, SourceKind
 
 
@@ -48,6 +49,7 @@ class _TelegramMessage:
     reply_to_message_id: str | None
     media_kind: str | None
     locators: tuple[str, ...]
+    attribution: SourceAttribution
 
 
 @dataclass(frozen=True)
@@ -99,16 +101,116 @@ def _flatten_text(raw: Any) -> str:
     return "".join(parts)
 
 
+def _mapped_substitution(
+    text: str,
+    raw_offsets: tuple[int | None, ...],
+    pattern: re.Pattern[str],
+    replacement: str,
+) -> tuple[str, tuple[int | None, ...]]:
+    characters = list(text)
+    offsets = list(raw_offsets)
+    for match in reversed(tuple(pattern.finditer(text))):
+        source_offset = next(
+            (value for value in offsets[match.start() : match.end()] if value is not None),
+            None,
+        )
+        characters[match.start() : match.end()] = replacement
+        offsets[match.start() : match.end()] = [source_offset] * len(replacement)
+    return "".join(characters), tuple(offsets)
+
+
+def _clean_external_text_with_offsets(text: str) -> tuple[str, tuple[int | None, ...]]:
+    cleaned = text
+    offsets: tuple[int | None, ...] = tuple(range(len(text)))
+    for pattern, replacement in (
+        (_CODE_BLOCK_RE, " "),
+        (_INLINE_CODE_RE, " "),
+        (_URL_RE, " "),
+        (_MENTION_RE, " "),
+        (_WHITESPACE_RE, " "),
+        (re.compile(r" *\n *"), "\n"),
+        (re.compile(r"\n{3,}"), "\n\n"),
+    ):
+        cleaned, offsets = _mapped_substitution(cleaned, offsets, pattern, replacement)
+
+    start = 0
+    end = len(cleaned)
+    while start < end and cleaned[start].isspace():
+        start += 1
+    while end > start and cleaned[end - 1].isspace():
+        end -= 1
+    return cleaned[start:end], offsets[start:end]
+
+
 def clean_external_text(text: str) -> str:
     """Remove transport/code noise without deleting any language or script."""
-    cleaned = _CODE_BLOCK_RE.sub(" ", text)
-    cleaned = _INLINE_CODE_RE.sub(" ", cleaned)
-    cleaned = _URL_RE.sub(" ", cleaned)
-    cleaned = _MENTION_RE.sub(" ", cleaned)
-    cleaned = _WHITESPACE_RE.sub(" ", cleaned)
-    cleaned = re.sub(r" *\n *", "\n", cleaned)
-    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    return cleaned.strip()
+    return _clean_external_text_with_offsets(text)[0]
+
+
+def _actor_role(value: str, owner_ids: frozenset[str]) -> ActorRole:
+    if value == "unknown":
+        return "unknown"
+    return "owner" if value in owner_ids else "non_owner"
+
+
+def _explicit_expression_spans(
+    message: dict[str, Any],
+    *,
+    flattened: str,
+    cleaned: str,
+    raw_offsets: tuple[int | None, ...],
+    owner_adopted: bool,
+) -> tuple[ExpressionSpan, ...]:
+    raw_entities = message.get("text_entities")
+    if raw_entities is None:
+        return ()
+    if not isinstance(raw_entities, list):
+        raise ValueError("Telegram text_entities must be an array")
+
+    cursor = 0
+    quote_ranges: list[tuple[int, int]] = []
+    entity_text: list[str] = []
+    for entity in raw_entities:
+        if not isinstance(entity, dict) or not isinstance(entity.get("text"), str):
+            raise ValueError("Telegram text_entities contain an invalid entity")
+        value = entity["text"]
+        start = cursor
+        cursor += len(value)
+        entity_text.append(value)
+        if entity.get("type") == "blockquote" and value:
+            quote_ranges.append((start, cursor))
+    if "".join(entity_text) != flattened:
+        raise ValueError("Telegram text_entities do not match message text")
+
+    spans: list[ExpressionSpan] = []
+    for raw_start, raw_end in quote_ranges:
+        indexes = tuple(
+            index
+            for index, raw_offset in enumerate(raw_offsets)
+            if raw_offset is not None and raw_start <= raw_offset < raw_end
+        )
+        if not indexes:
+            continue
+        start = indexes[0]
+        end = indexes[-1] + 1
+        while start < end and cleaned[start].isspace():
+            start += 1
+        while end > start and cleaned[end - 1].isspace():
+            end -= 1
+        if start == end:
+            continue
+        spans.append(
+            ExpressionSpan.from_text(
+                cleaned,
+                start=start,
+                end=end,
+                kind="quotation",
+                origin_status="unresolved",
+                owner_relation="adopted" if owner_adopted else "not_adopted",
+                derivation="telegram:text-entity:blockquote:v1",
+            )
+        )
+    return tuple(spans)
 
 
 def _valid_timestamp(value: float) -> bool:
@@ -232,6 +334,7 @@ def _message_record(message: _TelegramMessage) -> dict[str, Any]:
         "reply_to_message_id": message.reply_to_message_id,
         "raw_text_sha256": message.raw_text_sha256,
         "text": message.text,
+        "source_attribution": message.attribution.to_dict(),
     }
 
 
@@ -303,7 +406,7 @@ def load_telegram_export(
             skipped += 1
             continue
         flattened = _flatten_text(raw_message.get("text", "")).strip()
-        cleaned = clean_external_text(flattened)
+        cleaned, raw_offsets = _clean_external_text_with_offsets(flattened)
         observed_at, dated = _observed_at(raw_message, fallback=fallback)
         message_id = str(raw_message.get("id", index)).strip() or str(index)
         if message_id in message_ids:
@@ -311,6 +414,25 @@ def load_telegram_export(
         message_ids.add(message_id)
         actor_value = _actor_value(raw_message)
         forward_value = _forward_source_value(raw_message)
+        owner_authored = actor_value in owner_ids
+        forwarded = forward_value is not None
+        attribution = source_attribution(
+            transport_author_role=_actor_role(actor_value, owner_ids),
+            owner_adopted_expression=owner_authored,
+            text_origin_status="unresolved",
+            forwarded=forwarded,
+            forward_origin_role=(
+                _actor_role(forward_value, owner_ids) if forward_value is not None else None
+            ),
+            expression_spans=_explicit_expression_spans(
+                raw_message,
+                flattened=flattened,
+                cleaned=cleaned,
+                raw_offsets=raw_offsets,
+                owner_adopted=owner_authored,
+            ),
+        )
+        attribution.verify(cleaned)
         raw_reply = raw_message.get("reply_to_message_id")
         reply_to_message_id = (
             str(raw_reply).strip()
@@ -326,8 +448,8 @@ def load_telegram_export(
                 raw_chars=len(flattened),
                 raw_text_sha256=hashlib.sha256(flattened.encode("utf-8")).hexdigest(),
                 author_key=_opaque_actor_key(actor_value),
-                owner_authored=actor_value in owner_ids,
-                forwarded=forward_value is not None,
+                owner_authored=owner_authored,
+                forwarded=forwarded,
                 forward_source_key=(
                     _opaque_actor_key(forward_value)
                     if forward_value is not None
@@ -336,6 +458,7 @@ def load_telegram_export(
                 reply_to_message_id=reply_to_message_id,
                 media_kind=_media_kind(raw_message),
                 locators=_locators(flattened),
+                attribution=attribution,
             )
         )
     messages.sort(key=lambda item: (item.observed_at, item.message_id, item.text))
@@ -423,6 +546,7 @@ def load_telegram_export(
                         if message.reply_to_message_id is not None
                         else None
                     ),
+                    "source_attribution": message.attribution.to_dict(),
                     "temporal_context": temporal_context,
                 },
             )

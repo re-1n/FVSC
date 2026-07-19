@@ -168,6 +168,15 @@ def test_configured_owner_is_per_message_and_forwarding_does_not_override_it(tmp
     assert owner.metadata["owner_adopted_expression"] is True
     assert owner.metadata["forwarded"] is True
     assert owner.metadata["forward_source_key"].startswith("actor-")
+    assert owner.metadata["source_attribution"] == {
+        "expression_spans": [],
+        "forward_origin_role": "non_owner",
+        "forwarded": True,
+        "owner_adopted_expression": True,
+        "schema_version": 1,
+        "text_origin_status": "unresolved",
+        "transport_author_role": "owner",
+    }
     assert participant.source_kind == "unknown"
     assert participant.metadata["owner_authored"] is False
     assert participant.metadata["reply_to_source_id"] == owner.source_id
@@ -176,6 +185,66 @@ def test_configured_owner_is_per_message_and_forwarding_does_not_override_it(tmp
     assert "Owner Name" not in combined_metadata
     assert "Participant Name" not in combined_metadata
     assert "External Private Name" not in combined_metadata
+
+
+def test_explicit_blockquote_becomes_a_verified_expression_span(tmp_path) -> None:
+    path = tmp_path / "result.json"
+    plain_before = "Мой комментарий\n"
+    quotation = "Чужая строка https://example.test\nвторая строка"
+    plain_after = "\nМой вывод"
+    text_entities = [
+        {"type": "plain", "text": plain_before},
+        {"type": "blockquote", "text": quotation},
+        {"type": "plain", "text": plain_after},
+    ]
+    _write_export(
+        path,
+        [
+            _message(
+                1,
+                "2026-01-01T00:00:00Z",
+                text_entities,
+                text_entities=text_entities,
+                from_id="owner",
+            )
+        ],
+    )
+
+    result = load_telegram_export(
+        path,
+        owner_author_ids={"owner"},
+        source_namespace="same",
+    )
+    document = result.documents[0]
+    attribution = document.metadata["source_attribution"]
+
+    assert attribution["transport_author_role"] == "owner"
+    assert attribution["text_origin_status"] == "unresolved"
+    assert len(attribution["expression_spans"]) == 1
+    span = attribution["expression_spans"][0]
+    excerpt = document.text[span["start"] : span["end"]]
+    assert excerpt == "Чужая строка\nвторая строка"
+    assert span["kind"] == "quotation"
+    assert span["owner_relation"] == "adopted"
+    assert quotation not in document.metadata_json
+
+
+def test_mismatched_text_entities_fail_closed(tmp_path) -> None:
+    path = tmp_path / "result.json"
+    _write_export(
+        path,
+        [
+            _message(
+                1,
+                "2026-01-01T00:00:00Z",
+                "actual",
+                text_entities=[{"type": "plain", "text": "different"}],
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="do not match"):
+        load_telegram_export(path)
 
 
 def test_reply_temporal_context_and_moscow_calendar_are_preserved(tmp_path) -> None:
