@@ -438,6 +438,32 @@ def _models(args: argparse.Namespace) -> int:
     return 0
 
 
+def _validate_annotations(args: argparse.Namespace) -> int:
+    export = load_telegram_export(
+        args.telegram,
+        owner_author_ids=args.owner_id,
+        source_namespace=args.namespace,
+        display_timezone=args.timezone,
+    )
+    overlay = load_owner_annotation_overlay(args.annotations)
+    documents = apply_owner_annotation_overlay(export.documents, overlay)
+    print(
+        _json_text(
+            {
+                "annotation_count": len(overlay.annotations),
+                "annotated_source_count": len(
+                    {item.source_id for item in overlay.annotations}
+                ),
+                "corpus_document_count": len(documents),
+                "overlay_id": overlay.overlay_id,
+                "status": "valid",
+            }
+        ),
+        end="",
+    )
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(
@@ -448,6 +474,17 @@ def _parser() -> argparse.ArgumentParser:
     models = subparsers.add_parser("models", help="list local Ollama model tags")
     models.add_argument("--ollama-host", default=DEFAULT_OLLAMA_HOST)
     models.set_defaults(handler=_models)
+
+    validate_annotations = subparsers.add_parser(
+        "validate-annotations",
+        help="verify a private annotation overlay against one Telegram export",
+    )
+    validate_annotations.add_argument("--telegram", type=Path, required=True)
+    validate_annotations.add_argument("--annotations", type=Path, required=True)
+    validate_annotations.add_argument("--owner-id", action="append", required=True)
+    validate_annotations.add_argument("--namespace", default="private-diary")
+    validate_annotations.add_argument("--timezone", default="Europe/Moscow")
+    validate_annotations.set_defaults(handler=_validate_annotations)
 
     run = subparsers.add_parser("run", help="freeze and run the six-case local pilot")
     run.add_argument("--telegram", type=Path, required=True)

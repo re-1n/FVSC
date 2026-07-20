@@ -6,6 +6,11 @@ from types import SimpleNamespace
 import pytest
 
 import scripts.stage4h_pilot as pilot
+from fvsc.ingest import load_telegram_export
+from fvsc.ingest.source_annotations import (
+    OwnerAnnotationOverlay,
+    OwnerExpressionAnnotation,
+)
 from scripts.stage4h_pilot import (
     _atomic_private_write,
     _load_reviews,
@@ -92,6 +97,75 @@ def test_pilot_cli_allows_slow_cpu_generation_timeout() -> None:
         ]
     )
     assert annotated.annotations.name == "annotations.json"
+
+
+def test_validate_annotations_checks_overlay_without_loading_model(
+    tmp_path,
+    capsys,
+) -> None:
+    telegram = tmp_path / "result.json"
+    telegram.write_text(
+        json.dumps(
+            {
+                "name": "private",
+                "messages": [
+                    {
+                        "date": "2026-01-01T00:00:00Z",
+                        "from_id": "owner",
+                        "id": 1,
+                        "text": "цитируемый текст",
+                        "type": "message",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    export = load_telegram_export(
+        telegram,
+        owner_author_ids=("owner",),
+        source_namespace="test",
+    )
+    document = export.documents[0]
+    annotation = OwnerExpressionAnnotation.create(
+        document,
+        start=0,
+        end=len(document.text),
+        kind="quotation",
+        origin_status="external",
+        owner_relation="selected",
+    )
+    overlay = OwnerAnnotationOverlay.create((annotation,))
+    annotations = tmp_path / "annotations.json"
+    annotations.write_text(
+        json.dumps(overlay.to_dict(), ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    exit_code = pilot.main(
+        [
+            "validate-annotations",
+            "--telegram",
+            str(telegram),
+            "--annotations",
+            str(annotations),
+            "--owner-id",
+            "owner",
+            "--namespace",
+            "test",
+        ]
+    )
+
+    assert exit_code == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output == {
+        "annotation_count": 1,
+        "annotated_source_count": 1,
+        "corpus_document_count": 1,
+        "overlay_id": overlay.overlay_id,
+        "status": "valid",
+    }
 
 
 def test_atomic_private_write_works_without_posix_fchmod(tmp_path, monkeypatch) -> None:
