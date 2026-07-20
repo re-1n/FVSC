@@ -31,6 +31,7 @@ from .judgment_events import (
     SourceSpan,
     judgment_to_evidence_event,
 )
+from .language_frontend import LanguageFrontend
 from .russian_judgments import (
     JudgmentCandidate,
     JudgmentExtractor,
@@ -93,6 +94,7 @@ __all__ = [
     "JUDGMENT_EVENT_EXTRACTOR_VERSION",
     "JudgmentCandidate",
     "JudgmentExtractor",
+    "LanguageFrontend",
     "MorphAnalysis",
     "Morphology",
     "MAX_OWNER_ANNOTATION_BYTES",
