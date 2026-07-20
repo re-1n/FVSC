@@ -9,7 +9,7 @@ from fvsc.ingest import OBSIDIAN_VAULT_ADAPTER, SourceDocument, normalize_markdo
 
 def _write(path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    path.write_bytes(text.encode("utf-8"))
 
 
 def test_scan_is_sorted_and_protected_exclusions_cannot_be_removed(tmp_path) -> None:
@@ -51,6 +51,24 @@ def test_revision_hashes_raw_file_and_scan_keeps_relative_ids_only(tmp_path) -> 
     assert document.source_revision == hashlib.sha256(raw.encode("utf-8")).hexdigest()
     assert str(tmp_path) not in document.source_id
     assert document.metadata == {"encoding": "utf-8", "format": "obsidian-markdown"}
+
+
+@pytest.mark.parametrize("line_ending", ["\r\n", "\r"])
+def test_markdown_normalizer_canonicalizes_platform_line_endings(line_ending: str) -> None:
+    raw = line_ending.join(
+        [
+            "---",
+            "fvsc_source_kind: owner_reflection",
+            "---",
+            "# Values",
+            "I value [[Freedom|freedom]].",
+        ]
+    )
+
+    text, source_kind = normalize_markdown(raw)
+
+    assert text == "Values\nI value freedom."
+    assert source_kind == "owner_reflection"
 
 
 @pytest.mark.parametrize("kind", ["owner_reflection", "dream_report", "external_fact"])

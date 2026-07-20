@@ -218,6 +218,10 @@ def normalize_markdown(text: str) -> tuple[str, SourceKind]:
     syntax, code, embeds, and link destinations without applying a
     language-specific vocabulary filter.
     """
+    # Markdown authored on Windows commonly contains CRLF line endings.  Keep
+    # normalized evidence and downstream hashes independent of the host that
+    # scans the vault, while source_revision continues to hash the raw bytes.
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
     body, frontmatter = _split_frontmatter(text)
     source_kind_value = frontmatter.get(
         "fvsc_source_kind",
