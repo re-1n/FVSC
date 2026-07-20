@@ -11,6 +11,12 @@ from .contracts import (
     SemanticGraphView,
     SemanticNode,
 )
+from .umr import (
+    UMRImportResult,
+    UMR_SUBSET_EXTRACTOR,
+    UMR_SUBSET_VERSION,
+    import_umr_subset,
+)
 
 __all__ = [
     "AlignmentStatus",
@@ -22,4 +28,8 @@ __all__ = [
     "SemanticEdge",
     "SemanticGraphView",
     "SemanticNode",
+    "UMRImportResult",
+    "UMR_SUBSET_EXTRACTOR",
+    "UMR_SUBSET_VERSION",
+    "import_umr_subset",
 ]
