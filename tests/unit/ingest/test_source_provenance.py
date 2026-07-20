@@ -27,6 +27,33 @@ def test_expression_span_is_content_addressed_and_verifiable() -> None:
         span.verify(text.replace("чужая", "другая"))
 
 
+def test_expression_span_keeps_adoption_separate_from_endorsement() -> None:
+    text = "чужая формулировка"
+    span = ExpressionSpan.from_text(
+        text,
+        start=0,
+        end=len(text),
+        kind="quotation",
+        origin_status="external",
+        owner_relation="adopted",
+        owner_endorsement="neutral",
+        derivation="owner-annotation:v1",
+    )
+
+    assert span.owner_relation == "adopted"
+    assert span.owner_endorsement == "neutral"
+    assert ExpressionSpan.from_dict(span.to_dict()) == span
+    assert span.to_dict()["owner_endorsement"] == "neutral"
+
+    unresolved = ExpressionSpan.from_text(
+        text,
+        start=0,
+        end=len(text),
+        kind="quotation",
+    )
+    assert "owner_endorsement" not in unresolved.to_dict()
+
+
 def test_source_attribution_keeps_transport_author_separate_from_text_origin() -> None:
     text = "Комментарий\nцитата"
     span = ExpressionSpan.from_text(

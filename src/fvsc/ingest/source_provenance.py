@@ -10,6 +10,7 @@ from typing import Any, Iterable, Literal, Mapping
 ActorRole = Literal["owner", "non_owner", "unknown"]
 TextOriginStatus = Literal["owner", "external", "mixed", "unresolved"]
 OwnerRelation = Literal["authored", "adopted", "selected", "not_adopted", "unknown"]
+OwnerEndorsement = Literal["endorsed", "rejected", "neutral", "mixed", "unresolved"]
 ExpressionKind = Literal[
     "quotation",
     "song_lyric",
@@ -23,6 +24,9 @@ ACTOR_ROLES = frozenset({"owner", "non_owner", "unknown"})
 TEXT_ORIGIN_STATUSES = frozenset({"owner", "external", "mixed", "unresolved"})
 OWNER_RELATIONS = frozenset(
     {"authored", "adopted", "selected", "not_adopted", "unknown"}
+)
+OWNER_ENDORSEMENTS = frozenset(
+    {"endorsed", "rejected", "neutral", "mixed", "unresolved"}
 )
 EXPRESSION_KINDS = frozenset(
     {
@@ -53,6 +57,7 @@ class ExpressionSpan:
     kind: ExpressionKind
     origin_status: TextOriginStatus = "unresolved"
     owner_relation: OwnerRelation = "unknown"
+    owner_endorsement: OwnerEndorsement = "unresolved"
     derivation: str = "explicit-annotation"
 
     def __post_init__(self) -> None:
@@ -71,6 +76,10 @@ class ExpressionSpan:
             raise ValueError(f"unknown text origin status: {self.origin_status!r}")
         if self.owner_relation not in OWNER_RELATIONS:
             raise ValueError(f"unknown owner relation: {self.owner_relation!r}")
+        if self.owner_endorsement not in OWNER_ENDORSEMENTS:
+            raise ValueError(
+                f"unknown owner endorsement: {self.owner_endorsement!r}"
+            )
         derivation = str(self.derivation).strip()
         if not derivation:
             raise ValueError("expression span derivation must not be empty")
@@ -91,6 +100,7 @@ class ExpressionSpan:
         kind: ExpressionKind,
         origin_status: TextOriginStatus = "unresolved",
         owner_relation: OwnerRelation = "unknown",
+        owner_endorsement: OwnerEndorsement = "unresolved",
         derivation: str = "explicit-annotation",
     ) -> "ExpressionSpan":
         if end > len(text):
@@ -105,6 +115,7 @@ class ExpressionSpan:
             kind=kind,
             origin_status=origin_status,
             owner_relation=owner_relation,
+            owner_endorsement=owner_endorsement,
             derivation=derivation,
         )
 
@@ -116,7 +127,7 @@ class ExpressionSpan:
             raise ValueError("expression span does not match source text")
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        value = {
             "derivation": self.derivation,
             "end": self.end,
             "kind": self.kind,
@@ -125,6 +136,11 @@ class ExpressionSpan:
             "start": self.start,
             "text_sha256": self.text_sha256,
         }
+        # Keep schema-v1 transport metadata byte-compatible until an owner has
+        # explicitly annotated stance. Missing means ``unresolved``.
+        if self.owner_endorsement != "unresolved":
+            value["owner_endorsement"] = self.owner_endorsement
+        return value
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "ExpressionSpan":
@@ -135,6 +151,7 @@ class ExpressionSpan:
             kind=value.get("kind", "unclassified"),
             origin_status=value.get("origin_status", "unresolved"),
             owner_relation=value.get("owner_relation", "unknown"),
+            owner_endorsement=value.get("owner_endorsement", "unresolved"),
             derivation=value.get("derivation", "explicit-annotation"),
         )
 
@@ -258,11 +275,13 @@ def source_attribution(
 __all__ = [
     "ACTOR_ROLES",
     "EXPRESSION_KINDS",
+    "OWNER_ENDORSEMENTS",
     "OWNER_RELATIONS",
     "TEXT_ORIGIN_STATUSES",
     "ActorRole",
     "ExpressionKind",
     "ExpressionSpan",
+    "OwnerEndorsement",
     "OwnerRelation",
     "SourceAttribution",
     "TextOriginStatus",
