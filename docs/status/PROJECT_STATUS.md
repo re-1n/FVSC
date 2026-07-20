@@ -103,24 +103,36 @@
     surrounding message; exact `Diary:747` identity was not anchored; and the review
     pack lacked enough metadata for attribution auditing. These are foundation errors,
     not evidence for a new geometry.
-  - Stage 4h.1 begins with the semantic-operation registry and five independent
-    checkpoints: `9bf4818` registers operation-level tests; `94301c6` adds a typed
-    source-attribution envelope and content-addressed expression spans; `cef2c30` gives
-    the local interpreter attribution/reply/time metadata under prompt v3; `754f48b`
-    exposes the same context in backward-compatible blinded review packs; and
-    `878a00b` anchors explicit logical locators before lexical/structural nomination.
+  - Stage 4h.1 begins with the semantic-operation registry and five independent remote
+    checkpoints: `e76e145` registers operation-level tests; `2c9a5c2` adds a typed
+    source-attribution envelope and content-addressed expression spans; `2fd314d` gives
+    the local interpreter attribution/reply/time metadata; `b98cdff` exposes the same
+    context in backward-compatible blinded review packs; and `dd3b79e` anchors explicit
+    logical locators before lexical/structural nomination. Status checkpoint `5846746`
+    is the pushed branch head for that tranche.
   - On the unchanged private 645-document corpus, explicit Telegram markup yields 61
     verified `blockquote` spans without storing duplicate source bodies in metadata.
     `Diary:747` now resolves first in A1, A2 and A4 even when lexical or structural
     similarity nominates another source. Plain text remains `text_origin=unresolved`;
     the system does not guess whether it is a lyric, AI output or owner composition.
-  - Current local verification: **275 passed / 1 skipped / 11 deselected**, legacy
-    boundary green, Obsidian production build green. The last pushed head before this
-    tranche, `8d5ac22`, passed GitHub Actions run 29662353646; the new commits still
-    require push/remote CI.
-  - Next: add a source-revision-bound owner annotation overlay for song/AI/quotation/
-    commentary spans, then preregister a new Stage 4h.1 run. The original v2 review pack
-    remains a historical diagnosis and may be completed without opening its blind map.
+  - A content-addressed sparse owner overlay is now implemented locally. It binds every
+    annotation to source id, source revision, offsets and span digest; stores no body;
+    separates origin, authorship/adoption/selection and endorsement; rejects stale or
+    partially overlapping annotations; and leaves source text/revision immutable.
+    Prompt v4 and the Stage 4h manifest bind the overlay id. A no-model validator checks
+    the full corpus before generation.
+  - The private two-span Stage 4h.1 seed validates against all 645 documents: message
+    681 is marked as an external song lyric selected by the owner, while the external
+    AI continuation of message 725 is separated from the preceding owner expression.
+    The body-free overlay remains local and ignored.
+  - Current local verification: **283 passed / 1 skipped / 11 deselected**, legacy
+    boundary green, Obsidian production build green, and frozen Gold/addendum files
+    unchanged. GitHub Actions run 29708329826 for pushed source-boundary head `5846746`
+    is still queued for a hosted runner, not failed. The owner-overlay commits require
+    push and a fresh remote run.
+  - Next: push the owner-overlay tranche, preregister and execute the new Stage 4h.1
+    run, then review its new blind pack. The original v2 review pack remains a historical
+    diagnosis; its blind map stays closed.
 
 ## Settled decisions (ADRs)
 

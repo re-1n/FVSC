@@ -223,7 +223,8 @@ simulated platform before writing.
 The successfully generated original review pack remains bound to
 `source-cited-json-v2-concise`. Preliminary owner review exposed that v2 did not show
 the interpreter safe source-attribution metadata. Any corrected Stage 4h.1 run must
-use `source-cited-json-v3-attribution`, a newly digested corpus and a new run id; it is
+use `source-cited-json-v4-owner-annotations`, a newly digested corpus, the validated
+owner annotation `overlay_id`, and a new run id; it is
 not a continuation under the old manifest. See
 [`STAGE_4H1_SOURCE_BOUNDARIES.md`](STAGE_4H1_SOURCE_BOUNDARIES.md).
 
@@ -235,11 +236,22 @@ List exact local model tags:
 PYTHONPATH=src python scripts/stage4h_pilot.py models
 ```
 
+Validate the private sparse overlay against the exact corpus before loading a model:
+
+```bash
+PYTHONPATH=src python scripts/stage4h_pilot.py validate-annotations \
+  --telegram "/path/to/result.json" \
+  --annotations "/path/to/owner-annotations.json" \
+  --owner-id "OWNER_ACTOR_ID_1" \
+  --owner-id "OWNER_ACTOR_ID_2"
+```
+
 Run the six-case pilot (repeat `--owner-id` for every owner identity in the export):
 
 ```bash
 PYTHONPATH=src python scripts/stage4h_pilot.py run \
   --telegram "/path/to/result.json" \
+  --annotations "/path/to/owner-annotations.json" \
   --owner-id "OWNER_ACTOR_ID_1" \
   --owner-id "OWNER_ACTOR_ID_2" \
   --model "EXACT_TAG_FROM_OLLAMA_LIST" \
@@ -261,7 +273,8 @@ to three concise claims so the cap constrains runaway output rather than silentl
 truncating the intended response shape.
 
 The command resolves the installed model digest, freezes the corpus and every
-candidate rank/revision, runs the paired local arms, and writes one new directory under
+candidate rank/revision, binds the overlay id into the manifest, runs the paired local
+arms, and writes one new directory under
 ignored `.fvsc/stage4h/<run-id>/`:
 
 - `manifest.json`, `candidates.json` — source-body-free run identity;

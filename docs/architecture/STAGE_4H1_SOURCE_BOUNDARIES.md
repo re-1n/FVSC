@@ -70,10 +70,48 @@ may supply context but cannot replace the anchor.
 
 ### 5. Owner annotation overlay
 
-A later small contract will allow the owner to mark verified spans as, for example,
-`owner_composed`, `external_quote`, `song_lyric`, `translated_external`, `ai_output`,
-or `owner_commentary`, and separately record adoption/endorsement. The overlay is
-versioned, source-revision-bound and never rewrites the original document.
+The implemented sparse overlay lets the owner mark verified spans as `quotation`,
+`song_lyric`, `translated_external`, `ai_output`, `owner_commentary`, or
+`unclassified`. It records three independent relations:
+
+- origin: `owner`, `external`, `mixed`, or `unresolved`;
+- owner relation: `authored`, `adopted`, `selected`, `not_adopted`, or `unknown`;
+- owner endorsement: `endorsed`, `rejected`, `neutral`, `mixed`, or `unresolved`.
+
+Each entry binds `source_id`, exact `source_revision`, half-open offsets and the span
+digest. Partial overlap with an automatic span fails closed; the owner may replace an
+exact automatic boundary with a more precise type. The overlay contains no source
+body, is content-addressed by `overlay_id`, and never rewrites the document text or
+revision. It is deliberately sparse: the owner annotates ambiguity that matters to a
+test, not every sentence in the corpus.
+
+Canonical JSON shape (placeholder values only):
+
+```json
+{
+  "annotations": [
+    {
+      "source_id": "telegram/private-diary/messages/message-N.json",
+      "source_revision": "<sha256>",
+      "span": {
+        "derivation": "owner-annotation:v1",
+        "end": 20,
+        "kind": "ai_output",
+        "origin_status": "external",
+        "owner_relation": "adopted",
+        "start": 10,
+        "text_sha256": "<sha256>"
+      }
+    }
+  ],
+  "overlay_id": "<canonical-payload-sha256>",
+  "schema_version": 1
+}
+```
+
+`owner_endorsement` is omitted when unresolved. The local validator recomputes every
+digest and rejects stale, unknown, overlapping or body-bearing fields before any model
+call.
 
 ## Rerun gate
 
@@ -83,6 +121,7 @@ generation it must prove:
 - every prompt source has a validated attribution envelope;
 - every expression span verifies against the exact source revision;
 - explicit locators resolve exactly;
+- the owner annotation `overlay_id`, when used, is part of the immutable run id;
 - source ids, author roles, forward roles and quote spans appear in the review pack;
 - the old blind map has not informed candidate or prompt changes;
 - no raw corpus, generated answer or owner review is committed.
@@ -92,17 +131,21 @@ from the [semantic operation registry](SEMANTIC_OPERATION_REGISTRY.md).
 
 ## Implemented checkpoint
 
-Commits `94301c6`..`878a00b` now provide:
+The Stage 4h.1 checkpoints now provide:
 
 - a typed, body-free attribution envelope that separates transport author, unresolved
   text origin, forwarding and owner adoption;
 - content-addressed `ExpressionSpan` records for explicit Telegram block quotations;
-- prompt v3 with attribution, message id, local display time, reply and temporal
+- prompt v4 with attribution, message id, local display time, reply and temporal
   context labels;
 - backward-compatible blinded review packs with source context and concrete scoring
   instructions;
-- deterministic source-locator resolution before lexical or structural nomination.
+- deterministic source-locator resolution before lexical or structural nomination;
+- a revision-bound, body-free owner annotation overlay, prompt-visible endorsement
+  distinct from adoption, and a no-model validation command.
 
 The private 645-document acceptance corpus materializes 61 verified quotation spans.
-The remaining blocker is the owner annotation overlay for meaningful plain-text
-subregions whose origin cannot be read from Telegram transport markup.
+On the private acceptance corpus, a two-span seed already validates the known song
+lyric in message 681 and the AI continuation in message 725 without committing either
+the corpus or the overlay. The next action is a new preregistered Stage 4h.1 run with
+prompt v4 and that validated overlay; the original blind map remains closed.

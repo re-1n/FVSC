@@ -2387,8 +2387,12 @@ AI-вставок.
 revision, но не копирует приватный текст в metadata. Telegram `blockquote` является
 надёжной границей цитаты, однако не устанавливает её автора. Plain text по умолчанию
 остаётся `origin=unresolved`: система не угадывает, является ли он песней, AI-ответом
-или собственной формулировкой. Owner overlay может уточнить origin и отношение
-`authored/adopted/selected`, не переписывая исходник.
+или собственной формулировкой. Sparse owner overlay может уточнить origin и отношение
+`authored/adopted/selected`, не переписывая исходник. Отдельное поле endorsement
+фиксирует `endorsed/rejected/neutral/mixed/unresolved`: публикация, выбор или adoption
+сами по себе не превращаются в согласие с каждым тезисом вложенного текста. Overlay
+связан с точной source revision, хранит offsets и digest без копии текста и входит в
+immutable identity экспериментального запуска.
 
 Явный locator вроде `Diary:747` относится к canonical scope, а не к семантическому
 ранжированию. Он разрешается до lexical/structural nomination; отсутствие или

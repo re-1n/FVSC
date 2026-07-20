@@ -55,14 +55,15 @@ Migration order (foundation-first; each commit must build and pass tests):
      remaining claim/citation and measure false authorship, unknown-referent assumptions,
      forbidden composites, abstention, latency, and tokens. `A3` remains deferred until
      a separate external-source privacy scope is explicitly authorized.
-   - **Stage 4h.1 source-boundary correction — in progress.** The operation registry,
+   - **Stage 4h.1 source-boundary correction — ready for rerun.** The operation registry,
      typed transport-author/origin/adoption envelope, 61 verified Telegram blockquote
-     spans on the private corpus, attribution-aware prompt v3, auditable review-pack
-     context and deterministic explicit-locator anchoring are implemented in
-     `9bf4818`..`878a00b`. These are canonical-safety corrections, not a promoted
-     semantic view. Remaining before a corrected run: a revision-bound owner annotation
-     overlay for plain-text lyric/AI/translation/commentary spans and a new immutable
-     manifest/run id. Protocol:
+     spans on the private corpus, attribution-aware prompt v4, auditable review-pack
+     context, deterministic explicit-locator anchoring and sparse revision-bound owner
+     annotation overlay are implemented. The overlay separates origin, adoption and
+     endorsement, stores no body, and is bound into the new immutable run id. The known
+     song/AI two-span seed validates against the 645-document corpus. These are
+     canonical-safety corrections, not a promoted semantic view. Next: push, run the
+     no-model validator, then execute and blind-review the corrected pilot. Protocol:
      [`STAGE_4H1_SOURCE_BOUNDARIES.md`](../architecture/STAGE_4H1_SOURCE_BOUNDARIES.md).
    - **Decision after Stage 4h** — choose at most one relation-conditioned view whose
      inductive bias matches the dominant error (for example contextual usage retrieval,
@@ -75,10 +76,11 @@ Migration order (foundation-first; each commit must build and pass tests):
      dependency or simultaneous implementation plan.
    Keep HTTP, plugin, and LLM dependencies outside the ingest layer. Do not commit
    vault data, voice data, or generated folders.
-5. **Verify** — current local checkpoint: **275 passed / 1 skipped / 11 deselected**,
-   legacy boundary green, Obsidian production build green, frozen Gold/addendum digests
-   unchanged. The last pre-tranche head `8d5ac22` passed GitHub Actions run 29662353646;
-   remote CI for the new Stage 4h.1 checkpoints is pending push.
+5. **Verify** — current owner-overlay checkpoint: **283 passed / 1 skipped / 11
+   deselected**, legacy boundary green, Obsidian production build green, and unchanged
+   frozen Gold/addendum files. GitHub Actions run 29708329826 for the preceding pushed
+   source-boundary head is queued, not failed; push this tranche and wait for its own
+   remote result.
    Draft PR #2 already exists and validates each pushed `integration/fvsc-core-v1`
    head; do not create or merge another PR without separate user instruction.
 
