@@ -3147,6 +3147,234 @@ Relation-conditioned query plan + cited result
 
 ---
 
+## XX. Языково-агностичный фронтир представлений смысла
+
+> **Статус:** результат сравнительного аудита на 2026-07-21 и направление первого
+> эксперимента. Ни одна внешняя схема не продвигается в каноническое ядро до
+> owner-gold проверки. Русский остаётся первым корпусом исполнения, но не определяет
+> внутренние контракты и не является условием существования view.
+
+### 20.1. Нет одного готового универсального победителя
+
+Сравнение UMR, AMR, DRS/PMB, MRS/DMRS, UDS, UCCA, UD-семейства,
+контекстуальных embeddings и density-matrix semantics не обнаруживает одну структуру,
+которая одновременно:
+
+- переносима между типологически разными языками;
+- покрывает предикаты и аргументы, scope, отрицание, модальность, время,
+  coreference, discourse и неоднозначность;
+- имеет точный зрелый автоматический parser для многих языков;
+- поддерживает формальный вывод;
+- сохраняет связь каждого результата с исходными токенами/spans;
+- доказанно превосходит простые baselines на реальных downstream-задачах.
+
+Это не отрицательный ответ на программу FVSC. Это эмпирическое основание уже принятого
+**семантического атласа**: разные формализмы являются координатными views для разных
+операций, а общая идентичность задаётся `SourceDocument`, revision/span,
+`EvidenceLedger`, provenance и owner review.
+
+| Роль | Наиболее сильный кандидат | Что он даёт | Почему не становится всем FVSC |
+|---|---|---|---|
+| Широкая целевая схема | UMR | predicate/argument, senses, aspect, person/number, scope, discourse; document time, modality и coreference; token alignment | молодой стандарт, мало clean gold, слабый automatic parsing |
+| Зрелая graph-экосистема | AMR | развитые English corpora, parsers, graph tooling | English-origin, преимущественно sentence-level, неполный scope/TAM/discourse |
+| Формально-логический контроль | DRS/PMB | scope, negation, modality, quantification, presupposition, reference и перевод в logic | gold и зрелая проверка сосредоточены в нескольких языках; длинная композиция остаётся трудной |
+| Многоязычный parser substrate | UD/Enhanced UD | согласованные токены, morphology и syntax для большого числа языков | это грамматика, а не полное представление смысла |
+| Градуированные свойства | UDS | semantic graph с real-valued node/edge attributes | преимущественно English research data, не полный document/personal layer |
+| Сцены и участники | UCCA | cross-lingual conceptual scenes, reentrancy и discontinuity | слабее scope, formal inference и document relations |
+| Поиск кандидатов | multilingual contextual embeddings | сильный практический paraphrase/context retrieval | нет явных truth conditions, provenance, scope или устойчивой читаемой структуры |
+| Смесь интерпретаций | density operators | распределение по конкурирующим senses/context states | положительные результаты узкие; универсальный substrate не доказан |
+
+MRS/DMRS остаётся строгим композиционным и scope-aware ориентиром, но practically
+зависит от дорогих language-specific deep grammars. Он служит исследовательским
+контролем, а не первым integration target.
+
+### 20.2. Почему UMR — target schema, но не готовый parser
+
+UMR ближе других рассмотренных схем к текущим потребностям FVSC. Его официальный file
+format разделяет:
+
+1. исходные токены;
+2. sentence-level semantic graph;
+3. node-to-token alignment;
+4. document-level temporal, modal и coreference graph.
+
+Guidelines также содержат отдельный механизм scope для quantification и negation.
+Схема поэтому способна выразить больше, чем текущий плоский `S -> V -> O` Judgment,
+не теряя привязку к тексту.
+
+Но выразительность формата нельзя смешивать с качеством автоматического восстановления.
+UMR 2.0 содержит восемь языковых каталогов, однако значительная доля больших Czech и
+English частей является partial conversion, а не вручную размеченным gold. В UMR Parsing
+Shared Task 2026 training data были даны для шести языков; две опубликованные системы
+получили примерно `0.19` среднего `FULL` score, при этом document-level modal, temporal
+и coreference relations часто не восстанавливались. Следовательно:
+
+> UMR принимается как **формат кандидатного view и источник семантических категорий**,
+> но FVSC не зависит от существующего UMR parser и не объявляет его output L0 truth.
+
+AMR остаётся полезным зрелым контрольным graph format. Однако cross-lingual исследования
+показывают, что source language, translation divergence и annotation choice измеримо
+влияют на AMR structure. Абстрагирование от поверхности не гарантирует полного
+языкового инварианта.
+
+### 20.3. UD — входной слой, а не смысл
+
+UD 2.18 публикует 353 treebanks для 193 языков и является самым широким согласованным
+морфосинтаксическим ресурсом среди рассмотренных кандидатов. Именно поэтому
+UD-compatible result полезен как один из реализационных вариантов будущего
+`LanguageFrontend`:
+
+```text
+normalized text + tokens + spans + lemmas/features + optional dependencies
+```
+
+Однако официальная задача UD — части речи, морфологические features и syntactic
+dependencies. Ни UD, ни русский падежный parser самостоятельно не задают полный смысл,
+scope, author/conceiver, adoption, endorsement или discourse truth conditions. Поэтому
+раздел XIX описывает один возможный русский adapter, а не устройство всех языков и не
+определение semantic core.
+
+### 20.4. DRS как строгий контроль
+
+DRS/PMB явно представляет scope отрицания, модальных операторов, кванторов и
+presupposition triggers, а также discourse referents. Это делает DRS полезным control
+view там, где graph similarity недостаточна и нужен проверяемый logical consequence.
+
+Parallel Meaning Bank поддерживает English, German, Dutch и Italian. Universal DRS
+показал перенос к silver resources для 99 языков через translation/projection, но silver
+coverage не равен native gold parsing. Более строгие PMB challenge sets обнаруживают
+существенное падение neural parsers на длинных текстах, discourse structure и
+compositional generalization. Поэтому FVSC использует DRS-подобный перевод лишь для
+зарегистрированного подмножества logic operations, а не как обязательный формат всей
+памяти.
+
+### 20.5. Место density matrix после аудита
+
+Density matrices имеют научно обоснованное локальное применение: смесь альтернативных
+word senses/context states и некоторые задачи lexical ambiguity/metaphor. Но такие
+результаты не показывают, что один оператор восстанавливает весь смысл документа,
+source identity, truth conditions или личное принятие высказывания.
+
+В новом эксперименте density разрешён только как annotation над **явно перечисленными
+конкурирующими интерпретациями**. Он может хранить их веса, uncertainty и обновление по
+контексту, но не может:
+
+- создавать semantic edge без отдельного derivation record;
+- переписывать `EvidenceLedger`;
+- превращать parser guess или model proposal в owner evidence;
+- скрывать альтернативы в одном aggregate score;
+- получать credit на задачах, где неоднозначность не зарегистрирована.
+
+### 20.6. Целевая интеграционная граница
+
+```text
+SourceDocument + exact revision/spans
+                 |
+                 v
+EvidenceLedger + attribution envelope          canonical, language-neutral
+                 |
+                 v
+LanguageFrontend                                replaceable per language/tool
+                 |
+                 v
+SemanticGraphView (UMR-compatible subset)       derived, versioned, cited
+                 |
+       +---------+----------+
+       |                    |
+       v                    v
+DRS control view       ambiguity density view   optional, operation-specific
+```
+
+`SemanticGraphView` не обязан сериализоваться ровно как UMR внутри процесса. Он обязан
+сохранить loss-aware correspondence: nodes, typed edges, attributes, sentence/document
+relations, token/span alignment, source revision, extractor/version, confidence и явно
+помеченные unsupported/lost fields. UMR import/export является adapter-ом, а не
+канонической моделью данных.
+
+RDF/OWL/PROV могут позже стать interchange/export layer. RDF задаёт графовую модель,
+OWL — ontology reasoning, PROV-O — provenance vocabulary; ни один из этих стандартов не
+выполняет natural-language semantic parsing. Добавлять их до зарегистрированной задачи
+interoperability означает переименовать уже работающие FVSC contracts без измеримого
+семантического выигрыша.
+
+### 20.7. Первый A/B/C experiment
+
+**Гипотеза B:** UMR-compatible document graph восстанавливает owner-validated semantic
+relations, которые теряет текущий flat Judgment projection.
+
+**Гипотеза C:** density overlay даёт дополнительную точность/калибровку только в случаях
+с несколькими defensible readings или context-dependent senses.
+
+На одном frozen наборе evidence сравниваются:
+
+- `A — current`: `EvidenceLedger` + текущий Judgment/exact graph;
+- `B — UMR view`: минимальный UMR-compatible sentence/document graph с точным span
+  alignment;
+- `C — UMR + density`: B плюс density operator только над размеченными конкурирующими
+  readings.
+
+Набор должен содержать negation/scope, modality/conceiver, time, cross-sentence
+coreference, condition, attribution, metaphor и lexical ambiguity. Первый execution
+может быть русским; promotion языковой агностичности требует отдельной confirmation на
+типологически отличном языке при неизменных внутренних contracts и metrics.
+
+Измеряются:
+
+- exact recovery зарегистрированных semantic relations;
+- answer correctness и citation/span correctness на фиксированных queries;
+- false composition и false owner-attribution;
+- abstention/calibration при недоопределённом источнике;
+- только на ambiguity subset — valid-reading recall при фиксированном false-reading
+  budget, probability calibration и owner-selected-reading accuracy;
+- latency, storage, update cost и implementation complexity.
+
+**Interpretive freedom** операционализируется не длиной и разнообразием generated prose,
+а числом/покрытием различных owner-accepted readings, сохранённых без роста ложных или
+unsupported readings.
+
+Promotion gates:
+
+1. B продвигается только при repeatable paired gain хотя бы на одной заранее выбранной
+   semantic operation без регресса citation/attribution safety.
+2. C сравнивается с B только на ambiguity operation. Его выигрыш не усредняется с
+   unrelated tasks.
+3. При tie сохраняется более простой active view; новый adapter остаётся experiment или
+   interchange format.
+4. Никакой parser dependency и никакая новая density materialization не добавляются до
+   minimal hand/constrained-model gold probe.
+
+### 20.8. Проверяемые внешние опоры
+
+- [UMR project](https://umr4nlp.github.io/web/),
+  [guidelines](https://github.com/umr4nlp/umr-guidelines/blob/master/guidelines.md),
+  [file format](https://ufal.mff.cuni.cz/umr-parsing/umr-file-format),
+  [UMR 2.0 data](https://github.com/umr4nlp/umr-data) и
+  [UMR Parsing 2026 results](https://ufal.mff.cuni.cz/umr-parsing/results).
+- Van Gysel et al. (2024),
+  [Uniform Meaning Representation](https://aclanthology.org/2024.lrec-main.229/);
+  Chun & Xue (2024),
+  [first automatic English UMR pipeline](https://aclanthology.org/2024.textgraphs-1.3/).
+- Banarescu et al. (2013), [AMR](https://aclanthology.org/W13-2322/);
+  Wein & Schneider (2024),
+  [cross-linguistic AMR assessment](https://aclanthology.org/2024.cl-2.1/).
+- [Parallel Meaning Bank](https://pmb.let.rug.nl/),
+  [DRS shared task](https://aclanthology.org/W19-1201/),
+  [Universal DRS](https://aclanthology.org/2021.cl-2.15/) и
+  [challenging PMB benchmarks](https://aclanthology.org/2024.dmr-1.17/).
+- White et al. (2020), [UDS and Decomp](https://aclanthology.org/2020.lrec-1.699/).
+- [UD introduction](https://universaldependencies.org/introduction.html) и
+  [UD 2.18 release](https://universaldependencies.org/download.html).
+- Meyer & Lewis (2020),
+  [density matrices for lexical ambiguity](https://aclanthology.org/2020.conll-1.21/);
+  Owers, Shutova & Lewis (2024),
+  [density matrices for metaphor](https://arxiv.org/abs/2408.11846).
+- [RDF 1.2 Concepts](https://www.w3.org/TR/rdf12-concepts/),
+  [RDF 1.2 Semantics](https://www.w3.org/TR/rdf12-semantics/),
+  [OWL 2 Overview](https://www.w3.org/TR/owl-overview/) и
+  [PROV-O](https://www.w3.org/TR/prov-o/).
+
+---
+
 ## Приложение A. Лексиконы контекстного классификатора
 
 Лексиконы — это знание о грамматическом ПОВЕДЕНИИ слов, не об их значении. Они фиксированы, не зависят от пользователя, и используются контекстным классификатором (шаг 3 пайплайна) для определения референциального статуса NP.
