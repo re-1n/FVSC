@@ -38,6 +38,7 @@ def _document(text="Паразиты захватывают внимание.") 
         end=len("Паразиты"),
         kind="quotation",
         owner_relation="adopted",
+        owner_endorsement="endorsed",
         derivation="test:v1",
     )
     attribution = source_attribution(
@@ -193,6 +194,7 @@ def test_review_pack_hides_arm_model_method_and_telemetry_but_keeps_exact_excerp
     assert "message_id=`1`" in markdown
     assert "transport_author=`owner`" in markdown
     assert "Expression span [0:8]" in markdown
+    assert "owner_endorsement=`endorsed`" in markdown
 
 
 def test_schema_v1_pack_without_optional_source_context_remains_readable() -> None:

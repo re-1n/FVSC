@@ -38,7 +38,9 @@ from fvsc.evidence import EvidenceLedger, EvidencePolicy
 from fvsc.ingest import (
     JUDGMENT_EVENT_EXTRACTOR,
     RussianJudgmentExtractor,
+    apply_owner_annotation_overlay,
     load_telegram_export,
+    load_owner_annotation_overlay,
 )
 from fvsc.ingest.document_ingest import build_evidence_batch
 from fvsc.integrations import (
@@ -271,6 +273,10 @@ def _run(args: argparse.Namespace) -> int:
         display_timezone=args.timezone,
     )
     documents = export.documents
+    annotation_overlay = None
+    if args.annotations is not None:
+        annotation_overlay = load_owner_annotation_overlay(args.annotations)
+        documents = apply_owner_annotation_overlay(documents, annotation_overlay)
     extractor = RussianJudgmentExtractor()
     lexical_index, structural_index = _build_indexes(documents, extractor=extractor)
 
@@ -310,6 +316,9 @@ def _run(args: argparse.Namespace) -> int:
         top_k=10,
         prompt_source_cap=12,
         context_depth=1,
+        owner_annotation_overlay_id=(
+            annotation_overlay.overlay_id if annotation_overlay is not None else None
+        ),
         evaluation_mode="pilot",
     )
     candidate_bundle = freeze_stage4h_candidates(
@@ -362,6 +371,9 @@ def _run(args: argparse.Namespace) -> int:
     summary = {
         "generated_review_items": len(pack.items),
         "model": identity.to_dict(),
+        "owner_annotation_overlay_id": (
+            annotation_overlay.overlay_id if annotation_overlay is not None else None
+        ),
         "next": (
             "Copy reviews.template.json to reviews.json, fill every null field while "
             "reading review-pack.md, then run the score subcommand."
@@ -439,6 +451,11 @@ def _parser() -> argparse.ArgumentParser:
 
     run = subparsers.add_parser("run", help="freeze and run the six-case local pilot")
     run.add_argument("--telegram", type=Path, required=True)
+    run.add_argument(
+        "--annotations",
+        type=Path,
+        help="private revision-bound owner expression annotation overlay",
+    )
     run.add_argument("--owner-id", action="append", required=True)
     run.add_argument("--model", required=True)
     run.add_argument("--ollama-host", default=DEFAULT_OLLAMA_HOST)

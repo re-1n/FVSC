@@ -602,7 +602,8 @@ def review_pack_markdown(pack: Stage4hReviewPack) -> str:
                             [
                                 f"Expression span [{span.start}:{span.end}]: "
                                 f"`{span.kind}`, origin=`{span.origin_status}`, "
-                                f"owner_relation=`{span.owner_relation}`",
+                                f"owner_relation=`{span.owner_relation}`, "
+                                f"owner_endorsement=`{span.owner_endorsement}`",
                                 "",
                             ]
                         )

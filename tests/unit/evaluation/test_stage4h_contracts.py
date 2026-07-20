@@ -58,6 +58,16 @@ def test_run_spec_is_content_addressed_and_round_trips() -> None:
         Stage4hRunSpec.from_dict(changed)
 
 
+def test_owner_annotation_overlay_is_part_of_new_run_identity_only_when_present() -> None:
+    legacy = _spec()
+    annotated = _spec(owner_annotation_overlay_id="d" * 64)
+
+    assert "owner_annotation_overlay_id" not in legacy.to_dict()
+    assert annotated.to_dict()["owner_annotation_overlay_id"] == "d" * 64
+    assert annotated.run_id != legacy.run_id
+    assert Stage4hRunSpec.from_dict(annotated.to_dict()) == annotated
+
+
 def test_run_spec_requires_all_local_arms_and_explicit_a3_scope() -> None:
     with pytest.raises(ValueError, match="missing required arms"):
         _spec(arms=("A0", "A1", "A2"))

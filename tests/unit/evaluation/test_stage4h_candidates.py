@@ -91,6 +91,24 @@ def _case() -> GoldCase:
     )
 
 
+def test_corpus_digest_binds_prompt_visible_metadata() -> None:
+    first = _document(
+        "message-1",
+        "Один и тот же исходный текст.",
+        observed_at=1.0,
+        message_id="1",
+    )
+    second = _document(
+        "message-1",
+        "Один и тот же исходный текст.",
+        observed_at=1.0,
+        message_id="2",
+    )
+
+    assert first.source_revision == second.source_revision
+    assert corpus_digest((first,)) != corpus_digest((second,))
+
+
 def test_freeze_keeps_a0_a1_identical_and_excludes_gold_meaning_and_negatives() -> None:
     documents = (
         _document("message-1", "Паразиты захватывают внимание.", observed_at=1.0),

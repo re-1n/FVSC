@@ -76,6 +76,22 @@ def test_pilot_cli_allows_slow_cpu_generation_timeout() -> None:
 
     assert args.ollama_timeout == 900.0
     assert args.num_predict == 768
+    assert args.annotations is None
+
+    annotated = _parser().parse_args(
+        [
+            "run",
+            "--telegram",
+            "result.json",
+            "--annotations",
+            "annotations.json",
+            "--owner-id",
+            "owner",
+            "--model",
+            "qwen:test",
+        ]
+    )
+    assert annotated.annotations.name == "annotations.json"
 
 
 def test_atomic_private_write_works_without_posix_fchmod(tmp_path, monkeypatch) -> None:

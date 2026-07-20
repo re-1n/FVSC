@@ -42,6 +42,7 @@ def _source() -> PromptSource:
         end=len("Паразиты"),
         kind="quotation",
         owner_relation="adopted",
+        owner_endorsement="endorsed",
         derivation="test:v1",
     )
     attribution = source_attribution(
@@ -111,6 +112,7 @@ def test_ollama_generates_strict_claims_without_exposing_source_ids_to_model() -
                 "end": len("Паразиты"),
                 "kind": "quotation",
                 "origin_status": "unresolved",
+                "owner_endorsement": "endorsed",
                 "owner_relation": "adopted",
                 "start": 0,
             }

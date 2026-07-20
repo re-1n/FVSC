@@ -23,7 +23,7 @@ from ..interpretation import (
 DEFAULT_OLLAMA_HOST = "http://127.0.0.1:11434"
 DEFAULT_OLLAMA_MODEL = "qwen2.5:7b-instruct-q4_K_M"
 DEFAULT_OLLAMA_NUM_PREDICT = 768
-OLLAMA_PROMPT_VERSION = "source-cited-json-v3-attribution"
+OLLAMA_PROMPT_VERSION = "source-cited-json-v4-owner-annotations"
 _MODEL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}")
 _DIGEST_RE = re.compile(r"[0-9a-f]{64}")
 
@@ -47,7 +47,10 @@ _SYSTEM_PROMPT = """Ты — слой L3 персональной семанти
    adoption, selection и authorship.
 10. expression_spans помечают известные границы вложенного текста. quotation с
     unresolved origin нельзя приписывать владельцу без отдельного основания.
-11. reply_to и temporal_previous дают контекст, но не разрешают сливать голоса. Если
+11. owner_relation описывает авторство/выбор/принятие выражения, а
+    owner_endorsement — отдельно явное согласие, несогласие, нейтральность или
+    смешанную позицию. Не выводи endorsement только из публикации или adoption.
+12. reply_to и temporal_previous дают контекст, но не разрешают сливать голоса. Если
     вопрос называет конкретный message_id, а такого id нет среди sources, воздержись.
 
 Верни только JSON-объект:

@@ -313,6 +313,7 @@ class Stage4hRunSpec:
     prompt_source_cap: int = 12
     context_depth: int = 1
     external_reference_scope: str | None = None
+    owner_annotation_overlay_id: str | None = None
     evaluation_mode: Stage4hEvaluationMode = "pilot"
     schema_version: int = 1
     protocol_version: str = "stage4h-v1"
@@ -378,9 +379,18 @@ class Stage4hRunSpec:
         if "A3" not in arms and scope is not None:
             raise ValueError("external_reference_scope is valid only when A3 is enabled")
         object.__setattr__(self, "external_reference_scope", scope)
+        if self.owner_annotation_overlay_id is not None:
+            object.__setattr__(
+                self,
+                "owner_annotation_overlay_id",
+                _digest(
+                    self.owner_annotation_overlay_id,
+                    field="owner_annotation_overlay_id",
+                ),
+            )
 
     def _payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "arms": list(self.arms),
             "case_ids": list(self.case_ids),
             "challenge_sha256": self.challenge_sha256,
@@ -397,6 +407,11 @@ class Stage4hRunSpec:
             "thresholds": self.thresholds.to_dict(),
             "top_k": self.top_k,
         }
+        # Preserve content ids for existing Stage 4h manifests. The field becomes
+        # part of the immutable run identity only when an overlay is applied.
+        if self.owner_annotation_overlay_id is not None:
+            payload["owner_annotation_overlay_id"] = self.owner_annotation_overlay_id
+        return payload
 
     @property
     def run_id(self) -> str:
@@ -430,6 +445,7 @@ class Stage4hRunSpec:
             prompt_source_cap=value.get("prompt_source_cap", 12),
             context_depth=value.get("context_depth", 1),
             external_reference_scope=value.get("external_reference_scope"),
+            owner_annotation_overlay_id=value.get("owner_annotation_overlay_id"),
             evaluation_mode=value.get("evaluation_mode", "pilot"),
             schema_version=value.get("schema_version", 0),
             protocol_version=value.get("protocol_version", ""),

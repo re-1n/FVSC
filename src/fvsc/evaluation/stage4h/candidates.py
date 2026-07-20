@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import json
 from typing import Any, Iterable, Mapping, Protocol, Sequence
 
-from ...ingest import SourceDocument
+from ...ingest import SourceAttribution, SourceDocument
 from ...retrieval import LexicalSearchIndex, SourceLocatorIndex, expand_source_context
 from ..gold import GoldCase
 from .contracts import (
@@ -33,19 +33,41 @@ def corpus_digest(documents: Iterable[SourceDocument]) -> str:
     source_ids = tuple(item.source_id for item in ordered)
     if len(source_ids) != len(set(source_ids)):
         raise ValueError("Stage 4h corpus source ids must be unique")
+    records = []
+    for item in ordered:
+        metadata = item.metadata
+        attribution = SourceAttribution.from_metadata(metadata)
+        attribution.verify(item.text)
+        temporal = metadata.get("temporal_context")
+        temporal_previous = (
+            temporal.get("previous_source_id") if isinstance(temporal, dict) else None
+        )
+        prompt_metadata_digest = content_digest(
+            {
+                "display_time": metadata.get("display_time"),
+                "message_id": metadata.get("message_id"),
+                "owner_annotation_overlay_id": metadata.get(
+                    "owner_annotation_overlay_id"
+                ),
+                "reply_to_source_id": metadata.get("reply_to_source_id"),
+                "source_attribution": attribution.to_dict(),
+                "temporal_previous_source_id": temporal_previous,
+            }
+        )
+        records.append(
+            {
+                "adapter": item.adapter,
+                "observed_at": item.observed_at,
+                "prompt_metadata_sha256": prompt_metadata_digest,
+                "source_id": item.source_id,
+                "source_kind": item.source_kind,
+                "source_revision": item.source_revision,
+            }
+        )
     return content_digest(
         {
-            "documents": [
-                {
-                    "adapter": item.adapter,
-                    "observed_at": item.observed_at,
-                    "source_id": item.source_id,
-                    "source_kind": item.source_kind,
-                    "source_revision": item.source_revision,
-                }
-                for item in ordered
-            ],
-            "schema_version": 1,
+            "documents": records,
+            "schema_version": 2,
         }
     )
 
