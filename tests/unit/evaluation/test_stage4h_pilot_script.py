@@ -82,6 +82,7 @@ def test_pilot_cli_allows_slow_cpu_generation_timeout() -> None:
     assert args.ollama_timeout == 900.0
     assert args.num_predict == 768
     assert args.annotations is None
+    assert args.explicit_locator_policy == "anchor"
 
     annotated = _parser().parse_args(
         [
@@ -97,6 +98,22 @@ def test_pilot_cli_allows_slow_cpu_generation_timeout() -> None:
         ]
     )
     assert annotated.annotations.name == "annotations.json"
+
+    exclusive = _parser().parse_args(
+        [
+            "run",
+            "--telegram",
+            "result.json",
+            "--owner-id",
+            "owner",
+            "--model",
+            "qwen:test",
+            "--explicit-locator-policy",
+            "exclusive",
+        ]
+    )
+    assert exclusive.explicit_locator_policy == "exclusive"
+
 
 
 def test_validate_annotations_checks_overlay_without_loading_model(

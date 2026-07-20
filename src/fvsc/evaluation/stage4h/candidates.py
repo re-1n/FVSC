@@ -422,29 +422,40 @@ def freeze_stage4h_candidates(
     frozen: list[FrozenCandidateSet] = []
     for case in selected:
         anchors = _locator_anchors(case=case, spec=spec, locator_index=locator_index)
-        lexical = _lexical_candidates(
-            case=case,
-            spec=spec,
-            documents=ordered_documents,
-            by_id=by_id,
-            index=lexical_index,
-            anchors=anchors,
-        )
+        locator_only = bool(anchors) and spec.explicit_locator_policy == "exclusive"
+        if locator_only:
+            lexical = tuple(_ranked_anchors(anchors))
+            lexical_case_method = "source-locator-only-v1"
+        else:
+            lexical = _lexical_candidates(
+                case=case,
+                spec=spec,
+                documents=ordered_documents,
+                by_id=by_id,
+                index=lexical_index,
+                anchors=anchors,
+            )
+            lexical_case_method = lexical_method
         oracle = _oracle_candidates(case=case, spec=spec, by_id=by_id)
-        structural = _structural_candidates(
-            case=case,
-            spec=spec,
-            documents=ordered_documents,
-            by_id=by_id,
-            index=structural_index,
-            anchors=anchors,
-        )
+        if locator_only:
+            structural = tuple(_ranked_anchors(anchors))
+            structural_case_method = "source-locator-only-v1"
+        else:
+            structural = _structural_candidates(
+                case=case,
+                spec=spec,
+                documents=ordered_documents,
+                by_id=by_id,
+                index=structural_index,
+                anchors=anchors,
+            )
+            structural_case_method = structural_method
         candidates_by_arm = {
-            "A0": (lexical_method, lexical),
-            "A1": (lexical_method, lexical),
+            "A0": (lexical_case_method, lexical),
+            "A1": (lexical_case_method, lexical),
             "A2": ("owner-gold-oracle-v1", oracle),
-            "A3": (lexical_method, lexical),
-            "A4": (structural_method, structural),
+            "A3": (lexical_case_method, lexical),
+            "A4": (structural_case_method, structural),
         }
         for arm in spec.arms:
             method, arm_candidates = candidates_by_arm[arm]

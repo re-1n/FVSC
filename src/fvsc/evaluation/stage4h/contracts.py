@@ -19,6 +19,7 @@ from typing import Any, Literal, Mapping, Sequence
 
 Stage4hArm = Literal["A0", "A1", "A2", "A3", "A4"]
 Stage4hEvaluationMode = Literal["pilot", "confirmatory"]
+Stage4hExplicitLocatorPolicy = Literal["anchor", "exclusive"]
 CandidateRole = Literal["ranked", "context", "oracle"]
 ClaimReviewVerdict = Literal[
     "accepted",
@@ -30,6 +31,7 @@ CitationReviewVerdict = Literal["supports", "partial", "unsupported"]
 
 _STAGE4H_ARMS = frozenset({"A0", "A1", "A2", "A3", "A4"})
 _STAGE4H_EVALUATION_MODES = frozenset({"pilot", "confirmatory"})
+_STAGE4H_EXPLICIT_LOCATOR_POLICIES = frozenset({"anchor", "exclusive"})
 STAGE4H_REQUIRED_ARMS = frozenset({"A0", "A1", "A2", "A4"})
 MIN_STAGE4H_CONFIRMATORY_CASES = 17
 _CANDIDATE_ROLES = frozenset({"ranked", "context", "oracle"})
@@ -312,6 +314,7 @@ class Stage4hRunSpec:
     top_k: int = 10
     prompt_source_cap: int = 12
     context_depth: int = 1
+    explicit_locator_policy: Stage4hExplicitLocatorPolicy = "anchor"
     external_reference_scope: str | None = None
     owner_annotation_overlay_id: str | None = None
     evaluation_mode: Stage4hEvaluationMode = "pilot"
@@ -325,6 +328,8 @@ class Stage4hRunSpec:
             raise ValueError("unsupported Stage 4h protocol version")
         if self.evaluation_mode not in _STAGE4H_EVALUATION_MODES:
             raise ValueError("unknown Stage 4h evaluation mode")
+        if self.explicit_locator_policy not in _STAGE4H_EXPLICIT_LOCATOR_POLICIES:
+            raise ValueError("unknown Stage 4h explicit locator policy")
         object.__setattr__(self, "gold_sha256", _digest(self.gold_sha256, field="gold_sha256"))
         object.__setattr__(
             self,
@@ -407,6 +412,10 @@ class Stage4hRunSpec:
             "thresholds": self.thresholds.to_dict(),
             "top_k": self.top_k,
         }
+        # Keep legacy manifests stable. Opting into locator-only retrieval is an
+        # experimental variable and therefore becomes part of the run identity.
+        if self.explicit_locator_policy != "anchor":
+            payload["explicit_locator_policy"] = self.explicit_locator_policy
         # Preserve content ids for existing Stage 4h manifests. The field becomes
         # part of the immutable run identity only when an overlay is applied.
         if self.owner_annotation_overlay_id is not None:
@@ -444,6 +453,7 @@ class Stage4hRunSpec:
             top_k=value.get("top_k", 10),
             prompt_source_cap=value.get("prompt_source_cap", 12),
             context_depth=value.get("context_depth", 1),
+            explicit_locator_policy=value.get("explicit_locator_policy", "anchor"),
             external_reference_scope=value.get("external_reference_scope"),
             owner_annotation_overlay_id=value.get("owner_annotation_overlay_id"),
             evaluation_mode=value.get("evaluation_mode", "pilot"),

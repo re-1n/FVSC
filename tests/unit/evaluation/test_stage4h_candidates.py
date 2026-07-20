@@ -211,6 +211,50 @@ def test_explicit_query_locator_anchors_lexical_and_structural_arms() -> None:
         assert candidates[0].score == 1.0
 
 
+def test_exclusive_locator_policy_omits_ranked_decoys_and_context() -> None:
+    anchor = _document(
+        "telegram/private-diary/messages/message-747.json",
+        "Поэтический фрагмент без слова реальный.",
+        observed_at=1.0,
+        message_id="747",
+    )
+    decoy = _document(
+        "telegram/private-diary/messages/message-1.json",
+        "Реальный человек или вымышленный человек?",
+        observed_at=2.0,
+        message_id="1",
+        reply_to_source_id=anchor.source_id,
+    )
+    case = GoldCase(
+        case_id="gold-001",
+        title="Referent",
+        question="Можно ли по Diary:747 установить, был ли человек реальным?",
+        decision="open",
+        evidence=(EvidenceRef("Diary:747", anchor.source_id, "primary"),),
+    )
+    structural_hit = SimpleNamespace(
+        source_id=decoy.source_id,
+        score=0.9,
+        evidence_event_ids=("e" * 64,),
+    )
+    documents = (anchor, decoy)
+
+    bundle = freeze_stage4h_candidates(
+        spec=_spec(documents, explicit_locator_policy="exclusive"),
+        cases=(case,),
+        documents=documents,
+        lexical_index=LexicalSearchIndex(documents),
+        structural_index=_StructuralIndex((structural_hit,)),
+    )
+
+    for arm in ("A0", "A1", "A4"):
+        candidate_set = bundle.for_case_arm("gold-001", arm)
+        assert tuple(item.source_id for item in candidate_set.candidates) == (
+            anchor.source_id,
+        )
+        assert candidate_set.retrieval_method == "source-locator-only-v1"
+
+
 def test_unresolved_explicit_query_locator_fails_before_generation() -> None:
     document = _document(
         "telegram/private-diary/messages/message-1.json",

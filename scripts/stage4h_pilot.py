@@ -316,6 +316,7 @@ def _run(args: argparse.Namespace) -> int:
         top_k=10,
         prompt_source_cap=12,
         context_depth=1,
+        explicit_locator_policy=args.explicit_locator_policy,
         owner_annotation_overlay_id=(
             annotation_overlay.overlay_id if annotation_overlay is not None else None
         ),
@@ -512,6 +513,15 @@ def _parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--namespace", default="private-diary")
     run.add_argument("--timezone", default="Europe/Moscow")
+    run.add_argument(
+        "--explicit-locator-policy",
+        choices=("anchor", "exclusive"),
+        default="anchor",
+        help=(
+            "how explicit source locators affect candidates: anchor keeps ranked "
+            "retrieval; exclusive supplies only explicitly named sources"
+        ),
+    )
     run.add_argument(
         "--gold",
         type=Path,

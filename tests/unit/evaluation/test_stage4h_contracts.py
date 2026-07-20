@@ -50,12 +50,26 @@ def test_run_spec_is_content_addressed_and_round_trips() -> None:
     assert spec.model.seed == 42
     assert spec.model.num_predict == 768
     assert spec.evaluation_mode == "pilot"
+    assert spec.explicit_locator_policy == "anchor"
     assert spec.thresholds.max_severe_errors == 0
 
     changed = dict(spec.to_dict())
     changed["top_k"] = 9
     with pytest.raises(ValueError, match="run_id"):
         Stage4hRunSpec.from_dict(changed)
+
+
+def test_exclusive_locator_policy_is_validated_and_changes_run_identity() -> None:
+    baseline = _spec()
+    exclusive = _spec(explicit_locator_policy="exclusive")
+
+    assert "explicit_locator_policy" not in baseline.to_dict()
+    assert exclusive.to_dict()["explicit_locator_policy"] == "exclusive"
+    assert exclusive.run_id != baseline.run_id
+    assert Stage4hRunSpec.from_dict(exclusive.to_dict()) == exclusive
+
+    with pytest.raises(ValueError, match="explicit locator policy"):
+        _spec(explicit_locator_policy="guess")
 
 
 def test_owner_annotation_overlay_is_part_of_new_run_identity_only_when_present() -> None:
