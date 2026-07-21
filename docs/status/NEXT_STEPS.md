@@ -43,6 +43,14 @@ Migration order (foundation-first; each commit must build and pass tests):
      universal substrate to an optional local view. The audit also corrects the legacy
      unbounded containment ratio, eigenvector/facet overclaim, non-unique matrix
      decomposition, and unproven fractal/convergence claims.
+   - **First vertical dialogue census — participant review pending.** A bounded private
+     two-party episode now has source-linked candidate `M/R/G/N/Q` units, external
+     reply-antecedent checks, provenance for model-assisted wording, and an independent
+     challenge pass. One participant's meaning layer is reviewed; the other participant
+     has a neutral source-cited review pack. Keep every source body and review artifact
+     under ignored `private_eval/`; freeze a new private revision only after the second
+     review and a final challenge pass. This is evaluation construction, not evidence of
+     semantic-representation superiority.
    - ✅ **Stage 4h harness** — immutable manifest and preregistered thresholds;
      source-body-free challenge addendum; frozen A0/A1/A2/A4 candidates; exact local
      model digest/seed/token/duration telemetry; paired local generation; keyed blinded
