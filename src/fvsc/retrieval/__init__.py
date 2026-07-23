@@ -1,5 +1,11 @@
 """Deterministic retrieval baselines over transient source documents."""
 
+from .context_compiler import (
+    CompiledContext,
+    SemanticContextCompiler,
+    SemanticContextUnit,
+    approximate_tokens,
+)
 from .lexical import LexicalHit, LexicalSearchIndex, expand_source_context, search_documents
 from .judgments import JudgmentHit, JudgmentSearchIndex, search_judgment_evidence
 from .fusion import FusedHit, reciprocal_rank_fusion
@@ -13,6 +19,8 @@ from .locators import (
 )
 
 __all__ = [
+    "CompiledContext",
+    "FusedHit",
     "JudgmentHit",
     "JudgmentSearchIndex",
     "LexicalHit",
@@ -20,12 +28,14 @@ __all__ = [
     "LocatorMatchKind",
     "LocatorResolution",
     "LocatorStatus",
+    "SemanticContextCompiler",
+    "SemanticContextUnit",
     "SourceLocator",
     "SourceLocatorIndex",
-    "FusedHit",
+    "approximate_tokens",
     "expand_source_context",
+    "parse_source_locators",
+    "reciprocal_rank_fusion",
     "search_documents",
     "search_judgment_evidence",
-    "reciprocal_rank_fusion",
-    "parse_source_locators",
 ]
