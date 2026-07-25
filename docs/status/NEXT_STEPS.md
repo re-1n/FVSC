@@ -92,6 +92,34 @@ Migration order (foundation-first; each commit must build and pass tests):
    Draft PR #2 already exists and validates each pushed `integration/fvsc-core-v1`
    head; do not create or merge another PR without separate user instruction.
 
+## Current handoff — coverage-aware synthesis
+
+The private dialogue census and owner-reviewed atomic `G001` view have separated the
+remaining Q07 failure from retrieval: bounded typed traversal places both the
+interaction protocol and the caveated tactile facet in a 492-token evidence block, but
+the generation model still omits one facet.
+
+Next:
+
+1. build public synthetic multi-facet questions with positive, optional, alternative
+   and prohibited facets;
+2. preregister one minimal coverage-aware synthesis contract against the current
+   one-shot baseline;
+3. score facet recall, unsupported-facet rate, citation correctness, abstention,
+   latency and tokens;
+4. preserve per-question isolation and never force guards/alternatives into positive
+   prose;
+5. repeat private Q07 only after the synthetic gate.
+
+Do not tune another ranker, increase the global budget, promote embeddings/density, or
+rewrite the frozen parent Gold for this failure.
+
+Protocol and result context:
+
+- [`CONTEXT_RANKER_CUES_PROBE.md`](../evaluation/CONTEXT_RANKER_CUES_PROBE.md)
+- [`ATOMIC_GROUP_COMPILATION.md`](../evaluation/ATOMIC_GROUP_COMPILATION.md)
+- [`NEXT_SESSION.md`](../../NEXT_SESSION.md)
+
 ## Follow-ups (not blocking)
 
 - Track `obsidian-plugin/package-lock.json` so CI can use `npm ci` (reproducible builds)

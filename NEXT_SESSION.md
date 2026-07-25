@@ -1,103 +1,197 @@
-# Следующая сессия — FVSC semantic atlas
+# Следующая сессия — FVSC guarded semantic context
 
-## Состояние на 2026-07-21
+## Состояние на 2026-07-26
 
 - Активная ветка: `integration/fvsc-core-v1`.
-- Draft PR: GitHub #2.
-- `main` остаётся замороженной MVP-веткой; без явного решения не сливать.
-- Последняя полная локальная проверка: **301 passed, 1 skipped, 11 deselected**.
-- Каноническая основа остаётся `SourceDocument -> EvidenceLedger`; семантические
-  представления являются заменяемыми, производными и source-cited views.
+- Ветка опережает `origin/integration/fvsc-core-v1` на **6 коммитов** до handoff-коммита.
+- Draft PR: GitHub #2. Ничего не сливать в `main` без отдельного решения.
+- Рабочее дерево перед handoff чистое.
+- Последняя полная локальная проверка:
+  **334 passed, 1 skipped, 11 deselected**.
+- Каноническая основа не изменилась:
+  `SourceDocument -> EvidenceLedger`. Census, atomic groups, embeddings и compiled
+  contexts — производные, заменяемые и source-cited views.
 
-## Что сделано в завершённой сессии
+## Что завершено
 
-1. В whitepaper записан языково-агностичный обзор фронтира представлений смысла.
-   Вывод: универсального победителя нет; первый широкий schema baseline — UMR, DRS —
-   формальный контроль, embeddings — retrieval baseline, density — только для
-   размеченной неоднозначности.
-2. Добавлены языково-нейтральные `LinguisticFrontendResult` и `SemanticGraphView` с
-   точной привязкой к source revision, детерминированными digest и явными потерями.
-3. Добавлен loss-aware импорт документированного UMR subset: token blocks, sentence
-   graph, alignments и document relations. Импорт не пишет в EvidenceLedger и не делает
-   parser guesses каноническими.
-4. Добавлен публичный synthetic capacity probe на RU/DE/FR/EN:
-   - `judgment_core`: micro-F1 `0.7692307692`, 5 пропущенных и 1 лишняя единица;
-   - `umr`: micro-F1 `1.0`, без пропусков;
-   - паритет на простом predicate/argument и отрицании;
-   - структурная разница на modal conceiver, cross-sentence coreference и time.
-5. Результат **не даёт права продвигать UMR**: parser/extraction исключён, gold специально
-   содержит представимые UMR-факты, `promotion_eligible=false`.
-6. Принято направление следующего эксперимента: не объявлять Gold 001–015 полным
-   экзаменом, а строить Evaluation Atlas из вертикальных глубоких census и
-   горизонтальных phenomenon/minimal-pair тестов.
-7. Добавлены русская инструкция и рабочий шаблон глубокого semantic census.
+### 1. Первый deep semantic census заморожен
 
-## Сохранённые коммиты этой линии
+- Приватный двухсторонний dialogue census полностью проверен обоими участниками.
+- Статус: `private-participant-gold-v1`.
+- Parent freeze:
+  `private_eval/deep_census/dialogue-census-001-freeze-v1.md`.
+- Открыты только явно сохранённые неопределённости памяти/конкретики.
+- Разрешено локальное тестирование понимания смыслов. Публикация, GitHub, передача
+  исходного текста наружу и расширение цели не разрешены.
 
-- `ec2b0b0` — whitepaper: language-agnostic semantics frontier.
-- `e91c9c9` — language-neutral graph contracts.
-- `28bb522` — source-grounded UMR subset importer.
-- `9cfd988` — frozen semantic capacity probe.
+### 2. Guarded context compiler
 
-Следующий commit после этого handoff содержит census guide/template и актуализацию
-памяти сессии.
+Публичный compiler теперь поддерживает:
+
+- детерминированный character cosine baseline;
+- character TF-IDF ablation;
+- reviewed/candidate retrieval cues, которые не рендерятся как evidence;
+- валидируемые external scores для локальных embedding-кандидатов;
+- минимальный score как fail-closed control;
+- неделимые guards и mandatory corrections;
+- отдельные optional related links;
+- per-question evidence isolation;
+- `require_positive` / `INSUFFICIENT_CONTEXT`;
+- atomic reviewed groups с `parent_group_id` и `selectable=false`;
+- ограниченный `related_depth`;
+- дедупликацию primary/guard/correction units.
+
+Ключевые файлы:
+
+- `src/fvsc/retrieval/context_compiler.py`
+- `docs/evaluation/CONTEXT_RANKER_CUES_PROBE.md`
+- `docs/evaluation/ATOMIC_GROUP_COMPILATION.md`
+
+### 3. Ranker ablations
+
+Retrieval-only результаты на замороженном диалоге:
+
+| Arm | Macro oracle recall | Решение |
+|---|---:|---|
+| character cosine, budget 500 | 0.683 | baseline |
+| character TF-IDF | 0.733 | не продвигать: небезопасно заполнил Q04 |
+| TF-IDF + floor 0.20 | 0.650 | отклонён |
+| Qwen3-Embedding 0.6B | 0.533 | отклонён |
+| Qwen3-Embedding + task instruction | 0.533 | отклонён |
+| blinded candidate cues | 0.733 | не reviewed; не продвигать |
+| cosine, budget 700 | 0.757 | только cost ablation |
+| owner-reviewed atomic + depth 2, budget 500 | 0.757 | retained view |
+
+Ни TF-IDF, ни embeddings, ни cues не продвинуты. Density matrices по этим ошибкам
+по-прежнему не оправданы.
+
+### 4. Локальная embedding-модель
+
+- Установлена в существующее Ollama-хранилище на диске D:
+  `qwen3-embedding:0.6b`.
+- Digest:
+  `ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d`.
+- Размер около 639 MB, embedding dimension 1024.
+- Добавлен loopback-only `/api/embed` adapter с проверкой batch, dimensions и finite
+  values.
+- Модель остаётся ablation, не default.
+
+### 5. Owner-reviewed atomic G001
+
+Монолитный безопасный bundle Q04 занимал 671 estimated tokens и не помещался в budget
+500. `G001` разложен на пять derived children:
+
+- `G001.A_MECHANISM`
+- `G001.B_COMPOSITION`
+- `G001.FRAME_RELATION`
+- `G001.A_ADOPTION`
+- `G001.B_RECEPTION`
+
+Владелец принял все пять формулировок и подтвердил их совместную полноту. Freeze:
+
+- `private_eval/deep_census/atomic-g001-freeze-v1.json`
+- `private_eval/deep_census/atomic-g001-derivation-review.md`
+
+Parent census не изменён. `G001` остаётся provenance-parent, но не участвует в ranking.
+Q04 теперь компилируется в 479 estimated tokens и сохраняет различие:
+
+- radical level A участницей принят;
+- supportive paint metaphor B не принята;
+- тогда B переживалась как навязанное неудачное утешение;
+- позднее отношение стало нейтральным.
+
+### 6. Generation diagnostics
+
+Итоговый post-dedup atomic v15:
+
+- Run: `.fvsc/dialogue_ablation/18ff4589360fc096`
+- raw + locators: **7 accepted, 3 partial, 0 rejected**
+- atomic FVSC: **9 accepted, 1 partial, 0 rejected**
+- prompt: raw 5,116; atomic FVSC 4,656 (**−9%**)
+- это один приватный диалог, одна модель и один seed; общей superiority не заявлять.
+
+После bounded two-hop retrieval Q07 получил `M017` и `M029` в одном 492-token block:
+
+- retrieval recall вырос;
+- generation всё равно опустила тактильность;
+- Run: `.fvsc/dialogue_ablation/e04069aaa7271eac`.
+
+Следовательно, Q07 теперь классифицирован как **downstream synthesis/coverage failure**,
+а не retrieval или storage failure.
+
+## Коммиты незапушенного tranche
+
+- `9bf34e0` — auditable ranker candidates + local embedding adapter.
+- `c47ce74` — ranker/budget ablation record.
+- `52a3d2e` — atomic reviewed groups.
+- `975c10c` — mandatory-unit deduplication.
+- `9bf9d89` — bounded typed related traversal.
+- `ccc5b52` — owner-reviewed atomic result.
+
+Следующий коммит после них — этот handoff/status checkpoint.
 
 ## Главный следующий шаг
 
-Создать первый **вертикальный deep semantic census** одного реального смыслонасыщенного
-текста.
+Не продолжать настройку ranker на этом диалоге.
 
-Пользователю не требуется самостоятельно выполнять полную разметку:
+Следующая зарегистрированная задача — **coverage-aware synthesis**:
 
-1. скопировать шаблон в `private_eval/deep_census/census-001.md`;
-2. вставить текст/locator и при желании первое свободное понимание;
-3. Codex выполняет первичную candidate-разметку, anchors, `M/R/G/N/Q`, несколько
-   проходов насыщения и карту вопросов для review;
-4. пользователь подтверждает только owner-sensitive намерения, авторские термины и
-   допустимые/отвергнутые интерпретации;
-5. после owner-review замораживается census v1 и вручную сравнивается ёмкость
-   Judgment/Evidence, UMR, DRS и ambiguity-only density.
+1. создать публичные synthetic fixtures, где один вопрос требует 2–3 независимых,
+   source-cited facets;
+2. сравнить обычный one-shot answer с минимальным coverage contract;
+3. coverage contract не должен превращать каждый selected unit в обязательное
+   утверждение: guards, alternatives и optional/caveated facets различаются;
+4. измерять facet recall, unsupported facet rate, citation correctness, abstention,
+   prompt/output tokens и latency;
+5. только после synthetic gate повторить приватный Q07;
+6. не менять Gold и не подбирать prompt по одному приватному ответу.
 
-Инструкция:
-`docs/evaluation/DEEP_SEMANTIC_CENSUS_GUIDE_RU.md`
+После решения synthesis/coverage перейти к **горизонтальному phenomenon atlas** на
+публичных или синтетических minimal pairs. Только затем выбирать следующую
+математическую view по доминирующему классу ошибок.
 
-Шаблон:
-`docs/evaluation/DEEP_SEMANTIC_CENSUS_TEMPLATE_RU.md`
+## Когда возвращаться к математическим структурам
 
-Рекомендуемое приватное рабочее место:
-`private_eval/deep_census/census-001.md` — папка уже исключена из публикации общим
-правилом `private_eval/*`.
+- Graph/typed edges уже оправданы для guards, corrections, parent groups и related
+  traversal.
+- UMR/DRS — проверять на scope, modality, coreference и time, не на общий retrieval.
+- Embeddings — оставить ablation; 0.6B кандидат проиграл lexical floor.
+- Density — только для размеченных сосуществующих интерпретаций и contextual mixture,
+  с classical/diagonal ablation. Текущие Q04/Q07 не являются таким доказательством.
+- Tensor/transform/temporal views — только после отдельной registered operation.
 
-## Правила следующей сессии
+## Жёсткие границы
 
-- Не превращать candidate-разметку модели в owner-gold автоматически.
-- Не требовать от владельца формальных UMR/DRS обозначений; сначала естественно-языковое
-  смысловое поле, затем mappings.
-- Не смешивать три результата: representational capacity, automatic extraction и
-  downstream/query utility.
-- Не усреднять всё в один F1: публиковать профиль predicate/argument, scope, modality,
-  time, coreference, attribution, ambiguity, abstention и provenance.
-- Явно записывать `underdetermined` и запрещённые утверждения; отсутствие ложной
-  уверенности является частью качества.
-- Новые gold revisions добавлять версиями; старые результаты не переписывать.
-- Не публиковать сырой личный текст, actor identities, локальные абсолютные пути или
-  generated owner-review journals.
+- Не публиковать dialogue source, participant identities, review journals, raw model
+  outputs, blind maps или локальные абсолютные пути.
+- Не превращать model candidate cues в owner-reviewed cues.
+- Не переписывать parent Gold результатами derived view.
+- Не считать retrieval recall downstream-quality metric.
+- Не скрывать отрицательные TF-IDF/embedding/cue результаты.
+- Не продвигать atomic view как универсальное представление смысла.
+- Не push/merge без явного решения пользователя; `main` остаётся замороженной.
 
 ## Быстрые команды
 
 ```powershell
 $env:PYTHONPATH='src'
 python -m pytest -q
-python scripts/semantic_schema_probe.py
-
-New-Item -ItemType Directory -Force private_eval/deep_census
-Copy-Item docs/evaluation/DEEP_SEMANTIC_CENSUS_TEMPLATE_RU.md `
-  private_eval/deep_census/census-001.md
+git status --short --branch
+git log -8 --oneline
+ollama list
 ```
+
+Приватные диагностические скрипты и артефакты находятся в ignored:
+
+- `private_eval/deep_census/`
+- `.fvsc/dialogue_ranker_audit/`
+- `.fvsc/dialogue_ablation/`
 
 ## Текущая научная формулировка
 
-FVSC строит не одну универсальную структуру смысла, а provenance-grounded semantic atlas.
-Для ограниченного текста и контекста создаётся максимально насыщенное, открытое поле
-смысловых единиц. Каждая математическая структура проверяется по тому, какую часть этого
-поля она различимо, вычислимо и без ложных утверждений сохраняет.
+FVSC — provenance-grounded semantic atlas, а не одна универсальная геометрия. Текущий
+результат показывает, что reviewed atomic structure может одновременно сохранить
+owner-sensitive границы, исправить context starvation и уменьшить prompt относительно
+raw. Но даже наличие нужных facets в контексте не гарантирует их сохранения
+генеративной моделью; retrieval, representation и synthesis должны оцениваться
+раздельно.

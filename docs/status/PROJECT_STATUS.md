@@ -1,4 +1,28 @@
-# Project status — 2026-07-21
+# Project status — 2026-07-26
+
+## Guarded semantic-context addendum — 2026-07-26
+
+- The first private two-party deep census is frozen as
+  `private-participant-gold-v1` after both participants reviewed their meaning layer.
+- A deterministic guarded context compiler now preserves mandatory guards,
+  corrections, parent-group provenance, per-question isolation and bounded typed
+  traversal under a hard token budget.
+- Character TF-IDF, a local Qwen3 0.6B multilingual embedding model, a global score
+  floor and blinded candidate cues did not pass the registered safety/coverage gate.
+  Character cosine remains the ranker baseline; no density or embedding view is
+  promoted.
+- The owner reviewed and accepted a five-child decomposition of oversized group
+  `G001`. The parent remains immutable and non-selectable. The Q04 safety bundle fell
+  from 671 to 479 estimated tokens and now fits the original 500-token budget.
+- Post-fix diagnostic run `18ff4589360fc096` produced 9 accepted / 1 partial answers
+  for atomic FVSC versus 7 accepted / 3 partial for raw + stable locators, with 9% fewer
+  prompt tokens. This is one private dialogue/model/seed and is not general proof.
+- Two-hop typed retrieval delivered both Q07 facets, but generation still omitted one.
+  The remaining failure is downstream synthesis/coverage, not retrieval. The next
+  experiment must begin on public synthetic multi-facet fixtures.
+- Current local verification: **334 passed / 1 skipped / 11 deselected**. The active
+  branch contains six unpushed implementation/evaluation commits before the handoff
+  checkpoint.
 
 ## Semantic-atlas research addendum — 2026-07-21
 
