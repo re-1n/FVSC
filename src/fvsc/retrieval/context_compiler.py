@@ -85,6 +85,8 @@ class SemanticContextUnit:
     correction_ids: tuple[str, ...] = ()
     related_ids: tuple[str, ...] = ()
     retrieval_cues: tuple[str, ...] = ()
+    parent_group_id: str | None = None
+    selectable: bool = True
     reason: str = ""
 
     def __post_init__(self) -> None:
@@ -105,6 +107,18 @@ class SemanticContextUnit:
             raise ValueError("retrieval_cues must be non-empty and trimmed")
         if len(normalized_cues) != len(set(normalized_cues)):
             raise ValueError("retrieval_cues must be unique")
+        if self.parent_group_id is not None:
+            parent_group_id = str(self.parent_group_id).strip()
+            if (
+                not parent_group_id
+                or parent_group_id != self.parent_group_id
+                or parent_group_id == self.unit_id
+            ):
+                raise ValueError(
+                    "parent_group_id must be a distinct non-empty trimmed id"
+                )
+        if not isinstance(self.selectable, bool):
+            raise ValueError("selectable must be a boolean")
         if self.unit_id in self.guard_ids:
             raise ValueError("a semantic unit cannot guard itself")
         if self.unit_id in self.related_ids:
@@ -122,6 +136,8 @@ class SemanticContextUnit:
             f"polarity={self.polarity}; modality={self.modality}; "
             f"owner_decision={self.owner_decision}"
         )
+        if self.parent_group_id is not None:
+            metadata += f"; parent_group_id={self.parent_group_id}"
         if self.kind == "guard":
             return (
                 f"[{self.unit_id}] {metadata}\n"
@@ -184,6 +200,17 @@ class SemanticContextCompiler:
                 for correction_id in item.correction_ids
             ):
                 raise ValueError("correction_ids must reference positive meaning/group units")
+            if item.parent_group_id is not None:
+                parent = by_id.get(item.parent_group_id)
+                if parent is None:
+                    raise ValueError(
+                        f"semantic unit {item.unit_id} references missing parent group: "
+                        f"{item.parent_group_id}"
+                    )
+                if parent.kind != "group":
+                    raise ValueError(
+                        "parent_group_id must reference a unit with kind='group'"
+                    )
         self.units = ordered
         self.by_id = by_id
         self.token_counter = token_counter
@@ -304,6 +331,8 @@ class SemanticContextCompiler:
             )
         ranked = []
         for item in self.units:
+            if not item.selectable:
+                continue
             score = (
                 normalized_external_scores[item.unit_id]
                 if ranking_method == "external"

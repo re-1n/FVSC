@@ -332,3 +332,128 @@ def test_minimum_score_is_validated(minimum_score: object) -> None:
             token_budget=100,
             minimum_score=minimum_score,  # type: ignore[arg-type]
         )
+
+
+def test_atomic_group_child_preserves_parent_without_rendering_whole_group() -> None:
+    parent = SemanticContextUnit(
+        unit_id="G100",
+        text="A very large reviewed group. " * 100,
+        kind="group",
+        owner_decision="reviewed",
+        selectable=False,
+    )
+    child = SemanticContextUnit(
+        unit_id="G100.A",
+        text="The participant adopts the mechanistic interpretation.",
+        kind="meaning",
+        adoption="participant-confirmed",
+        owner_decision="confirmed",
+        parent_group_id="G100",
+    )
+
+    result = SemanticContextCompiler((parent, child)).compile(
+        "Which mechanistic interpretation did the participant adopt?",
+        token_budget=100,
+        top_k=1,
+        require_positive=True,
+    )
+
+    assert [item.unit_id for item in result.units] == ["G100.A"]
+    assert "parent_group_id=G100" in result.rendered
+    assert "A very large reviewed group" not in result.rendered
+    assert all(unit_id != "G100" for unit_id, _score in result.scores)
+    assert result.estimated_tokens <= 100
+
+
+def test_parent_group_contract_is_validated() -> None:
+    with pytest.raises(ValueError, match="distinct non-empty"):
+        SemanticContextUnit(
+            unit_id="G100",
+            text="group",
+            kind="group",
+            parent_group_id="G100",
+        )
+    with pytest.raises(ValueError, match="missing parent group"):
+        SemanticContextCompiler(
+            (
+                SemanticContextUnit(
+                    unit_id="M100",
+                    text="child",
+                    parent_group_id="G404",
+                ),
+            )
+        )
+    with pytest.raises(ValueError, match="kind='group'"):
+        SemanticContextCompiler(
+            (
+                SemanticContextUnit(unit_id="M100", text="not a group"),
+                SemanticContextUnit(
+                    unit_id="M101",
+                    text="child",
+                    parent_group_id="M100",
+                ),
+            )
+        )
+    with pytest.raises(ValueError, match="selectable"):
+        SemanticContextUnit(
+            unit_id="M102",
+            text="meaning",
+            selectable=1,  # type: ignore[arg-type]
+        )
+
+
+def test_atomic_group_guard_compiles_corrections_without_unrelated_sibling() -> None:
+    parent = SemanticContextUnit(
+        unit_id="G200",
+        text="Oversized group containing several reviewed alternatives. " * 80,
+        kind="group",
+        owner_decision="reviewed",
+        selectable=False,
+    )
+    adopted = SemanticContextUnit(
+        unit_id="G200.ADOPTED",
+        text="The participant confirmed the austere interpretation.",
+        adoption="participant-confirmed",
+        owner_decision="confirmed",
+        guard_ids=("N200",),
+        parent_group_id="G200",
+    )
+    reception = SemanticContextUnit(
+        unit_id="G200.RECEPTION",
+        text="The participant did not adopt the supportive metaphor.",
+        adoption="participant-not-adopted",
+        owner_decision="confirmed",
+        parent_group_id="G200",
+    )
+    unrelated_sibling = SemanticContextUnit(
+        unit_id="G200.UNRELATED",
+        text="A separate compatible level describes compositional mechanics.",
+        adoption="speaker-only",
+        owner_decision="reviewed",
+        parent_group_id="G200",
+    )
+    guard = SemanticContextUnit(
+        unit_id="N200",
+        text="The participant adopted every interpretation in the group.",
+        kind="guard",
+        reason="Only the austere interpretation was confirmed.",
+        correction_ids=("G200.ADOPTED", "G200.RECEPTION"),
+    )
+
+    result = SemanticContextCompiler(
+        (parent, adopted, reception, unrelated_sibling, guard)
+    ).compile(
+        "Which austere interpretation did the participant confirm?",
+        token_budget=500,
+        top_k=1,
+        require_positive=True,
+    )
+
+    assert {unit.unit_id for unit in result.units} == {
+        "G200.ADOPTED",
+        "G200.RECEPTION",
+        "N200",
+    }
+    assert "G200.UNRELATED" not in result.rendered
+    assert "adoption=participant-not-adopted" in result.rendered
+    assert "PROHIBITED_CLAIM" in result.rendered
