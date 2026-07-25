@@ -370,11 +370,15 @@ class SemanticContextCompiler:
                 for guard in ([item] if item.kind == "guard" else guards)
                 for correction_id in guard.correction_ids
             ]
-            mandatory = [
-                candidate
-                for candidate in [*primary, *guards, *corrections]
-                if candidate.unit_id not in chosen_ids
-            ]
+            mandatory: list[SemanticContextUnit] = []
+            mandatory_ids: set[str] = set()
+            for candidate in [*primary, *guards, *corrections]:
+                if (
+                    candidate.unit_id not in chosen_ids
+                    and candidate.unit_id not in mandatory_ids
+                ):
+                    mandatory.append(candidate)
+                    mandatory_ids.add(candidate.unit_id)
             candidate_units = [*chosen, *mandatory]
             rendered = "\n\n".join(candidate.render() for candidate in candidate_units)
             if self.token_counter(rendered) > token_budget:
@@ -392,8 +396,12 @@ class SemanticContextCompiler:
                     ]
                     optional = [
                         candidate
-                        for candidate in optional
+                        for index, candidate in enumerate(optional)
                         if candidate.unit_id not in chosen_ids
+                        and candidate.unit_id
+                        not in {
+                            earlier.unit_id for earlier in optional[:index]
+                        }
                     ]
                     optional_units = [*chosen, *optional]
                     optional_rendered = "\n\n".join(

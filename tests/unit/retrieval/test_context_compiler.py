@@ -457,3 +457,34 @@ def test_atomic_group_guard_compiles_corrections_without_unrelated_sibling() -> 
     assert "G200.UNRELATED" not in result.rendered
     assert "adoption=participant-not-adopted" in result.rendered
     assert "PROHIBITED_CLAIM" in result.rendered
+
+
+def test_primary_correction_is_not_rendered_twice() -> None:
+    parent = SemanticContextUnit(
+        unit_id="G300",
+        text="parent",
+        kind="group",
+        selectable=False,
+    )
+    child = SemanticContextUnit(
+        unit_id="G300.CHILD",
+        text="The reviewed correction.",
+        guard_ids=("N300",),
+        parent_group_id="G300",
+    )
+    guard = SemanticContextUnit(
+        unit_id="N300",
+        text="The prohibited opposite.",
+        kind="guard",
+        reason="The child is the reviewed correction.",
+        correction_ids=("G300.CHILD",),
+    )
+
+    result = SemanticContextCompiler((parent, child, guard)).compile(
+        "reviewed correction",
+        token_budget=300,
+        top_k=1,
+    )
+
+    assert [unit.unit_id for unit in result.units] == ["G300.CHILD", "N300"]
+    assert result.rendered.count("[G300.CHILD]") == 1
