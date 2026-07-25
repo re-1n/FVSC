@@ -261,6 +261,7 @@ class SemanticContextCompiler:
         token_budget: int,
         top_k: int = 6,
         expand_related: bool = False,
+        related_depth: int = 1,
         require_positive: bool = False,
         use_retrieval_cues: bool = False,
         ranking_method: RankingMethod = "char_cosine",
@@ -271,6 +272,12 @@ class SemanticContextCompiler:
             raise ValueError("token_budget must be a positive integer")
         if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k <= 0:
             raise ValueError("top_k must be a positive integer")
+        if (
+            isinstance(related_depth, bool)
+            or not isinstance(related_depth, int)
+            or related_depth < 1
+        ):
+            raise ValueError("related_depth must be a positive integer")
         query_value = str(query).strip()
         if not query_value:
             raise ValueError("query must be non-empty")
@@ -388,7 +395,12 @@ class SemanticContextCompiler:
             chosen_ids.update(candidate.unit_id for candidate in mandatory)
 
             if expand_related:
-                for related_id in item.related_ids:
+                related_queue = [
+                    (related_id, 1) for related_id in item.related_ids
+                ]
+                queued_ids = {related_id for related_id in item.related_ids}
+                while related_queue:
+                    related_id, depth = related_queue.pop(0)
                     related = self.by_id[related_id]
                     optional = [
                         related,
@@ -410,6 +422,14 @@ class SemanticContextCompiler:
                     if self.token_counter(optional_rendered) <= token_budget:
                         chosen.extend(optional)
                         chosen_ids.update(candidate.unit_id for candidate in optional)
+                        if depth < related_depth:
+                            for nested_id in related.related_ids:
+                                if (
+                                    nested_id not in chosen_ids
+                                    and nested_id not in queued_ids
+                                ):
+                                    related_queue.append((nested_id, depth + 1))
+                                    queued_ids.add(nested_id)
 
         rendered = "\n\n".join(item.render() for item in chosen)
         if require_positive and not any(item.kind != "guard" for item in chosen):

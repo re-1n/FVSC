@@ -488,3 +488,49 @@ def test_primary_correction_is_not_rendered_twice() -> None:
 
     assert [unit.unit_id for unit in result.units] == ["G300.CHILD", "N300"]
     assert result.rendered.count("[G300.CHILD]") == 1
+
+
+def test_related_depth_expands_typed_chain_without_looping() -> None:
+    first = SemanticContextUnit(
+        unit_id="M400",
+        text="The requested response protocol.",
+        related_ids=("M401",),
+    )
+    second = SemanticContextUnit(
+        unit_id="M401",
+        text="Show understanding before offering a solution.",
+        related_ids=("M402",),
+    )
+    third = SemanticContextUnit(
+        unit_id="M402",
+        text="Tactility may also be relevant.",
+        related_ids=("M400",),
+    )
+    compiler = SemanticContextCompiler((first, second, third))
+
+    one_hop = compiler.compile(
+        "requested response protocol",
+        token_budget=300,
+        top_k=1,
+        expand_related=True,
+    )
+    two_hops = compiler.compile(
+        "requested response protocol",
+        token_budget=300,
+        top_k=1,
+        expand_related=True,
+        related_depth=2,
+    )
+
+    assert [unit.unit_id for unit in one_hop.units] == ["M400", "M401"]
+    assert [unit.unit_id for unit in two_hops.units] == ["M400", "M401", "M402"]
+
+
+@pytest.mark.parametrize("related_depth", [0, -1, 1.5, True])
+def test_related_depth_is_validated(related_depth: object) -> None:
+    with pytest.raises(ValueError, match="related_depth"):
+        SemanticContextCompiler(_units()).compile(
+            "query",
+            token_budget=100,
+            related_depth=related_depth,  # type: ignore[arg-type]
+        )
