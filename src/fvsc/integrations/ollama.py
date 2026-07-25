@@ -578,12 +578,63 @@ class OllamaInterpretationBackend:
         return result
 
 
+class OllamaEmbeddingBackend(OllamaInterpretationBackend):
+    """Loopback-only embedding adapter; vectors remain derived, transient data."""
+
+    def embed(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
+        if not isinstance(texts, tuple) or not texts or len(texts) > 1_024:
+            raise ValueError("texts must be a non-empty tuple with at most 1024 items")
+        normalized = tuple(str(text).strip() for text in texts)
+        if any(not text for text in normalized):
+            raise ValueError("embedding texts must be non-empty")
+        if sum(len(text) for text in normalized) > self.max_prompt_chars:
+            raise ValueError("embedding texts exceed the configured character limit")
+
+        envelope = self._request_json(
+            "/api/embed",
+            payload={"model": self.model, "input": list(normalized)},
+        )
+        raw_embeddings = envelope.get("embeddings")
+        if (
+            not isinstance(raw_embeddings, list)
+            or len(raw_embeddings) != len(normalized)
+        ):
+            raise OllamaIntegrationError(
+                "Ollama returned an invalid embedding batch"
+            )
+        vectors: list[tuple[float, ...]] = []
+        dimension: int | None = None
+        for raw_vector in raw_embeddings:
+            if not isinstance(raw_vector, list) or not raw_vector:
+                raise OllamaIntegrationError("Ollama returned an invalid embedding")
+            vector: list[float] = []
+            for raw_value in raw_vector:
+                if (
+                    isinstance(raw_value, bool)
+                    or not isinstance(raw_value, (int, float))
+                    or not math.isfinite(float(raw_value))
+                ):
+                    raise OllamaIntegrationError(
+                        "Ollama embedding contains a non-finite value"
+                    )
+                vector.append(float(raw_value))
+            if dimension is None:
+                dimension = len(vector)
+            elif len(vector) != dimension:
+                raise OllamaIntegrationError(
+                    "Ollama returned inconsistent embedding dimensions"
+                )
+            vectors.append(tuple(vector))
+        return tuple(vectors)
+
+
 __all__ = [
     "DEFAULT_OLLAMA_HOST",
     "DEFAULT_OLLAMA_MODEL",
     "DEFAULT_OLLAMA_NUM_PREDICT",
     "OLLAMA_PROMPT_VERSION",
     "OllamaGenerationTelemetry",
+    "OllamaEmbeddingBackend",
     "OllamaIntegrationError",
     "OllamaInterpretationBackend",
     "OllamaModelIdentity",

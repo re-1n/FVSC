@@ -2,6 +2,7 @@
 
 from .context_compiler import (
     CompiledContext,
+    RankingMethod,
     SemanticContextCompiler,
     SemanticContextUnit,
     approximate_tokens,
@@ -28,6 +29,7 @@ __all__ = [
     "LocatorMatchKind",
     "LocatorResolution",
     "LocatorStatus",
+    "RankingMethod",
     "SemanticContextCompiler",
     "SemanticContextUnit",
     "SourceLocator",

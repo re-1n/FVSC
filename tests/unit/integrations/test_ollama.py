@@ -8,7 +8,11 @@ import urllib.error
 import pytest
 
 from fvsc.ingest import ExpressionSpan, SourceDocument, source_attribution
-from fvsc.integrations import OllamaIntegrationError, OllamaInterpretationBackend
+from fvsc.integrations import (
+    OllamaEmbeddingBackend,
+    OllamaIntegrationError,
+    OllamaInterpretationBackend,
+)
 from fvsc.interpretation import PromptSource
 
 
@@ -267,3 +271,48 @@ def test_stage4h_seed_and_model_digest_validation_fail_closed() -> None:
         OllamaInterpretationBackend(model_digest="not-a-digest", opener=_Opener())
     with pytest.raises(ValueError, match="num_predict"):
         OllamaInterpretationBackend(num_predict=0, opener=_Opener())
+
+
+def test_embedding_backend_validates_batch_and_dimensions() -> None:
+    opener = _Opener(
+        responses=[
+            {
+                "model": "embed:test",
+                "embeddings": [[0.1, 0.2], [0.3, 0.4]],
+            }
+        ]
+    )
+    backend = OllamaEmbeddingBackend(model="embed:test", opener=opener)
+
+    assert backend.embed(("первый смысл", "второй смысл")) == (
+        (0.1, 0.2),
+        (0.3, 0.4),
+    )
+    request = opener.requests[0][0]
+    assert request.full_url == "http://127.0.0.1:11434/api/embed"
+    sent = json.loads(request.data.decode("utf-8"))
+    assert sent == {
+        "model": "embed:test",
+        "input": ["первый смысл", "второй смысл"],
+    }
+
+    with pytest.raises(ValueError, match="non-empty tuple"):
+        backend.embed(())
+
+
+@pytest.mark.parametrize(
+    "response, message",
+    [
+        ({"embeddings": [[0.1]]}, "batch"),
+        ({"embeddings": [[0.1], []]}, "invalid embedding"),
+        ({"embeddings": [[0.1], [0.2, 0.3]]}, "inconsistent"),
+        ({"embeddings": [[0.1], [float("nan")]]}, "non-finite"),
+    ],
+)
+def test_embedding_backend_rejects_malformed_vectors(response, message) -> None:
+    backend = OllamaEmbeddingBackend(
+        model="embed:test",
+        opener=_Opener(responses=[response]),
+    )
+    with pytest.raises(OllamaIntegrationError, match=message):
+        backend.embed(("one", "two"))

@@ -1,7 +1,7 @@
 """Deterministic token-budgeted compilation of reviewed semantic context.
 
 This is a retrieval/compiler baseline, not a semantic model. It ranks immutable
-semantic units with Unicode character n-gram similarity, then preserves explicitly
+semantic units with auditable Unicode character methods, then preserves explicitly
 linked scope, voice, adoption and forbidden-claim guards in the rendered context.
 """
 
@@ -11,12 +11,13 @@ from collections import Counter
 from dataclasses import dataclass
 import math
 import re
-from typing import Callable, Iterable, Literal
+from typing import Callable, Iterable, Literal, Mapping
 import unicodedata
 
 
 _WORD_RE = re.compile(r"\w+", flags=re.UNICODE)
 UnitKind = Literal["meaning", "group", "guard"]
+RankingMethod = Literal["char_cosine", "char_tfidf", "external"]
 
 
 def _ngrams(text: str, *, minimum: int = 3, maximum: int = 5) -> Counter[str]:
@@ -43,6 +44,27 @@ def _cosine(left: Counter[str], right: Counter[str]) -> float:
     return dot / (left_norm * right_norm)
 
 
+def _tfidf(
+    counts: Counter[str],
+    *,
+    document_frequency: Counter[str],
+    document_count: int,
+) -> Counter[str]:
+    return Counter(
+        {
+            gram: (1.0 + math.log(frequency))
+            * (
+                math.log(
+                    (1.0 + document_count)
+                    / (1.0 + document_frequency[gram])
+                )
+                + 1.0
+            )
+            for gram, frequency in counts.items()
+        }
+    )
+
+
 def approximate_tokens(text: str) -> int:
     """Conservative dependency-free estimate for mixed Cyrillic/ASCII prompts."""
     value = str(text)
@@ -62,6 +84,7 @@ class SemanticContextUnit:
     guard_ids: tuple[str, ...] = ()
     correction_ids: tuple[str, ...] = ()
     related_ids: tuple[str, ...] = ()
+    retrieval_cues: tuple[str, ...] = ()
     reason: str = ""
 
     def __post_init__(self) -> None:
@@ -75,6 +98,13 @@ class SemanticContextUnit:
             raise ValueError("related_ids must be unique")
         if len(self.correction_ids) != len(set(self.correction_ids)):
             raise ValueError("correction_ids must be unique")
+        normalized_cues = tuple(cue.strip() for cue in self.retrieval_cues)
+        if any(not cue for cue in normalized_cues):
+            raise ValueError("retrieval_cues must be non-empty and trimmed")
+        if normalized_cues != self.retrieval_cues:
+            raise ValueError("retrieval_cues must be non-empty and trimmed")
+        if len(normalized_cues) != len(set(normalized_cues)):
+            raise ValueError("retrieval_cues must be unique")
         if self.unit_id in self.guard_ids:
             raise ValueError("a semantic unit cannot guard itself")
         if self.unit_id in self.related_ids:
@@ -104,16 +134,18 @@ class SemanticContextUnit:
 @dataclass(frozen=True)
 class CompiledContext:
     query: str
+    ranking_method: str
     units: tuple[SemanticContextUnit, ...]
     scores: tuple[tuple[str, float], ...]
     rendered: str
     estimated_tokens: int
     token_budget: int
     omitted_ranked_ids: tuple[str, ...]
+    below_threshold_ranked_ids: tuple[str, ...]
 
 
 class SemanticContextCompiler:
-    """Rank reviewed units and compile a guarded context within a hard budget."""
+    """Rank reviewed units and compile a guarded, fail-closed bounded context."""
 
     def __init__(
         self,
@@ -166,6 +198,34 @@ class SemanticContextCompiler:
             item.unit_id: _ngrams(f"{item.unit_id} {item.text}")
             for item in ordered
         }
+        self.cued_vectors = {
+            item.unit_id: _ngrams(
+                " ".join((item.unit_id, item.text, *item.retrieval_cues))
+            )
+            for item in ordered
+        }
+        self.document_frequency: Counter[str] = Counter()
+        self.cued_document_frequency: Counter[str] = Counter()
+        for vector in self.vectors.values():
+            self.document_frequency.update(vector.keys())
+        for vector in self.cued_vectors.values():
+            self.cued_document_frequency.update(vector.keys())
+        self.tfidf_vectors = {
+            unit_id: _tfidf(
+                vector,
+                document_frequency=self.document_frequency,
+                document_count=len(self.units),
+            )
+            for unit_id, vector in self.vectors.items()
+        }
+        self.cued_tfidf_vectors = {
+            unit_id: _tfidf(
+                vector,
+                document_frequency=self.cued_document_frequency,
+                document_count=len(self.units),
+            )
+            for unit_id, vector in self.cued_vectors.items()
+        }
 
     def compile(
         self,
@@ -175,6 +235,10 @@ class SemanticContextCompiler:
         top_k: int = 6,
         expand_related: bool = False,
         require_positive: bool = False,
+        use_retrieval_cues: bool = False,
+        ranking_method: RankingMethod = "char_cosine",
+        minimum_score: float = 0.0,
+        external_scores: Mapping[str, float] | None = None,
     ) -> CompiledContext:
         if isinstance(token_budget, bool) or not isinstance(token_budget, int) or token_budget <= 0:
             raise ValueError("token_budget must be a positive integer")
@@ -183,23 +247,86 @@ class SemanticContextCompiler:
         query_value = str(query).strip()
         if not query_value:
             raise ValueError("query must be non-empty")
+        if ranking_method not in ("char_cosine", "char_tfidf", "external"):
+            raise ValueError(
+                "ranking_method must be 'char_cosine', 'char_tfidf' or 'external'"
+            )
+        if ranking_method == "external":
+            if external_scores is None:
+                raise ValueError("external ranking requires external_scores")
+            if set(external_scores) != set(self.by_id):
+                raise ValueError(
+                    "external_scores must contain exactly every semantic unit id"
+                )
+            normalized_external_scores: dict[str, float] = {}
+            for unit_id, raw_score in external_scores.items():
+                if (
+                    isinstance(raw_score, bool)
+                    or not isinstance(raw_score, (int, float))
+                    or not math.isfinite(float(raw_score))
+                    or not 0.0 <= float(raw_score) <= 1.0
+                ):
+                    raise ValueError(
+                        "external_scores values must be finite and in [0, 1]"
+                    )
+                normalized_external_scores[unit_id] = float(raw_score)
+        elif external_scores is not None:
+            raise ValueError(
+                "external_scores may be supplied only with external ranking"
+            )
+        if (
+            isinstance(minimum_score, bool)
+            or not isinstance(minimum_score, (int, float))
+            or not math.isfinite(float(minimum_score))
+            or not 0.0 <= float(minimum_score) <= 1.0
+        ):
+            raise ValueError("minimum_score must be finite and in [0, 1]")
+        score_floor = float(minimum_score)
 
         query_vector = _ngrams(query_value)
-        ranked = [
-            (
-                item,
-                _cosine(query_vector, self.vectors[item.unit_id])
-                * (self.guard_score_discount if item.kind == "guard" else 1.0),
+        vectors = self.cued_vectors if use_retrieval_cues else self.vectors
+        if ranking_method == "char_tfidf":
+            document_frequency = (
+                self.cued_document_frequency
+                if use_retrieval_cues
+                else self.document_frequency
             )
-            for item in self.units
-        ]
+            document_count = len(self.units)
+            query_vector = _tfidf(
+                query_vector,
+                document_frequency=document_frequency,
+                document_count=document_count,
+            )
+            vectors = (
+                self.cued_tfidf_vectors
+                if use_retrieval_cues
+                else self.tfidf_vectors
+            )
+        ranked = []
+        for item in self.units:
+            score = (
+                normalized_external_scores[item.unit_id]
+                if ranking_method == "external"
+                else _cosine(query_vector, vectors[item.unit_id])
+            )
+            ranked.append(
+                (
+                    item,
+                    score
+                    * (self.guard_score_discount if item.kind == "guard" else 1.0),
+                )
+            )
         ranked.sort(key=lambda pair: (-pair[1], pair[0].unit_id))
 
         chosen: list[SemanticContextUnit] = []
         chosen_ids: set[str] = set()
         omitted: list[str] = []
+        below_threshold: list[str] = []
 
-        for item, _score in ranked[:top_k]:
+        for item, score in ranked[:top_k]:
+            if score < score_floor:
+                below_threshold.append(item.unit_id)
+                continue
             primary = [item]
             guard_ids = tuple(
                 dict.fromkeys(
@@ -253,17 +380,30 @@ class SemanticContextCompiler:
             chosen = []
         return CompiledContext(
             query=query_value,
+            ranking_method=(
+                "unicode-char-tfidf-with-reviewed-cues-v1"
+                if ranking_method == "char_tfidf" and use_retrieval_cues
+                else "external-scores-v1"
+                if ranking_method == "external"
+                else "unicode-char-tfidf-v1"
+                if ranking_method == "char_tfidf"
+                else "unicode-char-ngram-with-reviewed-cues-v1"
+                if use_retrieval_cues
+                else "unicode-char-ngram-v1"
+            ),
             units=tuple(chosen),
             scores=tuple((item.unit_id, score) for item, score in ranked),
             rendered=rendered,
             estimated_tokens=self.token_counter(rendered),
             token_budget=token_budget,
             omitted_ranked_ids=tuple(omitted),
+            below_threshold_ranked_ids=tuple(below_threshold),
         )
 
 
 __all__ = [
     "CompiledContext",
+    "RankingMethod",
     "SemanticContextCompiler",
     "SemanticContextUnit",
     "approximate_tokens",

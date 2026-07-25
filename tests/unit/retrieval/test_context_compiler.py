@@ -150,3 +150,185 @@ def test_require_positive_fails_closed_for_guard_without_correction() -> None:
 
     assert result.units == ()
     assert result.rendered == ""
+
+
+def test_reviewed_retrieval_cues_bridge_paraphrase_without_becoming_evidence() -> None:
+    desired_response = SemanticContextUnit(
+        unit_id="M030",
+        text="Сначала показать отношение и понимание, не предлагая немедленного решения.",
+        voice="participant",
+        owner_decision="confirmed",
+        retrieval_cues=("какого способа ответа хотела участница",),
+    )
+    surface_distractor = SemanticContextUnit(
+        unit_id="M031",
+        text="Участница хотела самостоятельно найти способ завершить ответ.",
+        voice="participant",
+        owner_decision="candidate",
+    )
+    compiler = SemanticContextCompiler((desired_response, surface_distractor))
+
+    baseline = compiler.compile(
+        "Какого способа ответа хотела участница?",
+        token_budget=200,
+        top_k=1,
+    )
+    cued = compiler.compile(
+        "Какого способа ответа хотела участница?",
+        token_budget=200,
+        top_k=1,
+        use_retrieval_cues=True,
+    )
+
+    assert [item.unit_id for item in baseline.units] == ["M031"]
+    assert [item.unit_id for item in cued.units] == ["M030"]
+    assert baseline.ranking_method == "unicode-char-ngram-v1"
+    assert cued.ranking_method == "unicode-char-ngram-with-reviewed-cues-v1"
+    assert "какого способа ответа" not in cued.rendered.casefold()
+
+
+@pytest.mark.parametrize(
+    "retrieval_cues, message",
+    [
+        (("",), "non-empty and trimmed"),
+        ((" cue",), "non-empty and trimmed"),
+        (("duplicate", "duplicate"), "unique"),
+    ],
+)
+def test_retrieval_cues_are_validated(
+    retrieval_cues: tuple[str, ...],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        SemanticContextUnit(
+            unit_id="M040",
+            text="meaning",
+            retrieval_cues=retrieval_cues,
+        )
+
+
+def test_tfidf_downweights_corpus_common_distractor_without_changing_budget() -> None:
+    target = SemanticContextUnit(
+        unit_id="TARGET",
+        text="The palette metaphor describes adoption.",
+    )
+    distractor = SemanticContextUnit(
+        unit_id="DISTRACTOR",
+        text=(
+            "How does the participant relate to this account? "
+            "The participant relationship is described here."
+        ),
+    )
+    common = tuple(
+        SemanticContextUnit(
+            unit_id=f"COMMON{index:02d}",
+            text=f"The participant describes a relationship and account number {index}.",
+        )
+        for index in range(10)
+    )
+    compiler = SemanticContextCompiler((target, distractor, *common))
+    query = "How does the participant relate to the palette metaphor?"
+
+    cosine = compiler.compile(
+        query,
+        token_budget=200,
+        top_k=1,
+        ranking_method="char_cosine",
+    )
+    tfidf = compiler.compile(
+        query,
+        token_budget=200,
+        top_k=1,
+        ranking_method="char_tfidf",
+    )
+
+    assert [item.unit_id for item in cosine.units] == ["DISTRACTOR"]
+    assert [item.unit_id for item in tfidf.units] == ["TARGET"]
+    assert tfidf.estimated_tokens <= tfidf.token_budget == cosine.token_budget
+    assert tfidf.ranking_method == "unicode-char-tfidf-v1"
+
+
+def test_compiler_rejects_unknown_ranking_method() -> None:
+    with pytest.raises(ValueError, match="ranking_method"):
+        SemanticContextCompiler(_units()).compile(
+            "query",
+            token_budget=100,
+            ranking_method="unknown",  # type: ignore[arg-type]
+        )
+
+
+def test_external_scores_are_auditable_and_preserve_compiler_contract() -> None:
+    result = SemanticContextCompiler(_units()).compile(
+        "semantic query",
+        token_budget=500,
+        top_k=1,
+        ranking_method="external",
+        external_scores={"M001": 0.9, "M002": 0.2, "N001": 0.1},
+    )
+
+    assert {item.unit_id for item in result.units} == {"M001", "N001"}
+    assert result.ranking_method == "external-scores-v1"
+
+
+def test_external_scores_fail_closed_on_incomplete_or_invalid_input() -> None:
+    compiler = SemanticContextCompiler(_units())
+    with pytest.raises(ValueError, match="requires external_scores"):
+        compiler.compile(
+            "query",
+            token_budget=100,
+            ranking_method="external",
+        )
+    with pytest.raises(ValueError, match="exactly every"):
+        compiler.compile(
+            "query",
+            token_budget=100,
+            ranking_method="external",
+            external_scores={"M001": 0.5},
+        )
+    with pytest.raises(ValueError, match=r"finite and in \[0, 1\]"):
+        compiler.compile(
+            "query",
+            token_budget=100,
+            ranking_method="external",
+            external_scores={"M001": 1.1, "M002": 0.2, "N001": 0.1},
+        )
+    with pytest.raises(ValueError, match="only with external"):
+        compiler.compile(
+            "query",
+            token_budget=100,
+            external_scores={"M001": 0.5, "M002": 0.2, "N001": 0.1},
+        )
+
+
+def test_minimum_score_fails_closed_and_records_weak_candidates() -> None:
+    compiler = SemanticContextCompiler(
+        (
+            SemanticContextUnit(
+                unit_id="M050",
+                text="The participant discussed an unrelated practical decision.",
+            ),
+        )
+    )
+
+    result = compiler.compile(
+        "What did the palette metaphor mean?",
+        token_budget=100,
+        top_k=1,
+        minimum_score=0.2,
+        require_positive=True,
+    )
+
+    assert result.units == ()
+    assert result.rendered == ""
+    assert result.below_threshold_ranked_ids == ("M050",)
+    assert result.omitted_ranked_ids == ()
+
+
+@pytest.mark.parametrize("minimum_score", [-0.01, 1.01, float("inf"), True])
+def test_minimum_score_is_validated(minimum_score: object) -> None:
+    with pytest.raises(ValueError, match="minimum_score"):
+        SemanticContextCompiler(_units()).compile(
+            "query",
+            token_budget=100,
+            minimum_score=minimum_score,  # type: ignore[arg-type]
+        )
