@@ -76,6 +76,9 @@ The frozen private retrieval-only audit (no model generation) produced:
 | TF-IDF + frozen 0.20 floor | 0.650 | 2 | rejected |
 | Qwen3-Embedding 0.6B | 0.533 | 0 | rejected |
 | Qwen3-Embedding 0.6B + task instruction | 0.533 | 0 | rejected |
+| blinded candidate cues + character cosine | 0.733 | 1 | not reviewed; not promoted |
+| character cosine, 700-token budget | 0.757 | 0 | cost ablation only |
+| candidate cues, 700-token budget | 0.757 | 0 | cost ablation only |
 
 TF-IDF improved aggregate recall mainly on the abstention question, but filled a
 previously empty question with an irrelevant positive unit. The absolute floor restored
@@ -91,3 +94,18 @@ Raw query/document cosine and the model-author-recommended task-instructed query
 produced the same macro recall. Both missed important reviewed units and neither fixed
 the known empty lexical question. The 0.6B embedding arm therefore remains available
 as an ablation but is not promoted or fused into the default.
+
+The blinded cue authoring pass received unit ids/text only, without questions, oracle
+maps or prior retrieval results. It improved the cosine aggregate only through the
+abstention question and did not repair the known metaphor-reception miss. Because the
+candidate set also contains at least one ambiguous paraphrase, it remains
+`candidate-not-reviewed`; owner review is not justified by this result.
+
+A separate 700-token budget ablation localized the metaphor-reception failure. The
+500-token compiler ranked the correct seed first, but its mandatory
+meaning/guard/correction bundle requires 671 estimated tokens. Raising the budget
+improved macro recall from 0.683 to 0.757 and removed the empty selection, while
+increasing total compiled context from 3,271 to 5,148 estimated tokens (57%). Cues
+provided no recall gain at the larger budget. The next target is therefore atomic
+decomposition of oversized reviewed groups with preserved parent, scope, adoption and
+guard links—not another ranker or a silent budget increase.
