@@ -295,4 +295,4 @@ $$w(t) = w_0 \cdot n \cdot \left(1 + \frac{\Delta t}{\tau}\right)^{-d}$$
 
 ---
 
-*FVSC разрабатывается [Rein](https://github.com/re-1n) при поддержке Claude (Anthropic). Исходный код: [GitHub](https://github.com/re-1n/qualia-computing).*
+*FVSC разрабатывается [Rein](https://github.com/re-1n). Исходный код: [GitHub](https://github.com/re-1n/qualia-computing).*
