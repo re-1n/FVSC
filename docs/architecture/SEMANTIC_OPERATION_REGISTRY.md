@@ -39,6 +39,8 @@ not semantic views and cannot be traded away for a better aggregate score.
 | `O8` | Preserve contradiction, modality and incompatible readings | signed constraint graph / typed hypergraph | independent cited claims without forced reconciliation | candidate |
 | `O9` | Interpret a query term in the owner's usage, such as the intended scope of “самочувствие” | versioned personal usage/glossary view grounded in owner examples | general-language query as written | candidate after source-boundary correction |
 | `O10` | Show similarities, differences and asymmetries between two people | aligned relation-conditioned personal views | raw-context model and flat profile similarity | deferred until two-party consent and single-owner validation |
+| `S1` | Keep user-facing prose propositionally identical to validated cited claims, with explicit abstention | claim-first structured output plus deterministic renderer | independently generated answer plus claims | candidate for missing-link risk; rejected as global default after atlas over-abstention |
+| `S2` | Preserve several independently relevant facets during cited synthesis | coverage plan over typed selected units | one-shot and claim-first cited synthesis | candidate; public phenomenon atlas frozen |
 
 The candidate structure column is deliberately plural. A structure is promoted only
 for the operation on which it wins; no row grants it universal semantic status.

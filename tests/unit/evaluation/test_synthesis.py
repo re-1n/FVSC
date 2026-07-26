@@ -17,6 +17,7 @@ from fvsc.evaluation.synthesis_fixtures import PUBLIC_SYNTHESIS_FIXTURES
 from fvsc.evaluation.synthesis_consistency_fixtures import (
     PUBLIC_CONSISTENCY_FIXTURES,
 )
+from fvsc.evaluation.coverage_atlas import PUBLIC_COVERAGE_ATLAS, atlas_fixtures
 
 
 def _fixture() -> SynthesisFixture:
@@ -194,3 +195,19 @@ def test_consistency_fixture_family_has_matched_positive_and_abstention_cases() 
         else:
             assert len(required) >= 2
             assert prohibited
+
+
+def test_public_coverage_atlas_freezes_six_balanced_minimal_pairs() -> None:
+    assert len(PUBLIC_COVERAGE_ATLAS) == 6
+    assert len(atlas_fixtures()) == 12
+    assert len({pair.phenomenon for pair in PUBLIC_COVERAGE_ATLAS}) == 6
+    assert len({fixture.case_id for fixture in atlas_fixtures()}) == 12
+    for pair in PUBLIC_COVERAGE_ATLAS:
+        easy_required = {
+            facet.facet_id for facet in pair.easy.facets if facet.role == "required"
+        }
+        hard_required = {
+            facet.facet_id for facet in pair.hard.facets if facet.role == "required"
+        }
+        assert easy_required == hard_required
+        assert len(easy_required) == 2

@@ -155,6 +155,12 @@ synthetic cases. Required recall сохранился 1.000, abstention accuracy
 Следующая задача — публичный горизонтальный phenomenon atlas для compositional
 multi-facet coverage.
 
+Coverage atlas v1 выполнен. Baseline macro required recall = 0.958, claim-first =
+0.583. Claim-first безопасен по unsupported/prohibited, но ошибочно воздержался в
+5/12 положительных cases, поэтому как global default отклонён. Hard/easy gaps для
+temporal contrast, conditional scope и distributed rationale равны; выбирать один
+post hoc нельзя. Нужен versioned public atlas extension, v1 не изменять.
+
 Не продолжать настройку ranker на этом диалоге.
 
 Следующая зарегистрированная задача — **coverage-aware synthesis**:

@@ -32,6 +32,10 @@
   relevant units were cited, but the explicit no-immediate-solution contrast remained
   omitted. Claim-first solves a consistency/abstention class, not general multi-facet
   coverage. No further Q07 tuning or repetition is allowed.
+- Coverage atlas v1 rejected claim-first as a global default: required-facet recall
+  fell from 0.958 to 0.583 through over-abstention on positive cases. Three hard/easy
+  gaps tied, so no phenomenon was selected post hoc. A versioned public extension is
+  required.
 - Current local verification: **334 passed / 1 skipped / 11 deselected**. The active
   branch contains six unpushed implementation/evaluation commits before the handoff
   checkpoint.
