@@ -47,9 +47,14 @@
   correctness after a narrowly safe empty-sentinel normalization. This localizes the
   remaining bottleneck to automatic question planning/linkage. The result is capacity
   evidence only, not a production promotion.
-- Current local verification: **334 passed / 1 skipped / 11 deselected**. The active
-  branch contains six unpushed implementation/evaluation commits before the handoff
-  checkpoint.
+- The first source-free QDMR-like `S5` planner completed on the same public question
+  set. Ten of twelve plans were structurally valid, but only six matched the frozen
+  atomic answer plan; reviewed requirement recall was 14/20. The dependency view
+  remains a candidate, while model-controlled `emits_requirement` is rejected. A
+  revised boundary compiler needs a new held-out gate before planner-plus-slot testing.
+- Current local verification: **381 passed / 1 skipped / 11 deselected**. The active
+  integration branch contains the versioned implementation and public evaluation
+  record.
 
 ## Semantic-atlas research addendum — 2026-07-21
 
