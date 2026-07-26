@@ -133,6 +133,15 @@ contrast inside the interaction protocol. The permitted repeat has been consumed
 Do not rerun or tune on Q07. Build the next compositional-coverage operation on a
 broader public phenomenon atlas.
 
+Third update (2026-07-26): the source-free QDMR-like planner failed its reused public
+gate because model-selected `emits_requirement` merged or suppressed answer
+obligations. A separate deterministic boundary compiler now passes a new twelve-case
+held-out question-only gate at 12/12, fails closed outside four registered explicit
+grammars, and adapts directly to `FrozenQuestionPlan`. This licenses a new public
+end-to-end boundary-plus-planned-slot gate; it does not license private Q07 or claim
+general semantic parsing. Protocol:
+[`ANSWER_SLOT_BOUNDARY_GATE.md`](../evaluation/ANSWER_SLOT_BOUNDARY_GATE.md).
+
 Protocol and result context:
 
 - [`CONTEXT_RANKER_CUES_PROBE.md`](../evaluation/CONTEXT_RANKER_CUES_PROBE.md)
