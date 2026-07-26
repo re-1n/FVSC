@@ -151,6 +151,7 @@ class OllamaGenerationTelemetry:
         *,
         configured_model: str,
         model_digest: str | None,
+        prompt_version: str,
         temperature: float,
         seed: int | None,
         num_ctx: int,
@@ -168,7 +169,7 @@ class OllamaGenerationTelemetry:
         return cls(
             model=returned_model,
             model_digest=model_digest,
-            prompt_version=OLLAMA_PROMPT_VERSION,
+            prompt_version=prompt_version,
             temperature=temperature,
             seed=seed,
             num_ctx=num_ctx,
@@ -286,6 +287,8 @@ class OllamaInterpretationBackend:
         timeout: float = 180.0,
         max_response_bytes: int = 2 * 1024 * 1024,
         max_prompt_chars: int = 300_000,
+        system_prompt: str | None = None,
+        prompt_version: str | None = None,
         opener: Any | None = None,
     ) -> None:
         model_value = str(model).strip()
@@ -334,6 +337,18 @@ class OllamaInterpretationBackend:
         self.timeout = _finite(timeout, field="timeout", lower=0.1, upper=3_600.0)
         self.max_response_bytes = max_response_bytes
         self.max_prompt_chars = max_prompt_chars
+        self.system_prompt = (
+            _SYSTEM_PROMPT if system_prompt is None else str(system_prompt).strip()
+        )
+        if not self.system_prompt:
+            raise ValueError("system_prompt must not be empty")
+        self.prompt_version = (
+            OLLAMA_PROMPT_VERSION
+            if prompt_version is None
+            else str(prompt_version).strip()
+        )
+        if not self.prompt_version:
+            raise ValueError("prompt_version must not be empty")
         self.last_generation_telemetry: OllamaGenerationTelemetry | None = None
         # Explicitly bypass proxy environment variables for loopback traffic.
         self._opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -510,7 +525,7 @@ class OllamaInterpretationBackend:
             payload={
                 "model": self.model,
                 "messages": [
-                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": user_payload},
                 ],
                 "format": "json",
@@ -567,12 +582,13 @@ class OllamaInterpretationBackend:
             envelope,
             configured_model=self.model,
             model_digest=self.model_digest,
+            prompt_version=self.prompt_version,
             temperature=self.temperature,
             seed=self.seed,
             num_ctx=self.num_ctx,
             num_predict=self.num_predict,
             source_count=len(sources),
-            prompt_chars=len(_SYSTEM_PROMPT) + len(user_payload),
+            prompt_chars=len(self.system_prompt) + len(user_payload),
             wall_seconds=wall_seconds,
         )
         return result

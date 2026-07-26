@@ -63,3 +63,21 @@ Optional facets do not enter the required-recall denominator. Merely mentioning 
 alternative or guard as ordinary positive prose is a role violation. Retrieval,
 budgets, source order, model digest, seed and sampling options remain fixed between
 arms. The frozen private Gold and its parent census are not modified.
+
+## Runner
+
+The paired public generation runner is:
+
+```powershell
+$env:PYTHONPATH='src'
+python scripts/run_synthesis_gate.py `
+  --model '<exact-local-tag>' `
+  --model-digest '<sha256-from-ollama>' `
+  --output '.fvsc/public-synthesis-gate-v1.json'
+```
+
+It refuses an absent model, a digest mismatch, a missing output directory, or an
+existing output file. Case order is frozen and arm order alternates by case to
+distribute warm-cache bias. The artifact contains public generated prose, telemetry,
+and an empty review template. Facet observations require explicit review; the runner
+does not infer semantic truth from lexical overlap.

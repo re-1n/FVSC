@@ -132,6 +132,36 @@ def test_ollama_generates_strict_claims_without_exposing_source_ids_to_model() -
     assert sent["stream"] is False
 
 
+def test_ollama_accepts_a_preregistered_prompt_variant() -> None:
+    model_content = {
+        "answer": "Кратко.",
+        "claims": [
+            {
+                "text": "Подтверждено.",
+                "citations": ["S1"],
+                "support_level": "evidence_bound",
+            }
+        ],
+    }
+    opener = _Opener(
+        responses=[{"message": {"content": json.dumps(model_content)}}]
+    )
+    backend = OllamaInterpretationBackend(
+        model="test-model",
+        system_prompt="Registered synthetic instruction.",
+        prompt_version="synthetic-v1",
+        opener=opener,
+    )
+
+    backend.generate("Question?", (_source(),))
+
+    payload = json.loads(opener.requests[0][0].data)
+    assert payload["messages"][0]["content"] == "Registered synthetic instruction."
+    assert backend.prompt_version == "synthetic-v1"
+    assert backend.last_generation_telemetry is not None
+    assert backend.last_generation_telemetry.prompt_version == "synthetic-v1"
+
+
 @pytest.mark.parametrize(
     "host",
     (
