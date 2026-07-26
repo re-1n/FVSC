@@ -167,6 +167,12 @@ over-abstention failure; tie сохранился, отдельный phenomenon
 candidate — public held-out requirement-to-claim coverage map, который отделяет
 question decomposition, relation support и deterministic rendering.
 
+Held-out end-to-end requirement coverage gate не пройден: recall 0.500, 6 schema
+errors, 7 status errors. Правильные claims часто были потеряны fail-closed из-за
+несогласованной индексной linkage-карты. Следующий controlled ablation: frozen
+question plan на входе и ровно один supported/unsupported cited slot на requirement.
+Это тест synthesis capacity, не автоматического planner.
+
 Не продолжать настройку ranker на этом диалоге.
 
 Следующая зарегистрированная задача — **coverage-aware synthesis**:

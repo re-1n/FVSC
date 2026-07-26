@@ -13,7 +13,12 @@ from typing import Literal, Mapping, Sequence
 
 
 FacetRole = Literal["required", "optional", "alternative", "guard", "prohibited"]
-SynthesisArm = Literal["baseline", "coverage", "claim_first"]
+SynthesisArm = Literal[
+    "baseline",
+    "coverage",
+    "claim_first",
+    "requirement_coverage",
+]
 
 _FACET_ROLES = frozenset(
     {"required", "optional", "alternative", "guard", "prohibited"}

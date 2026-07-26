@@ -40,6 +40,9 @@
   paraphrases; temporal paraphrases passed. The cross-cutting target is relation
   normalization against explicit question requirements, not either relation family
   alone. A new held-out public gate is required.
+- The end-to-end requirement-map gate failed: recall fell to 0.500 with six schema
+  errors. The next controlled ablation freezes the question plan as input and tests
+  one claim slot per requirement; it cannot promote automatic planning.
 - Current local verification: **334 passed / 1 skipped / 11 deselected**. The active
   branch contains six unpushed implementation/evaluation commits before the handoff
   checkpoint.
