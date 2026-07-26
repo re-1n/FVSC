@@ -18,6 +18,7 @@ GuardedRelation = Literal[
     "replaced",
     "retained",
 ]
+RELATION_SUPPORT_GUARD_OPERATION_ID = "S6"
 
 _DESCRIPTION_RELATIONS: tuple[tuple[re.Pattern[str], GuardedRelation], ...] = (
     (re.compile(r"\bconfirmed\b", re.IGNORECASE), "confirmed"),
@@ -67,6 +68,38 @@ class RelationSupportCandidate:
     eligible_source_labels: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class RelationSupportGuardOperation:
+    operation_id: str = RELATION_SUPPORT_GUARD_OPERATION_ID
+    registered_relations: tuple[GuardedRelation, ...] = (
+        "accepted",
+        "conditional",
+        "confirmed",
+        "declined",
+        "replaced",
+        "retained",
+    )
+
+    def __post_init__(self) -> None:
+        if self.operation_id != RELATION_SUPPORT_GUARD_OPERATION_ID:
+            raise ValueError("relation guard operation id must remain S6")
+        if set(self.registered_relations) != set(_SOURCE_CUES):
+            raise ValueError("relation guard registration must match frozen cue types")
+
+    def compile(
+        self,
+        plan: FrozenQuestionPlan,
+        sources: Sequence[SyntheticSource],
+    ) -> tuple[RelationSupportCandidate, ...]:
+        candidates = compile_relation_support_candidates(plan, sources)
+        if any(item.relation not in self.registered_relations for item in candidates):
+            raise ValueError("plan requests an unregistered guarded relation")
+        return candidates
+
+
+PUBLIC_RELATION_SUPPORT_GUARD = RelationSupportGuardOperation()
+
+
 def relation_for_requirement(description: str) -> GuardedRelation:
     matches = tuple(
         relation
@@ -98,7 +131,10 @@ def compile_relation_support_candidates(
 
 __all__ = [
     "GuardedRelation",
+    "PUBLIC_RELATION_SUPPORT_GUARD",
+    "RELATION_SUPPORT_GUARD_OPERATION_ID",
     "RelationSupportCandidate",
+    "RelationSupportGuardOperation",
     "compile_relation_support_candidates",
     "relation_for_requirement",
 ]

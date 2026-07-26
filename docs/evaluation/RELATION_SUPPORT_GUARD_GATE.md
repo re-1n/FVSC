@@ -89,3 +89,8 @@ New relations or paraphrastic cues require their own held-out positive and adver
 gate. The next step is integration at the planned-slot boundary behind explicit
 operation registration, followed by regression tests proving unregistered slots still
 fail closed.
+
+Integration checkpoint: the guard is registered as operation `S6`. Its immutable
+registration must match the six frozen cue types, and an unknown or ambiguous
+requirement relation raises before source eligibility is produced. `S6` remains an
+optional composition after `S4`; it is not enabled as a global synthesis default.

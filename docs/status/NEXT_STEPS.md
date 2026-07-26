@@ -173,6 +173,12 @@ end-to-end boundary-plus-planned-slot gate; it does not license private Q07 or c
   registration and prove unregistered slots fail closed. Protocol:
   [`RELATION_SUPPORT_GUARD_GATE.md`](../evaluation/RELATION_SUPPORT_GUARD_GATE.md).
 
+  Integration checkpoint: the promoted guard is now explicitly registered as `S6`;
+  its registration is locked to the six gated cue types, unknown or ambiguous
+  relations fail before eligibility compilation, and `S6` remains an opt-in
+  composition after `S4` rather than a global synthesis default. Any new relation or
+  paraphrastic cue now requires a separate held-out gate.
+
 Protocol and result context:
 
 - [`CONTEXT_RANKER_CUES_PROBE.md`](../evaluation/CONTEXT_RANKER_CUES_PROBE.md)

@@ -6,7 +6,7 @@ from .answer_slot_boundaries import (
     compile_answer_slot_boundaries,
     to_frozen_question_plan,
 )
-from .relation_support_guard import compile_relation_support_candidates
+from .relation_support_guard import PUBLIC_RELATION_SUPPORT_GUARD
 from .synthesis import GoldFacet, SynthesisFixture, SyntheticSource
 
 
@@ -153,7 +153,7 @@ RELATION_GUARD_PLAN_BY_CASE = {
 RELATION_ELIGIBLE_LABELS_BY_CASE = {
     fixture.case_id: {
         candidate.requirement_id: candidate.eligible_source_labels
-        for candidate in compile_relation_support_candidates(
+        for candidate in PUBLIC_RELATION_SUPPORT_GUARD.compile(
             RELATION_GUARD_PLAN_BY_CASE[fixture.case_id],
             fixture.sources,
         )

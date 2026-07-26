@@ -7,6 +7,9 @@ from fvsc.evaluation.planned_slot_synthesis import (
     PlannedRequirement,
 )
 from fvsc.evaluation.relation_support_guard import (
+    PUBLIC_RELATION_SUPPORT_GUARD,
+    RELATION_SUPPORT_GUARD_OPERATION_ID,
+    RelationSupportGuardOperation,
     compile_relation_support_candidates,
     relation_for_requirement,
 )
@@ -54,3 +57,10 @@ def test_unknown_or_ambiguous_relation_fails_closed() -> None:
         relation_for_requirement("general plan")
     with pytest.raises(ValueError, match="exactly one"):
         relation_for_requirement("what was accepted and declined")
+
+
+def test_guard_is_explicitly_registered_as_s6() -> None:
+    assert PUBLIC_RELATION_SUPPORT_GUARD.operation_id == "S6"
+    assert RELATION_SUPPORT_GUARD_OPERATION_ID == "S6"
+    with pytest.raises(ValueError, match="remain S6"):
+        RelationSupportGuardOperation(operation_id="S7")
