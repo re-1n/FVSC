@@ -195,8 +195,9 @@ Protocol and result context:
 
 ## Follow-ups (not blocking)
 
-- Track `obsidian-plugin/package-lock.json` so CI can use `npm ci` (reproducible builds)
-  and restore the `typecheck` job. It remains intentionally ignored in this checkpoint.
+- ✅ Track `obsidian-plugin/package-lock.json`, use reproducible `npm ci` with dependency
+  caching in CI, and restore the plugin `typecheck` step. The direct esbuild development
+  dependency is updated beyond the affected `<=0.24.2` advisory range.
 - Profile the plugin's debounced full-vault reconciliation and add a source-scoped
   endpoint only if live vault latency warrants the extra lifecycle surface.
 - Port `core.viability_benchmark` and the `natural-language-live.yml` workflow once the

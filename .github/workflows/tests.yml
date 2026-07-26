@@ -51,11 +51,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      # package-lock.json is currently gitignored, so use `npm install` (not `npm ci`).
-      # Tracking the lockfile + restoring a `typecheck` job is a follow-up.
+          cache: npm
+          cache-dependency-path: obsidian-plugin/package-lock.json
       - name: Install plugin dependencies
         working-directory: obsidian-plugin
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck plugin
+        working-directory: obsidian-plugin
+        run: npm run typecheck
       - name: Build plugin
         working-directory: obsidian-plugin
         run: |
