@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Protocol, Sequence
+from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from ..integrations.ollama import OllamaGenerationTelemetry
 from .claim_first_runner import _claims
@@ -12,6 +12,7 @@ from .planned_slot_synthesis import (
     PLANNED_SLOT_INSTRUCTION,
     PLANNED_SLOT_PROMPT_VERSION,
     FilledRequirementSlot,
+    FrozenQuestionPlan,
     PlannedSlotOutput,
     normalize_empty_claim_sentinel,
     render_planned_slot_answer,
@@ -51,13 +52,15 @@ def run_planned_slots(
     fixtures: Sequence[SynthesisFixture],
     *,
     backend_factory: Callable[[str, str], PlannedSlotBackend],
+    plans_by_case: Mapping[str, FrozenQuestionPlan] | None = None,
 ) -> tuple[PlannedSlotGeneration, ...]:
+    plans = QUESTION_PLAN_BY_CASE if plans_by_case is None else plans_by_case
     expected_ids = tuple(item.case_id for item in fixtures)
-    if set(expected_ids) != set(QUESTION_PLAN_BY_CASE):
+    if set(expected_ids) != set(plans):
         raise ValueError("planned-slot run requires the complete frozen fixture set")
     results: list[PlannedSlotGeneration] = []
     for fixture in fixtures:
-        plan = QUESTION_PLAN_BY_CASE[fixture.case_id]
+        plan = plans[fixture.case_id]
         backend = backend_factory(
             PLANNED_SLOT_INSTRUCTION, PLANNED_SLOT_PROMPT_VERSION
         )

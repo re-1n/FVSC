@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from fvsc.evaluation.planned_slot_runner import run_planned_slots
+from fvsc.evaluation.planned_slot_synthesis import (
+    FrozenQuestionPlan,
+    PlannedRequirement,
+)
 from fvsc.evaluation.requirement_gate_fixtures import PUBLIC_REQUIREMENT_GATE_FIXTURES
 
 
@@ -44,3 +48,38 @@ def test_planned_slot_runner_fails_closed_on_missing_slots() -> None:
         backend_factory=lambda prompt, version: Backend(),
     )
     assert all(item.status == "schema_error" for item in results)
+
+
+def test_planned_slot_runner_accepts_an_explicit_new_plan_set() -> None:
+    fixture = PUBLIC_REQUIREMENT_GATE_FIXTURES[0]
+    plans = {
+        fixture.case_id: FrozenQuestionPlan(
+            fixture.case_id,
+            (
+                PlannedRequirement("R1", "primary plan"),
+                PlannedRequirement("R2", "heat condition"),
+            ),
+        )
+    }
+
+    class Backend:
+        last_generation_telemetry = None
+
+        def generate_json_object(self, payload, *, source_count):
+            return {
+                "slots": [
+                    {
+                        "requirement_id": item["requirement_id"],
+                        "status": "unsupported",
+                        "claim": None,
+                    }
+                    for item in payload["requirements"]
+                ]
+            }
+
+    result = run_planned_slots(
+        (fixture,),
+        backend_factory=lambda prompt, version: Backend(),
+        plans_by_case=plans,
+    )
+    assert result[0].status == "insufficient"

@@ -54,3 +54,27 @@ or end-to-end answer quality. The next experiment must freeze new sources and fa
 Gold, compile slots before source access, fill exactly those slots with the existing
 planned-slot operation, and score slot recall, support status, citations, prohibited
 relations, abstention, latency and tokens. Do not rerun private Q07.
+
+## Diagnostic boundary-plus-slot transfer
+
+A twelve-case source set was constructed for the frozen questions: ten supported
+two-slot cases and two cases where neither requested step was established. The
+existing planned-slot prompt ran with the same frozen Qwen model digest and seed.
+Because this source fixture tranche had not yet been committed when generation began,
+the result is explicitly diagnostic and cannot promote the combined operation.
+
+| Metric | Result |
+|---|---:|
+| Macro required-facet recall | 0.950 |
+| Citation correctness | 1.000 |
+| Unsupported-facet rate | 0.000 |
+| Abstention accuracy | 1.000 |
+| Prohibited / role violations | 0 / 0 |
+| Schema errors | 0 |
+
+Nine positive cases were complete, both negative cases abstained, and one positive case
+was partial. The preserved `R2` slot asked what remained conditional, but the filler
+did not link that implicit referent to the source-supported second delivery. This is no
+longer a slot-boundary loss. It localizes the next public task to referent-aware
+relation support inside an already fixed slot. Do not alter the v1 question, source,
+prompt or review after observing this result.

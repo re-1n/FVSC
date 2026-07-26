@@ -139,8 +139,18 @@ obligations. A separate deterministic boundary compiler now passes a new twelve-
 held-out question-only gate at 12/12, fails closed outside four registered explicit
 grammars, and adapts directly to `FrozenQuestionPlan`. This licenses a new public
 end-to-end boundary-plus-planned-slot gate; it does not license private Q07 or claim
-general semantic parsing. Protocol:
-[`ANSWER_SLOT_BOUNDARY_GATE.md`](../evaluation/ANSWER_SLOT_BOUNDARY_GATE.md).
+  general semantic parsing. Protocol:
+  [`ANSWER_SLOT_BOUNDARY_GATE.md`](../evaluation/ANSWER_SLOT_BOUNDARY_GATE.md).
+
+  Diagnostic transfer on the newly constructed boundary-plus-slot source set reached
+  0.950 required-facet recall, 1.000 citation correctness, 1.000 abstention accuracy,
+  zero unsupported/prohibited/role violations, and zero schema errors. It remains
+  non-promotional because the source fixture tranche was not committed before
+  execution. The only miss preserved its slot but failed to resolve the implicit
+  referent in “what remains conditional” to the source-supported second delivery.
+  Freeze this tranche as diagnostic evidence; the next public candidate is
+  referent-aware relation support inside fixed slots, not another boundary prompt and
+  not private Q07.
 
 Protocol and result context:
 
