@@ -1,6 +1,6 @@
 # Typed relation-support guard gate
 
-Status: public gate preregistered; generation not yet run.
+Status: public gate passed; guard promoted only for the six registered relation types.
 
 ## Motivation
 
@@ -58,3 +58,34 @@ Promote the guard for these registered relation types only if:
 Any positive claim demoted by the guard rejects the candidate. Tokens and latency are
 reported once because generation is shared. The old referent and private Q07 fixtures
 are excluded. Do not widen the cue lexicon after observing the run.
+
+## Frozen result
+
+The run used `qwen2.5:14b-instruct-q4_K_M`, digest
+`7cdf5a0187d5c58cc5d369b255592f7841d1c4696d45a8c8a9489440385b22f6`,
+temperature zero and seed 42.
+
+| Metric | v1 | Relation guard |
+|---|---:|---:|
+| Macro required-facet recall | 1.000 | 1.000 |
+| Citation correctness | 1.000 | 1.000 |
+| Unsupported-facet rate | 0.250 | 0.000 |
+| Abstention accuracy | 0.750 | 1.000 |
+| Prohibited violations | 4 | 0 |
+| Schema errors | 0 | 0 |
+
+All six positive answers were unchanged. The guard corrected all three raw-v1
+negative-case failures: test/price interpreted as acceptance/rejection, permit
+chronology interpreted as conditionality, and room availability interpreted as
+confirmation. Because arms share the same twelve model generations, tokens and latency
+are identical and are not attributed to the guard.
+
+## Decision
+
+Promote the guard as a high-precision control only for `confirmed`, `conditional`,
+`accepted`, `declined`, `retained` and `replaced` in the registered English operation.
+This is not a general entailment layer and does not authorize silent cue expansion.
+New relations or paraphrastic cues require their own held-out positive and adversarial
+gate. The next step is integration at the planned-slot boundary behind explicit
+operation registration, followed by regression tests proving unregistered slots still
+fail closed.

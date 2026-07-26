@@ -162,6 +162,17 @@ end-to-end boundary-plus-planned-slot gate; it does not license private Q07 or c
   tune another referent prompt on the frozen cases. Protocol:
   [`REFERENT_AWARE_SLOT_GATE.md`](../evaluation/REFERENT_AWARE_SLOT_GATE.md).
 
+  Fourth update (2026-07-26): a deterministic typed relation-support guard passed its
+  preregistered twelve-case gate using shared generation for raw and guarded arms.
+  Positive recall and citation correctness stayed at 1.000; abstention accuracy rose
+  from 0.750 to 1.000; unsupported-facet rate fell from 0.250 to 0; and four prohibited
+  relation assertions fell to zero. Promote it only for the six registered English
+  relations (`confirmed`, `conditional`, `accepted`, `declined`, `retained`,
+  `replaced`). It is not general entailment and its cue set must not expand without a
+  new held-out gate. Next: integrate it behind explicit planned-slot operation
+  registration and prove unregistered slots fail closed. Protocol:
+  [`RELATION_SUPPORT_GUARD_GATE.md`](../evaluation/RELATION_SUPPORT_GUARD_GATE.md).
+
 Protocol and result context:
 
 - [`CONTEXT_RANKER_CUES_PROBE.md`](../evaluation/CONTEXT_RANKER_CUES_PROBE.md)
