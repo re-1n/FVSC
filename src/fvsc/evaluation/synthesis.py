@@ -18,6 +18,7 @@ SynthesisArm = Literal[
     "coverage",
     "claim_first",
     "requirement_coverage",
+    "planned_slot",
 ]
 
 _FACET_ROLES = frozenset(

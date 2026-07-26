@@ -42,7 +42,8 @@ not semantic views and cannot be traded away for a better aggregate score.
 | `S1` | Keep user-facing prose propositionally identical to validated cited claims, with explicit abstention | claim-first structured output plus deterministic renderer | independently generated answer plus claims | candidate for missing-link risk; rejected as global default after atlas over-abstention |
 | `S2` | Preserve several independently relevant facets during cited synthesis | coverage plan over typed selected units | one-shot and claim-first cited synthesis | candidate; public phenomenon atlas frozen |
 | `S3` | Normalize paraphrastic source relations against explicit question requirements before rendering | requirement-to-claim coverage map with supported/unsupported status | global claim-first and independent answer baseline | rejected: indexed end-to-end map failed held-out schema/coverage gate |
-| `S4` | Fill a frozen question plan without losing or inventing requirements | one supported/unsupported cited slot per externally supplied requirement | indexed end-to-end requirement map | controlled candidate; does not include automatic planning |
+| `S4` | Fill a frozen question plan without losing or inventing requirements | one supported/unsupported cited slot per externally supplied requirement | indexed end-to-end requirement map | controlled capacity passed; automatic planning not evaluated |
+| `S5` | Decompose a question into independently answerable requirements without source leakage | question-only planner with frozen requirement review | implicit one-shot decomposition | candidate; public planner-only evaluation next |
 
 The candidate structure column is deliberately plural. A structure is promoted only
 for the operation on which it wins; no row grants it universal semantic status.

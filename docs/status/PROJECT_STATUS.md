@@ -43,6 +43,10 @@
 - The end-to-end requirement-map gate failed: recall fell to 0.500 with six schema
   errors. The next controlled ablation freezes the question plan as input and tests
   one claim slot per requirement; it cannot promote automatic planning.
+- Frozen-plan slot synthesis then achieved full public recall, abstention and citation
+  correctness after a narrowly safe empty-sentinel normalization. This localizes the
+  remaining bottleneck to automatic question planning/linkage. The result is capacity
+  evidence only, not a production promotion.
 - Current local verification: **334 passed / 1 skipped / 11 deselected**. The active
   branch contains six unpushed implementation/evaluation commits before the handoff
   checkpoint.

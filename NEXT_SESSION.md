@@ -173,6 +173,13 @@ errors, 7 status errors. Правильные claims часто были пот�
 question plan на входе и ровно один supported/unsupported cited slot на requirement.
 Это тест synthesis capacity, не автоматического planner.
 
+Frozen-plan slot ablation выполнен: после безопасной normalization только exact
+proposition-free unsupported sentinel получены recall 1.000, abstention 1.000,
+citations 1.000, unsupported/prohibited 0. Strict schema errors были 4, tolerant 0.
+Это локализует bottleneck в automatic question planning/linkage. Следующий этап —
+отдельный public planner-only evaluation против frozen question-only plans; только
+после него возможен новый held-out end-to-end gate.
+
 Не продолжать настройку ranker на этом диалоге.
 
 Следующая зарегистрированная задача — **coverage-aware synthesis**:
