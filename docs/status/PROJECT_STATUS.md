@@ -20,6 +20,10 @@
 - Two-hop typed retrieval delivered both Q07 facets, but generation still omitted one.
   The remaining failure is downstream synthesis/coverage, not retrieval. The next
   experiment must begin on public synthetic multi-facet fixtures.
+- The first public synthetic synthesis gate is complete. A minimal silent coverage
+  checklist did not improve saturated required-facet recall (1.000 in both arms),
+  reduced citation correctness (1.000 to 0.933), and did not repair abstention. The
+  contract is rejected and private Q07 remains closed.
 - Current local verification: **334 passed / 1 skipped / 11 deselected**. The active
   branch contains six unpushed implementation/evaluation commits before the handoff
   checkpoint.

@@ -17,6 +17,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True, help="exact installed Ollama model tag")
     parser.add_argument("--model-digest", required=True, help="SHA-256 reported by Ollama")
+    parser.add_argument("--host", default="http://127.0.0.1:11434")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--num-ctx", type=int, default=8192)
@@ -35,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
 
     probe = OllamaInterpretationBackend(
         model=args.model,
+        host=args.host,
         model_digest=args.model_digest,
         seed=args.seed,
         temperature=0.0,
@@ -55,6 +57,7 @@ def main(argv: list[str] | None = None) -> int:
     ) -> OllamaInterpretationBackend:
         return OllamaInterpretationBackend(
             model=args.model,
+            host=args.host,
             model_digest=args.model_digest,
             seed=args.seed,
             temperature=0.0,

@@ -1,6 +1,6 @@
 # Coverage-aware synthesis: public synthetic gate
 
-Status: preregistered protocol; no result recorded yet.
+Status: public synthetic gate completed; coverage contract rejected.
 
 ## Question
 
@@ -73,6 +73,7 @@ $env:PYTHONPATH='src'
 python scripts/run_synthesis_gate.py `
   --model '<exact-local-tag>' `
   --model-digest '<sha256-from-ollama>' `
+  --host 'http://127.0.0.1:11434' `
   --output '.fvsc/public-synthesis-gate-v1.json'
 ```
 
@@ -81,3 +82,35 @@ existing output file. Case order is frozen and arm order alternates by case to
 distribute warm-cache bias. The artifact contains public generated prose, telemetry,
 and an empty review template. Facet observations require explicit review; the runner
 does not infer semantic truth from lexical overlap.
+
+## Result — public synthetic gate v1
+
+The frozen run used `qwen2.5:14b-instruct-q4_K_M`, digest
+`7cdf5a0187d5c58cc5d369b255592f7841d1c4696d45a8c8a9489440385b22f6`,
+temperature `0`, seed `42`, and six paired cases.
+
+| Metric | Baseline | Coverage |
+|---|---:|---:|
+| Macro required-facet recall | 1.000 | 1.000 |
+| Mean unsupported-facet rate | 0.167 | 0.167 |
+| Mean citation correctness | 1.000 | 0.933 |
+| Abstention accuracy | 0.833 | 0.833 |
+| Prohibited violations | 1 | 1 |
+| Role-promotion violations | 0 | 0 |
+| Prompt tokens | 2,564 | 2,810 |
+| Output tokens | 536 | 552 |
+| Mean wall seconds | 14.43 | 5.61 |
+
+The gate **failed**. Required-facet recall was already saturated in the baseline and
+did not improve. Both arms incorrectly asserted that zinc coating had been selected
+in the insufficient-evidence case. The coverage arm also mentioned the conditional
+Thursday alternative in its answer without representing it as a separately cited
+claim, reducing citation correctness.
+
+Latency is descriptive only: local model loading and cache state remain plausible
+contributors even with alternating arm order. No speed claim is made.
+
+This result rejects this minimal coverage instruction for promotion. It does not show
+that coverage-aware synthesis is impossible; it shows that the tested instruction
+does not solve abstention and provides no recall gain on this fixture set. Under the
+registered gate, private Q07 is not repeated and the prompt is not tuned against it.

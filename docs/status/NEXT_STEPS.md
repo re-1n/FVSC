@@ -114,6 +114,13 @@ Next:
 Do not tune another ranker, increase the global budget, promote embeddings/density, or
 rewrite the frozen parent Gold for this failure.
 
+Update (2026-07-26): the first public synthetic gate is complete. The minimal coverage
+instruction failed: macro required-facet recall remained 1.000 in both arms, citation
+correctness decreased from 1.000 to 0.933, and both arms failed the
+insufficient-evidence case. Do not repeat private Q07 under this contract. The next
+step is to classify the abstention failure and design a new public fixture family or
+structured synthesis operation before registering another intervention.
+
 Protocol and result context:
 
 - [`CONTEXT_RANKER_CUES_PROBE.md`](../evaluation/CONTEXT_RANKER_CUES_PROBE.md)

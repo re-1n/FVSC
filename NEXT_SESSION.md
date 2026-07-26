@@ -69,6 +69,9 @@ Retrieval-only результаты на замороженном диалоге
 
 - Установлена в существующее Ollama-хранилище на диске D:
   `qwen3-embedding:0.6b`.
+- Локальное Ollama-хранилище: `D:\ollama models`. Если стандартный daemon показывает
+  пустой список, запускать отдельный loopback daemon с `OLLAMA_MODELS` на это хранилище;
+  не считать модели отсутствующими только по default `ollama list`.
 - Digest:
   `ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d`.
 - Размер около 639 MB, embedding dimension 1024.
@@ -131,6 +134,13 @@ Q04 теперь компилируется в 479 estimated tokens и сохр�
 Следующий коммит после них — этот handoff/status checkpoint.
 
 ## Главный следующий шаг
+
+Обновление 2026-07-26: публичный synthetic coverage gate выполнен и **не пройден**.
+Baseline и coverage получили macro required-facet recall 1.000; citation correctness
+снизилась с 1.000 до 0.933; обе arms ошибочно выбрали zinc coating в abstention-case.
+Минимальный coverage contract отклонён. Приватный Q07 не повторять. Следующий шаг —
+на публичных данных локализовать abstention/answer-claim consistency failure и только
+затем preregister новую synthesis operation.
 
 Не продолжать настройку ranker на этом диалоге.
 
