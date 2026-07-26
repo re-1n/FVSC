@@ -91,3 +91,16 @@ model-load effects are not eliminated by arm alternation.
 This is one public synthetic fixture family, one model, and one seed. It validates a
 single private Q07 diagnostic under the frozen claim-first operation; it does not
 establish general superiority or authorize rewriting the private Gold.
+
+## Private transfer diagnostic
+
+The one permitted frozen Q07 diagnostic was completed locally. Raw private context and
+model output remain ignored and are not published. The claim-first answer cited both
+the interaction-protocol unit and the separate tactile unit, and it restored the
+tactile facet. However, it compressed the interaction protocol to understanding and
+again omitted the explicit contrast with moving immediately to a solution.
+
+The result is therefore **partial**, not accepted. Claim-first repaired answer/claim
+consistency and missing-link abstention, but did not solve multi-facet coverage. Q07
+must not be repeated or used for prompt tuning. The next coverage operation must be
+registered on a broader public phenomenon atlas.

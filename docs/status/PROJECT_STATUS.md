@@ -28,6 +28,10 @@
   rendering preserved positive-control recall, achieved 4/4 missing-link abstentions,
   and emitted no prohibited relations. One frozen private Q07 diagnostic is now
   permitted; this narrow result is not a general synthesis claim.
+- The permitted private Q07 transfer was partial: tactility was restored and both
+  relevant units were cited, but the explicit no-immediate-solution contrast remained
+  omitted. Claim-first solves a consistency/abstention class, not general multi-facet
+  coverage. No further Q07 tuning or repetition is allowed.
 - Current local verification: **334 passed / 1 skipped / 11 deselected**. The active
   branch contains six unpushed implementation/evaluation commits before the handoff
   checkpoint.

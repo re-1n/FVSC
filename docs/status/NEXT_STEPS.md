@@ -127,6 +127,12 @@ abstention accuracy from 0.625 to 1.000, and reduced prohibited relation violati
 from 2 to 0. One diagnostic repeat of private Q07 is now allowed under exactly this
 operation. Do not tune it on the private response; retain either outcome.
 
+Private transfer result: partial. The frozen claim-first diagnostic cited both Q07
+units and restored tactility, but still omitted the explicit no-immediate-solution
+contrast inside the interaction protocol. The permitted repeat has been consumed.
+Do not rerun or tune on Q07. Build the next compositional-coverage operation on a
+broader public phenomenon atlas.
+
 Protocol and result context:
 
 - [`CONTEXT_RANKER_CUES_PROBE.md`](../evaluation/CONTEXT_RANKER_CUES_PROBE.md)
