@@ -53,6 +53,8 @@ def run_planned_slots(
     *,
     backend_factory: Callable[[str, str], PlannedSlotBackend],
     plans_by_case: Mapping[str, FrozenQuestionPlan] | None = None,
+    instruction: str = PLANNED_SLOT_INSTRUCTION,
+    prompt_version: str = PLANNED_SLOT_PROMPT_VERSION,
 ) -> tuple[PlannedSlotGeneration, ...]:
     plans = QUESTION_PLAN_BY_CASE if plans_by_case is None else plans_by_case
     expected_ids = tuple(item.case_id for item in fixtures)
@@ -61,9 +63,7 @@ def run_planned_slots(
     results: list[PlannedSlotGeneration] = []
     for fixture in fixtures:
         plan = plans[fixture.case_id]
-        backend = backend_factory(
-            PLANNED_SLOT_INSTRUCTION, PLANNED_SLOT_PROMPT_VERSION
-        )
+        backend = backend_factory(instruction, prompt_version)
         raw = backend.generate_json_object(
             {
                 "question": fixture.question,
