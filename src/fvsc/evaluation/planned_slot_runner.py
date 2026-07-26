@@ -48,6 +48,57 @@ class PlannedSlotGeneration:
         }
 
 
+def guard_planned_slot_generation(
+    generation: PlannedSlotGeneration,
+    plan: FrozenQuestionPlan,
+    eligible_labels_by_requirement: Mapping[str, tuple[str, ...]],
+) -> PlannedSlotGeneration:
+    """Fail closed on generated citations lacking a typed relation cue."""
+
+    if generation.error is not None:
+        return generation
+    slots = []
+    stored = []
+    for item in generation.slots:
+        requirement_id = str(item.get("requirement_id", ""))
+        status = item.get("status", "")
+        claim_value = item.get("claim")
+        claim = None if claim_value is None else _claims([claim_value])[0]
+        if (
+            claim is not None
+            and not set(claim.source_labels)
+            <= set(eligible_labels_by_requirement.get(requirement_id, ()))
+        ):
+            status = "unsupported"
+            claim = None
+        slot = FilledRequirementSlot(requirement_id, status, claim)
+        slots.append(slot)
+        stored.append(
+            {
+                "claim": (
+                    None
+                    if claim is None
+                    else {
+                        "citations": list(claim.source_labels),
+                        "support_level": claim.support_level,
+                        "text": claim.text,
+                    }
+                ),
+                "requirement_id": requirement_id,
+                "status": status,
+            }
+        )
+    output = PlannedSlotOutput(plan, tuple(slots))
+    return PlannedSlotGeneration(
+        generation.case_id,
+        output.status,
+        render_planned_slot_answer(output),
+        tuple(stored),
+        generation.telemetry,
+        generation.error,
+    )
+
+
 def run_planned_slots(
     fixtures: Sequence[SynthesisFixture],
     *,
@@ -55,6 +106,7 @@ def run_planned_slots(
     plans_by_case: Mapping[str, FrozenQuestionPlan] | None = None,
     instruction: str = PLANNED_SLOT_INSTRUCTION,
     prompt_version: str = PLANNED_SLOT_PROMPT_VERSION,
+    eligible_labels_by_case: Mapping[str, Mapping[str, tuple[str, ...]]] | None = None,
 ) -> tuple[PlannedSlotGeneration, ...]:
     plans = QUESTION_PLAN_BY_CASE if plans_by_case is None else plans_by_case
     expected_ids = tuple(item.case_id for item in fixtures)
@@ -100,8 +152,22 @@ def run_planned_slots(
                     if claim_value is None
                     else _claims([claim_value])[0]
                 )
+                requirement_id = str(item.get("requirement_id", ""))
+                if (
+                    claim is not None
+                    and eligible_labels_by_case is not None
+                    and not set(claim.source_labels)
+                    <= set(
+                        eligible_labels_by_case[fixture.case_id].get(
+                            requirement_id, ()
+                        )
+                    )
+                ):
+                    claim = None
+                    item = dict(item)
+                    item["status"] = "unsupported"
                 slot = FilledRequirementSlot(
-                    str(item.get("requirement_id", "")),
+                    requirement_id,
                     item.get("status", ""),
                     claim,
                 )
@@ -146,4 +212,9 @@ def run_planned_slots(
     return tuple(results)
 
 
-__all__ = ["PlannedSlotGeneration", "PlannedSlotBackend", "run_planned_slots"]
+__all__ = [
+    "PlannedSlotGeneration",
+    "PlannedSlotBackend",
+    "guard_planned_slot_generation",
+    "run_planned_slots",
+]
