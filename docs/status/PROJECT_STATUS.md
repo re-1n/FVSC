@@ -36,6 +36,10 @@
   fell from 0.958 to 0.583 through over-abstention on positive cases. Three hard/easy
   gaps tied, so no phenomenon was selected post hoc. A versioned public extension is
   required.
+- Atlas v2 retained a tie between conditional-scope and distributed-rationale hard
+  paraphrases; temporal paraphrases passed. The cross-cutting target is relation
+  normalization against explicit question requirements, not either relation family
+  alone. A new held-out public gate is required.
 - Current local verification: **334 passed / 1 skipped / 11 deselected**. The active
   branch contains six unpushed implementation/evaluation commits before the handoff
   checkpoint.

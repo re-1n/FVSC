@@ -161,6 +161,12 @@ Coverage atlas v1 выполнен. Baseline macro required recall = 0.958, clai
 temporal contrast, conditional scope и distributed rationale равны; выбирать один
 post hoc нельзя. Нужен versioned public atlas extension, v1 не изменять.
 
+Atlas v2 extension выполнен: baseline recall 1.000, claim-first 0.667. Temporal hard
+paraphrases прошли, conditional и distributed-rationale hard paraphrases дали по два
+over-abstention failure; tie сохранился, отдельный phenomenon не выбран. Следующий
+candidate — public held-out requirement-to-claim coverage map, который отделяет
+question decomposition, relation support и deterministic rendering.
+
 Не продолжать настройку ranker на этом диалоге.
 
 Следующая зарегистрированная задача — **coverage-aware synthesis**:

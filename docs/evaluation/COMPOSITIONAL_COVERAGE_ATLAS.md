@@ -72,3 +72,39 @@ The three hard/easy completion gaps are tied. No phenomenon is selected post hoc
 Claim-first remains useful as a validated missing-link operation but is rejected as a
 global default. A versioned public extension must add cases for the tied phenomena
 before the next operation is chosen; v1 fixtures and results remain frozen.
+
+## Registered v2 extension
+
+V2 leaves every v1 case and result unchanged. It adds two pairs each for temporal
+contrast, conditional scope and distributed rationale: pricing and badge-policy
+changes; overflow-room and rollback conditions; route and archive-relocation reasons.
+
+Selection is frozen before generation:
+
+1. select a unique maximum count of easy-complete/hard-incomplete drops;
+2. if tied, select a unique lowest mean hard required-facet recall;
+3. if still tied, select nothing.
+
+Only the existing baseline and claim-first arms are audited. V2 is localization, not
+prompt tuning or an intervention gate.
+
+## Result — v2 extension
+
+| Metric | Baseline | Claim-first |
+|---|---:|---:|
+| Macro required-facet recall | 1.000 | 0.667 |
+| Citation correctness | 1.000 | 1.000 |
+| Unsupported-facet rate | 0.000 | 0.000 |
+| Prompt tokens | 2,017 | 2,533 |
+| Output tokens | 911 | 498 |
+
+Claim-first completed all four temporal cases. It completed the easy conditional and
+rationale cases but abstained on all four corresponding hard paraphrases. Conditional
+scope and distributed rationale each produced two completion drops with hard recall
+zero, so the preregistered tie-breaker still selects no individual phenomenon.
+
+The shared error is relation normalization under paraphrase, not one relation type:
+literal/easy causal and conditional statements pass, while semantically equivalent
+relational wording triggers over-abstention. The next candidate must separate question
+requirements, relation support and deterministic rendering. It must be gated on new
+held-out public fixtures rather than rerun either atlas version.

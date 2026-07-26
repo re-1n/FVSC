@@ -11,6 +11,10 @@ from fvsc.evaluation.coverage_atlas import (
     atlas_fixtures,
     summarize_coverage_atlas,
 )
+from fvsc.evaluation.coverage_atlas_v2 import (
+    atlas_v2_extension_fixtures,
+    summarize_coverage_extension,
+)
 from fvsc.evaluation.synthesis import (
     FacetObservation,
     score_synthesis_case,
@@ -23,6 +27,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--run", type=Path, required=True)
     parser.add_argument("--review", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--fixture-set",
+        choices=("v1", "v2-extension"),
+        default="v1",
+    )
     return parser
 
 
@@ -56,7 +65,11 @@ def main(argv: list[str] | None = None) -> int:
         for item in observations
         if isinstance(item, dict)
     }
-    fixtures = atlas_fixtures()
+    fixtures = (
+        atlas_fixtures()
+        if args.fixture_set == "v1"
+        else atlas_v2_extension_fixtures()
+    )
     expected = {
         (fixture.case_id, arm)
         for fixture in fixtures
@@ -94,7 +107,11 @@ def main(argv: list[str] | None = None) -> int:
         for arm, scores in scores_by_arm.items()
     }
     atlas_summaries = {
-        arm: summarize_coverage_atlas(scores)
+        arm: (
+            summarize_coverage_atlas(scores)
+            if args.fixture_set == "v1"
+            else summarize_coverage_extension(scores)
+        )
         for arm, scores in scores_by_arm.items()
     }
     result = {
@@ -107,6 +124,7 @@ def main(argv: list[str] | None = None) -> int:
             }
             for arm, summary in atlas_summaries.items()
         },
+        "fixture_set": args.fixture_set,
         "review_id": review.get("review_id"),
         "run_prompt_version": run.get("prompt_version"),
         "schema_errors": {

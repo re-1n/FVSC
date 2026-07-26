@@ -10,6 +10,7 @@ import sys
 from fvsc.evaluation.claim_first_runner import run_claim_first_pair
 from fvsc.evaluation.claim_first_synthesis import CLAIM_FIRST_PROMPT_VERSION
 from fvsc.evaluation.coverage_atlas import atlas_fixtures
+from fvsc.evaluation.coverage_atlas_v2 import atlas_v2_extension_fixtures
 from fvsc.integrations.ollama import OllamaInterpretationBackend
 
 
@@ -23,6 +24,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--num-ctx", type=int, default=8192)
     parser.add_argument("--num-predict", type=int, default=768)
     parser.add_argument("--timeout", type=float, default=900.0)
+    parser.add_argument(
+        "--fixture-set",
+        choices=("v1", "v2-extension"),
+        default="v1",
+    )
     return parser
 
 
@@ -60,10 +66,14 @@ def main(argv: list[str] | None = None) -> int:
             num_predict=args.num_predict,
             timeout=args.timeout,
             system_prompt=system_prompt,
-            prompt_version=f"coverage-atlas-v1-{prompt_version}",
+            prompt_version=f"coverage-atlas-{args.fixture_set}-{prompt_version}",
         )
 
-    fixtures = atlas_fixtures()
+    fixtures = (
+        atlas_fixtures()
+        if args.fixture_set == "v1"
+        else atlas_v2_extension_fixtures()
+    )
     generations = run_claim_first_pair(fixtures, backend_factory=backend_factory)
     artifact = {
         "fixture_ids": [item.case_id for item in fixtures],
@@ -71,7 +81,10 @@ def main(argv: list[str] | None = None) -> int:
         "model_identity": identity.to_dict(),
         "num_ctx": args.num_ctx,
         "num_predict": args.num_predict,
-        "prompt_version": f"coverage-atlas-v1-{CLAIM_FIRST_PROMPT_VERSION}",
+        "fixture_set": args.fixture_set,
+        "prompt_version": (
+            f"coverage-atlas-{args.fixture_set}-{CLAIM_FIRST_PROMPT_VERSION}"
+        ),
         "seed": args.seed,
         "temperature": 0.0,
     }
