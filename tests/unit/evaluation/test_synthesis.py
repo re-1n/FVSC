@@ -14,6 +14,9 @@ from fvsc.evaluation.synthesis import (
     summarize_synthesis_arm,
 )
 from fvsc.evaluation.synthesis_fixtures import PUBLIC_SYNTHESIS_FIXTURES
+from fvsc.evaluation.synthesis_consistency_fixtures import (
+    PUBLIC_CONSISTENCY_FIXTURES,
+)
 
 
 def _fixture() -> SynthesisFixture:
@@ -176,3 +179,18 @@ def test_registered_gate_reports_role_promotion() -> None:
     decision = evaluate_synthesis_gate(baseline, coverage)
     assert not decision.passed
     assert "coverage arm promoted guards or alternatives" in decision.reasons
+
+
+def test_consistency_fixture_family_has_matched_positive_and_abstention_cases() -> None:
+    assert len(PUBLIC_CONSISTENCY_FIXTURES) == 8
+    assert sum(item.should_abstain for item in PUBLIC_CONSISTENCY_FIXTURES) == 4
+    assert len({item.case_id for item in PUBLIC_CONSISTENCY_FIXTURES}) == 8
+    for fixture in PUBLIC_CONSISTENCY_FIXTURES:
+        required = [facet for facet in fixture.facets if facet.role == "required"]
+        prohibited = [facet for facet in fixture.facets if facet.role == "prohibited"]
+        if fixture.should_abstain:
+            assert not required
+            assert prohibited
+        else:
+            assert len(required) >= 2
+            assert prohibited

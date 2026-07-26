@@ -121,6 +121,12 @@ insufficient-evidence case. Do not repeat private Q07 under this contract. The n
 step is to classify the abstention failure and design a new public fixture family or
 structured synthesis operation before registering another intervention.
 
+Second update (2026-07-26): a frozen eight-case answer/claim consistency gate passed.
+Claim-first deterministic rendering preserved required-facet recall at 1.000, raised
+abstention accuracy from 0.625 to 1.000, and reduced prohibited relation violations
+from 2 to 0. One diagnostic repeat of private Q07 is now allowed under exactly this
+operation. Do not tune it on the private response; retain either outcome.
+
 Protocol and result context:
 
 - [`CONTEXT_RANKER_CUES_PROBE.md`](../evaluation/CONTEXT_RANKER_CUES_PROBE.md)

@@ -24,6 +24,10 @@
   checklist did not improve saturated required-facet recall (1.000 in both arms),
   reduced citation correctness (1.000 to 0.933), and did not repair abstention. The
   contract is rejected and private Q07 remains closed.
+- A subsequent public answer/claim consistency gate passed. Claim-first deterministic
+  rendering preserved positive-control recall, achieved 4/4 missing-link abstentions,
+  and emitted no prohibited relations. One frozen private Q07 diagnostic is now
+  permitted; this narrow result is not a general synthesis claim.
 - Current local verification: **334 passed / 1 skipped / 11 deselected**. The active
   branch contains six unpushed implementation/evaluation commits before the handoff
   checkpoint.

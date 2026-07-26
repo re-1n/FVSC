@@ -466,6 +466,79 @@ class OllamaInterpretationBackend:
         matches.sort(key=lambda item: (item.name != self.model, item.name, item.digest))
         return matches[0]
 
+    def generate_json_object(
+        self,
+        payload: dict[str, Any],
+        *,
+        source_count: int,
+    ) -> dict[str, Any]:
+        """Run one strict structured call while retaining transport telemetry."""
+
+        self.last_generation_telemetry = None
+        if (
+            isinstance(source_count, bool)
+            or not isinstance(source_count, int)
+            or not 0 <= source_count <= 100
+        ):
+            raise ValueError("source_count must be an integer in [0, 100]")
+        try:
+            user_payload = json.dumps(
+                payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Ollama structured payload must contain JSON values") from exc
+        if len(user_payload) > self.max_prompt_chars:
+            raise ValueError("Ollama interpretation prompt exceeds the configured size limit")
+        options: dict[str, Any] = {
+            "temperature": self.temperature,
+            "num_ctx": self.num_ctx,
+            "num_predict": self.num_predict,
+        }
+        if self.seed is not None:
+            options["seed"] = self.seed
+        started = time.perf_counter()
+        envelope = self._request_json(
+            "/api/chat",
+            payload={
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": user_payload},
+                ],
+                "format": "json",
+                "stream": False,
+                "options": options,
+            },
+        )
+        wall_seconds = time.perf_counter() - started
+        message = envelope.get("message")
+        if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+            raise OllamaIntegrationError("Ollama chat response is missing message content")
+        content = _strip_json_fence(message["content"])
+        try:
+            generated = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise OllamaIntegrationError("Ollama message content is not valid JSON") from exc
+        if not isinstance(generated, dict):
+            raise OllamaIntegrationError("Ollama structured output must be a JSON object")
+        self.last_generation_telemetry = OllamaGenerationTelemetry.from_envelope(
+            envelope,
+            configured_model=self.model,
+            model_digest=self.model_digest,
+            prompt_version=self.prompt_version,
+            temperature=self.temperature,
+            seed=self.seed,
+            num_ctx=self.num_ctx,
+            num_predict=self.num_predict,
+            source_count=source_count,
+            prompt_chars=len(self.system_prompt) + len(user_payload),
+            wall_seconds=wall_seconds,
+        )
+        return generated
+
     def generate(
         self,
         question: str,
@@ -504,46 +577,10 @@ class OllamaInterpretationBackend:
                     "text": source.text,
                 }
             )
-        user_payload = json.dumps(
+        generated = self.generate_json_object(
             {"question": str(question).strip(), "sources": source_payload},
-            ensure_ascii=False,
-            separators=(",", ":"),
-            allow_nan=False,
+            source_count=len(sources),
         )
-        if len(user_payload) > self.max_prompt_chars:
-            raise ValueError("Ollama interpretation prompt exceeds the configured size limit")
-        options: dict[str, Any] = {
-            "temperature": self.temperature,
-            "num_ctx": self.num_ctx,
-            "num_predict": self.num_predict,
-        }
-        if self.seed is not None:
-            options["seed"] = self.seed
-        started = time.perf_counter()
-        envelope = self._request_json(
-            "/api/chat",
-            payload={
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": user_payload},
-                ],
-                "format": "json",
-                "stream": False,
-                "options": options,
-            },
-        )
-        wall_seconds = time.perf_counter() - started
-        message = envelope.get("message")
-        if not isinstance(message, dict) or not isinstance(message.get("content"), str):
-            raise OllamaIntegrationError("Ollama chat response is missing message content")
-        content = _strip_json_fence(message["content"])
-        try:
-            generated = json.loads(content)
-        except json.JSONDecodeError as exc:
-            raise OllamaIntegrationError("Ollama message content is not valid JSON") from exc
-        if not isinstance(generated, dict):
-            raise OllamaIntegrationError("Ollama interpretation must be a JSON object")
         answer = generated.get("answer")
         raw_claims = generated.get("claims")
         if not isinstance(answer, str) or not isinstance(raw_claims, list):
@@ -578,19 +615,6 @@ class OllamaInterpretationBackend:
             result = GeneratedInterpretation(answer=answer, claims=tuple(claims))
         except ValueError as exc:
             raise OllamaIntegrationError("Ollama interpretation failed validation") from exc
-        self.last_generation_telemetry = OllamaGenerationTelemetry.from_envelope(
-            envelope,
-            configured_model=self.model,
-            model_digest=self.model_digest,
-            prompt_version=self.prompt_version,
-            temperature=self.temperature,
-            seed=self.seed,
-            num_ctx=self.num_ctx,
-            num_predict=self.num_predict,
-            source_count=len(sources),
-            prompt_chars=len(self.system_prompt) + len(user_payload),
-            wall_seconds=wall_seconds,
-        )
         return result
 
 

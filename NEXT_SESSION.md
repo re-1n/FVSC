@@ -142,6 +142,12 @@ Baseline и coverage получили macro required-facet recall 1.000; citatio
 на публичных данных локализовать abstention/answer-claim consistency failure и только
 затем preregister новую synthesis operation.
 
+Второе обновление 2026-07-26: public claim-first consistency gate **пройден** на восьми
+synthetic cases. Required recall сохранился 1.000, abstention accuracy вырос с 0.625
+до 1.000, prohibited violations снизились с 2 до 0. Разрешён ровно один диагностический
+повтор приватного Q07 с frozen claim-first operation. Результат сохранить независимо
+от исхода; prompt по приватному ответу не менять.
+
 Не продолжать настройку ranker на этом диалоге.
 
 Следующая зарегистрированная задача — **coverage-aware synthesis**:

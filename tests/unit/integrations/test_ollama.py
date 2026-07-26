@@ -162,6 +162,25 @@ def test_ollama_accepts_a_preregistered_prompt_variant() -> None:
     assert backend.last_generation_telemetry.prompt_version == "synthetic-v1"
 
 
+def test_ollama_structured_call_reuses_safe_transport_and_telemetry() -> None:
+    opener = _Opener(
+        responses=[{"message": {"content": '{"status":"insufficient","claims":[]}'}}]
+    )
+    backend = OllamaInterpretationBackend(
+        system_prompt="Claim-first.",
+        prompt_version="claim-first-v1",
+        opener=opener,
+    )
+    result = backend.generate_json_object(
+        {"question": "Which option?", "sources": []},
+        source_count=0,
+    )
+    assert result == {"status": "insufficient", "claims": []}
+    assert backend.last_generation_telemetry is not None
+    assert backend.last_generation_telemetry.source_count == 0
+    assert backend.last_generation_telemetry.prompt_version == "claim-first-v1"
+
+
 @pytest.mark.parametrize(
     "host",
     (
