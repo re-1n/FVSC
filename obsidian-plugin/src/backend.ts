@@ -58,7 +58,8 @@ export class BackendController {
     const args = [
       "-X", "utf8",
       "-m", "uvicorn",
-      "service.app:app",
+      "fvsc.service.app:app",
+      "--app-dir", "src",
       "--host", "127.0.0.1",
       "--port", String(s.port),
     ];
@@ -141,7 +142,7 @@ export class BackendController {
     while (Date.now() < deadline) {
       if (!this.proc) return false;
       try {
-        const r = await fetch(`${this.baseUrl()}/viz/status`, { method: "GET" });
+        const r = await fetch(`${this.baseUrl()}/health`, { method: "GET" });
         if (r.ok) {
           return true;
         }

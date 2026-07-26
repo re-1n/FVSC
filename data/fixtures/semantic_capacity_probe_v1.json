@@ -1,0 +1,66 @@
+{
+  "schema": "fvsc.semantic-capacity-probe/v1",
+  "description": "Public synthetic annotations for representation-capacity checks; not a parser benchmark.",
+  "cases": [
+    {
+      "case_id": "simple-predicate-ru",
+      "language_tag": "ru",
+      "source_text": "Свобода требует ответственности.",
+      "umr": "################################################################################\n# :: snt1\nWords: Свобода требует ответственности .\n\n# sentence level graph:\n(s1r / require-01\n    :ARG0 (s1f / freedom)\n    :ARG1 (s1x / responsibility))\n\n# alignment:\ns1f: 1-1\ns1r: 2-2\ns1x: 3-3\n\n# document level annotation:\n",
+      "judgments": [
+        {"subject": "freedom", "verb": "require-01", "object": "responsibility"}
+      ],
+      "gold_facts": [
+        {"kind": "sentence_edge", "subject": "require-01", "predicate": "ARG0", "object": "freedom"},
+        {"kind": "sentence_edge", "subject": "require-01", "predicate": "ARG1", "object": "responsibility"}
+      ]
+    },
+    {
+      "case_id": "explicit-negation-de",
+      "language_tag": "de",
+      "source_text": "Das Kind geht nicht nach Hause.",
+      "umr": "################################################################################\n# :: snt1\nWords: Das Kind geht nicht nach Hause .\n\n# sentence level graph:\n(s1g / go-01\n    :ARG0 (s1c / child)\n    :ARG1 (s1h / home)\n    :polarity \"-\")\n\n# alignment:\ns1c: 2-2\ns1g: 3-3\ns1h: 6-6\n\n# document level annotation:\n",
+      "judgments": [
+        {"subject": "child", "verb": "go-01", "object": "home", "negation_scope": true}
+      ],
+      "gold_facts": [
+        {"kind": "sentence_edge", "subject": "go-01", "predicate": "ARG0", "object": "child"},
+        {"kind": "sentence_edge", "subject": "go-01", "predicate": "ARG1", "object": "home"},
+        {"kind": "attribute", "subject": "go-01", "predicate": "polarity", "object": "-"}
+      ]
+    },
+    {
+      "case_id": "modal-conceiver-fr",
+      "language_tag": "fr",
+      "source_text": "Elle peut partir.",
+      "umr": "################################################################################\n# :: snt1\nWords: Elle peut partir .\n\n# sentence level graph:\n(s1l / leave-01\n    :ARG0 (s1s / she))\n\n# alignment:\ns1s: 1-1\ns1l: 3-3\n\n# document level annotation:\n(s1s0 / sentence\n    :modal ((root :modal author)\n            (author :partial-affirmative s1l)))\n",
+      "judgments": [
+        {"subject": "she", "verb": "leave-01", "object": "unspecified", "modality": 0.5, "modality_type": "POSSIBLE"}
+      ],
+      "gold_facts": [
+        {"kind": "sentence_edge", "subject": "leave-01", "predicate": "ARG0", "object": "she"},
+        {"kind": "document_edge", "subject": "root", "predicate": "modal", "object": "author"},
+        {"kind": "document_edge", "subject": "author", "predicate": "partial-affirmative", "object": "leave-01"}
+      ]
+    },
+    {
+      "case_id": "cross-sentence-links-en",
+      "language_tag": "en",
+      "source_text": "Alice entered home. She rested there.",
+      "umr": "################################################################################\n# :: snt1\nWords: Alice entered home .\n\n# sentence level graph:\n(s1e / enter-01\n    :ARG0 (s1a / alice)\n    :ARG1 (s1h / home))\n\n# alignment:\ns1a: 1-1\ns1e: 2-2\ns1h: 3-3\n\n# document level annotation:\n(s1s0 / sentence\n    :coref ((s1a :same-entity s2s)\n            (s1h :same-entity s2t))\n    :temporal ((s1e :before s2r)))\n################################################################################\n# :: snt2\nWords: She rested there .\n\n# sentence level graph:\n(s2r / rest-01\n    :ARG0 (s2s / she)\n    :ARG1 (s2t / home))\n\n# alignment:\ns2s: 1-1\ns2r: 2-2\ns2t: 3-3\n\n# document level annotation:\n",
+      "judgments": [
+        {"subject": "alice", "verb": "enter-01", "object": "home"},
+        {"subject": "she", "verb": "rest-01", "object": "home"}
+      ],
+      "gold_facts": [
+        {"kind": "sentence_edge", "subject": "enter-01", "predicate": "ARG0", "object": "alice"},
+        {"kind": "sentence_edge", "subject": "enter-01", "predicate": "ARG1", "object": "home"},
+        {"kind": "sentence_edge", "subject": "rest-01", "predicate": "ARG0", "object": "she"},
+        {"kind": "sentence_edge", "subject": "rest-01", "predicate": "ARG1", "object": "home"},
+        {"kind": "document_edge", "subject": "alice", "predicate": "same-entity", "object": "she"},
+        {"kind": "document_edge", "subject": "home", "predicate": "same-entity", "object": "home"},
+        {"kind": "document_edge", "subject": "enter-01", "predicate": "before", "object": "rest-01"}
+      ]
+    }
+  ]
+}

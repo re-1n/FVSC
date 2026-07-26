@@ -29,6 +29,17 @@ core/*.pkl
 data/spaces/
 *.pkl.tmp
 
+# Local vault-ingest state (derived from personal notes)
+.fvsc/
+
+# Owner-validated real-data evaluation. Keep runtime journals/reports local; publish
+# only the explicitly owner-authorized, source-body-free Gold seed and its README.
+private_eval/*
+!private_eval/README.md
+!private_eval/fvsc_gold_001_015.json
+!private_eval/fvsc_stage4h_challenge_001_002.json
+data/private/
+
 # Large data files (download separately)
 data/conceptnet-assertions-5.7.0.csv.gz
 # RuWordNet XML (non-commercial license, request from louk_nat@mail.ru)
@@ -67,4 +78,3 @@ __pycache__/
 obsidian-plugin/node_modules/
 obsidian-plugin/main.js
 obsidian-plugin/main.js.map
-obsidian-plugin/package-lock.json

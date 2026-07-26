@@ -1,0 +1,258 @@
+# Project status — 2026-07-26
+
+## Guarded semantic-context addendum — 2026-07-26
+
+- The first private two-party deep census is frozen as
+  `private-participant-gold-v1` after both participants reviewed their meaning layer.
+- A deterministic guarded context compiler now preserves mandatory guards,
+  corrections, parent-group provenance, per-question isolation and bounded typed
+  traversal under a hard token budget.
+- Character TF-IDF, a local Qwen3 0.6B multilingual embedding model, a global score
+  floor and blinded candidate cues did not pass the registered safety/coverage gate.
+  Character cosine remains the ranker baseline; no density or embedding view is
+  promoted.
+- The owner reviewed and accepted a five-child decomposition of oversized group
+  `G001`. The parent remains immutable and non-selectable. The Q04 safety bundle fell
+  from 671 to 479 estimated tokens and now fits the original 500-token budget.
+- Post-fix diagnostic run `18ff4589360fc096` produced 9 accepted / 1 partial answers
+  for atomic FVSC versus 7 accepted / 3 partial for raw + stable locators, with 9% fewer
+  prompt tokens. This is one private dialogue/model/seed and is not general proof.
+- Two-hop typed retrieval delivered both Q07 facets, but generation still omitted one.
+  The remaining failure is downstream synthesis/coverage, not retrieval. The next
+  experiment must begin on public synthetic multi-facet fixtures.
+- The first public synthetic synthesis gate is complete. A minimal silent coverage
+  checklist did not improve saturated required-facet recall (1.000 in both arms),
+  reduced citation correctness (1.000 to 0.933), and did not repair abstention. The
+  contract is rejected and private Q07 remains closed.
+- A subsequent public answer/claim consistency gate passed. Claim-first deterministic
+  rendering preserved positive-control recall, achieved 4/4 missing-link abstentions,
+  and emitted no prohibited relations. One frozen private Q07 diagnostic is now
+  permitted; this narrow result is not a general synthesis claim.
+- The permitted private Q07 transfer was partial: tactility was restored and both
+  relevant units were cited, but the explicit no-immediate-solution contrast remained
+  omitted. Claim-first solves a consistency/abstention class, not general multi-facet
+  coverage. No further Q07 tuning or repetition is allowed.
+- Coverage atlas v1 rejected claim-first as a global default: required-facet recall
+  fell from 0.958 to 0.583 through over-abstention on positive cases. Three hard/easy
+  gaps tied, so no phenomenon was selected post hoc. A versioned public extension is
+  required.
+- Atlas v2 retained a tie between conditional-scope and distributed-rationale hard
+  paraphrases; temporal paraphrases passed. The cross-cutting target is relation
+  normalization against explicit question requirements, not either relation family
+  alone. A new held-out public gate is required.
+- The end-to-end requirement-map gate failed: recall fell to 0.500 with six schema
+  errors. The next controlled ablation freezes the question plan as input and tests
+  one claim slot per requirement; it cannot promote automatic planning.
+- Frozen-plan slot synthesis then achieved full public recall, abstention and citation
+  correctness after a narrowly safe empty-sentinel normalization. This localizes the
+  remaining bottleneck to automatic question planning/linkage. The result is capacity
+  evidence only, not a production promotion.
+- The first source-free QDMR-like `S5` planner completed on the same public question
+  set. Ten of twelve plans were structurally valid, but only six matched the frozen
+  atomic answer plan; reviewed requirement recall was 14/20. The dependency view
+  remains a candidate, while model-controlled `emits_requirement` is rejected. A
+  revised boundary compiler needs a new held-out gate before planner-plus-slot testing.
+- Current local verification: **381 passed / 1 skipped / 11 deselected**. The active
+  integration branch contains the versioned implementation and public evaluation
+  record.
+
+## Semantic-atlas research addendum — 2026-07-21
+
+- The language-agnostic frontier review is recorded in the whitepaper. UMR is the first
+  broad schema baseline, not a promoted universal representation; DRS is a scope/logic
+  control and density remains restricted to explicit ambiguity.
+- Source-bound `LinguisticFrontendResult` / `SemanticGraphView` contracts and a loss-aware
+  UMR subset importer are implemented in commits `e91c9c9` and `28bb522`.
+- The frozen four-case RU/DE/FR/EN capacity sanity probe (`9cfd988`) reports micro-F1
+  `0.7692` for the guaranteed Judgment core and `1.0` for manually supplied UMR facts.
+  Extraction is excluded and `promotion_eligible=false`.
+- The next evaluation object is a vertically deep semantic census of one bounded real
+  text, followed by horizontal phenomenon/minimal-pair coverage. Candidate annotation
+  may be generated by Codex; owner-sensitive meaning requires explicit owner review.
+- The working guide and template are under `docs/evaluation/`. Private source text and
+  census work products remain under ignored `private_eval/`.
+- The first bounded two-party dialogue census is now a private candidate: source
+  boundaries, anchors, meaning/relationship/alternative/negative units, and query
+  checks have passed an independent challenge pass. One participant review is complete;
+  the second participant review is pending. No dialogue Gold has been frozen, published,
+  or used as a promotion result.
+
+## Where we are
+
+- `main` (`ff703b7`) — frozen. The shippable MVP / plugin / Ollama line. **Do not modify
+  or merge without explicit instruction.**
+- `fix/security-and-integrity-hardening` (`1ade64d`) — 217-commit research monolith
+  (ContainerCore v1, Voice R1, comparative benchmark, Draft PR #1). Frozen as a lab
+  journal; archived by tag `experiment/container-core-v1` (pushed to origin).
+- `integration/fvsc-core-v1` — **active.** Clean rebuild from `main`, carrying file
+  states (not history) in logical blocks into the `src/fvsc/` layout.
+  - Rebuild progress: Stage 0 (scaffold) ✅, Stage 1 foundation ✅, Stage 3
+    representations ✅, Stage 4a–4c ingest foundation ✅, Stage 4d vault ingest ✅,
+    Stage 4d.1 real-data ingest correction ✅, Stage 4e real-data semantic
+    evaluation ✅, Stage 4f cited interpretation ✅, Stage 4g thin local
+    transports/Obsidian ✅, and the semantic-representation audit ✅. Audit checkpoint
+    `f5cdefa` passed GitHub Actions run 223. Stage 4h harness checkpoint `2fc1c66`
+    passed GitHub Actions run 225; draft PR #2 tests every pushed branch head.
+  - Working vault chain: `Obsidian Markdown -> SourceDocument -> EvidenceLedger ->
+    MaterializedSnapshot -> atomic JSON cache`. Source replacement/deletion is
+    append-only; source kinds remain explicit; cache stores no raw note body or absolute
+    vault path.
+  - Stage 4d.1 checkpoints: `1bea6d7` `f6f4389` `48f9916` `7a7b175`;
+    **160 passed / 1 skipped / 11 deselected**, boundary check and GitHub CI green.
+  - A 658-record private Telegram diary now produces 645 message-level documents while
+    preserving configured owner adoption, participant comments, forwards, replies,
+    deferred media, and Moscow calendar metadata. The diary itself is not committed.
+  - The first gold query retrieves its primary message first with the lexical baseline
+    and expands to the correct three-message context. The semantic snapshot misses the
+    rare metaphor term, so semantic superiority is **not demonstrated**.
+  - Stage 4e restores portable exact-relation Judgments, source-span citations,
+    user-controlled interpretation views, feedback overlays, temporal contradictions,
+    Gold 001–015, and reusable evaluation indexes. Full local suite:
+    **193 passed / 1 skipped / 11 deselected**; boundary check green.
+  - Across all 15 owner questions, lexical MRR@10/recall@10 is **0.5262/0.6389**;
+    judgment-only is **0.2611/0.3778** and both tested fusions are worse than lexical.
+    Exact structure is retained for explanation and feedback, but lexical remains the
+    default source retriever. Semantic superiority is **not demonstrated**.
+  - Stage 4f/4g adds content-addressed citations, independently reviewable L2/L3
+    claims, forbidden-link evaluation, an atomic proposal/assessment journal, a
+    strict loopback Ollama adapter, `VaultRuntime`, thin FastAPI routes, and a native
+    Obsidian source/search/interpret/review view. Antourage output remains outside
+    EvidenceLedger. Full local suite: **229 passed / 2 skipped / 11 deselected**;
+    boundary check and production TypeScript build green.
+  - Gold 001–015 is now released at
+    [`private_eval/fvsc_gold_001_015.json`](../../private_eval/fvsc_gold_001_015.json)
+    with explicit owner authorization. It contains questions, logical source locators,
+    roles, owner interpretations, rejected readings, and link boundaries—not raw
+    Telegram bodies, actor identities, the source corpus, or the interpretation journal.
+  - The separate source-body-free Stage 4h challenge addendum now freezes the two
+    severe blind-probe boundaries without rewriting Gold 001–015: a participant's
+    hope comment is negative evidence for owner wellbeing, and the text of
+    `Diary:747` licenses neither a real-person nor a fictional-person assertion.
+  - The released Gold 001–015 retrieval rerun is unchanged: lexical remains default,
+    no exact/hybrid arm is promoted, and negative hits remain zero.
+  - A conversational blind-question probe over the private diary produced useful
+    interpretations and substantial owner agreement, but also exposed a false owner
+    attribution and an unsupported real-person assumption for a fictional referent.
+    The probe did not log a frozen candidate set, model/version, output, or ablation
+    through the FVSC runtime. It is qualitative design evidence, **not** a benchmark and
+    not proof that FVSC rather than the strong surrounding model produced the result.
+  - The whitepaper representation audit preserves its exact Judgments, directed
+    containers, relation transforms, tensor factors, graph view, recursive propagation,
+    temporal traces, metaphor mappings, and L0–L3 policy. ADR-007 removes only the
+    unsupported privilege of one universal density space and organizes those existing
+    constructs as a provenance-grounded atlas of relation-conditioned views.
+  - Stage 4h execution infrastructure is implemented in eight independent commits:
+    content-addressed run/threshold contracts; a separate two-case challenge addendum;
+    corpus/candidate freezing for A0/A1/A2/A4; exact Ollama tag/digest, seed, token and
+    duration telemetry; one paired local runner; keyed arm-blinded owner-review packs;
+    paired scoring/diagnosis with safety gates; and the local `stage4h_pilot.py`
+    run/score workflow. Gold interpretations are never prompt input, A4 cannot fall
+    back to lexical, source revisions are rechecked immediately before generation,
+    and raw outputs/excerpts remain under ignored `.fvsc/stage4h/`.
+  - Runtime hardening now binds a 900-second per-request timeout and
+    `num_predict=768`. The first capable-GPU attempt at `0c2b2dd` then exposed one
+    pre-scoring candidate defect: Gold 008/A4 context expansion admitted adjacent
+    media-only `message-697` with an empty body. The fail-closed guard stopped the run
+    before any artifact or blind map was written, so this is not a pilot result.
+    Checkpoint `94e7730` retains the media record in corpus topology but excludes it
+    from the text-only prompt view, preflights every frozen source before generation,
+    and versions the corrected retrieval identifiers. On the exact 645-document local
+    corpus, all 24 frozen case/arm sets now contain zero empty prompt candidates.
+  - The following Windows GPU retry at `ceb1995` completed generation for the full
+    pilot, then exposed a separate POSIX-only artifact-writer defect before any final
+    file was saved: `os.fchmod` was unavailable and the open temporary descriptor made
+    cleanup mask the primary error with `WinError 32`. No review pack, blind map, or
+    score was produced, so the in-memory generation is not a pilot result. Checkpoint
+    `e576224` feature-detects `fchmod`, makes descriptor ownership explicit, preserves
+    primary exceptions, and regression-tests the Windows path.
+  - The preregistered first run is a six-question diagnostic pilot (18 possible
+    generative variants across A1/A2/A4; A0 is automatic). `A3` is deferred because no
+    external-source privacy scope has been authorized. Pilot mode cannot promote a
+    representation; confirmatory mode requires at least 17 cases and every registered
+    quality, citation, safety, confidence, and latency gate.
+  - A later local GPU execution successfully produced the original blinded review
+    pack. Five of 18 generative items have preliminary qualitative owner review; the
+    remaining items are unscored and the blind map remains closed. No per-arm metric or
+    representation promotion is claimed from the incomplete review.
+  - Those five reviews already exposed an arm-independent boundary defect: the v2
+    prompt received text and `source_kind`, but not the safe author/forward/adoption
+    metadata held by ingest; explicit Telegram quotations were flattened into the
+    surrounding message; exact `Diary:747` identity was not anchored; and the review
+    pack lacked enough metadata for attribution auditing. These are foundation errors,
+    not evidence for a new geometry.
+  - Stage 4h.1 begins with the semantic-operation registry and five independent remote
+    checkpoints: `e76e145` registers operation-level tests; `2c9a5c2` adds a typed
+    source-attribution envelope and content-addressed expression spans; `2fd314d` gives
+    the local interpreter attribution/reply/time metadata; `b98cdff` exposes the same
+    context in backward-compatible blinded review packs; and `dd3b79e` anchors explicit
+    logical locators before lexical/structural nomination. Status checkpoint `5846746`
+    is the pushed branch head for that tranche.
+  - On the unchanged private 645-document corpus, explicit Telegram markup yields 61
+    verified `blockquote` spans without storing duplicate source bodies in metadata.
+    `Diary:747` now resolves first in A1, A2 and A4 even when lexical or structural
+    similarity nominates another source. Plain text remains `text_origin=unresolved`;
+    the system does not guess whether it is a lyric, AI output or owner composition.
+  - A content-addressed sparse owner overlay is now implemented locally. It binds every
+    annotation to source id, source revision, offsets and span digest; stores no body;
+    separates origin, authorship/adoption/selection and endorsement; rejects stale or
+    partially overlapping annotations; and leaves source text/revision immutable.
+    Prompt v4 and the Stage 4h manifest bind the overlay id. A no-model validator checks
+    the full corpus before generation.
+  - The private two-span Stage 4h.1 seed validates against all 645 documents: message
+    681 is marked as an external song lyric selected by the owner, while the external
+    AI continuation of message 725 is separated from the preceding owner expression.
+    The body-free overlay remains local and ignored.
+  - Current local verification: **283 passed / 1 skipped / 11 deselected**, legacy
+    boundary green, Obsidian production build green, and frozen Gold/addendum files
+    unchanged. GitHub Actions run 29708329826 for pushed source-boundary head `5846746`
+    is still queued for a hosted runner, not failed. The owner-overlay commits require
+    push and a fresh remote run.
+  - Next: push the owner-overlay tranche, preregister and execute the new Stage 4h.1
+    run, then review its new blind pack. The original v2 review pack remains a historical
+    diagnosis; its blind map stays closed.
+
+## Settled decisions (ADRs)
+
+- ADR-001 EvidenceLedger is canonical.
+- ADR-002 ContainerCore is experimental (no demonstrated superiority; density adds no
+  AUC over structure-only).
+- ADR-003 Density is an optional local state, not canonical.
+- ADR-004 Antourage outputs are not owner evidence.
+- ADR-005 Dream and narrative assets use sandbox branches.
+- ADR-006 Semantic compression is referentially reversible, not text-invertible.
+- ADR-007 Semantic computation uses a provenance-grounded atlas of
+  relation-conditioned views; no derived representation is universally privileged.
+
+## Honest results on record
+
+- Container bakeoff (Stack Exchange Workplace, 80 threads): best container vs direct
+  graph ΔAUC −0.0079, paired CI95 [−0.049, +0.029] → `container_model_competitive`
+  (no statistical superiority).
+- Prior density-only bakeoff: `no_demonstrated_added_value`.
+- Owner Gold 001–015: exact Judgment and hybrid retrieval do not beat the lexical
+  source floor. No semantic arm is promoted.
+- The conversational owner probe suggests that cited synthesis can be useful, but it
+  cannot yet separate the contribution of retrieval/structure from the capability of
+  the surrounding model. Two corrected failure modes—authorship and fictional/real
+  referent status—are required Stage 4h checks.
+
+These are **not** proof that density / containers are useless or that a unified tensor
+representation is impossible. They show that the current materializers and operations
+did not earn universal status or added complexity on their registered tasks. Each
+future view requires a relation-specific validation before promotion.
+
+## Hard constraints
+
+- Do not change / merge `main`; do not merge PR #1; do not delete the security branch.
+- Do not claim density proven better; do not hide negative results.
+- Do not auto-record LLM / Antourage output as owner evidence.
+- Owner assessment of an Antourage claim is journaled separately; it does not mutate
+  the original source or silently become an EvidenceEvent.
+- Distinguish `dream_report` / `owner_reflection` / external fact.
+- Do not claim semantic superiority from source retrieval alone; the owner must validate
+  open interpretations and evidence links on a real-data gold set.
+- Do not describe generated prose as text recovered from a semantic map. Exact wording
+  is resolved from retained source revisions; map unfolding is a cited interpretation.
+- Do not describe one distance, matrix, embedding, graph, or container as the complete
+  representation of personal meaning. Preserve whitepaper constructs as candidate
+  views and promote only measured operations.

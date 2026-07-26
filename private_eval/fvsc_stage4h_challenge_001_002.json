@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case_id": "stage4h-challenge-001",
+      "title": "Изменение самочувствия и граница авторства",
+      "question": "Как изменялось самочувствие автора?",
+      "decision": "accepted",
+      "evidence": [
+        {"ref": "Diary:42", "source_id": "telegram/private-diary/messages/message-42.json", "role": "context"},
+        {"ref": "Diary:94", "source_id": "telegram/private-diary/messages/message-94.json", "role": "support"},
+        {"ref": "Diary:115", "source_id": "telegram/private-diary/messages/message-115.json", "role": "support"},
+        {"ref": "Diary:145", "source_id": "telegram/private-diary/messages/message-145.json", "role": "support"},
+        {"ref": "Diary:379", "source_id": "telegram/private-diary/messages/message-379.json", "role": "support"},
+        {"ref": "Diary:381", "source_id": "telegram/private-diary/messages/message-381.json", "role": "support"},
+        {"ref": "Diary:454", "source_id": "telegram/private-diary/messages/message-454.json", "role": "primary"},
+        {"ref": "Diary:560", "source_id": "telegram/private-diary/messages/message-560.json", "role": "support"},
+        {"ref": "Diary:662", "source_id": "telegram/private-diary/messages/message-662.json", "role": "support"},
+        {"ref": "Diary:740", "source_id": "telegram/private-diary/messages/message-740.json", "role": "support"},
+        {"ref": "Diary:770", "source_id": "telegram/private-diary/messages/message-770.json", "role": "negative"}
+      ],
+      "links": [],
+      "owner_interpretation": "Линия не сводится к равномерному ухудшению или улучшению. В 2024 году одиночество, нехватка уединения и дереализация сосуществуют с интенсивным переживанием мира. В 2025 году мучительность, надежда и быстрая смена смысла и мотивации остаются рядом. В январе 2026 года автор прямо описывает многолетнюю цикличность от единения и большого ресурса к истощению, ангедонии, дереализации и апатии, затем длительный спад. Весной сохраняются нигилизм и тяжёлые диссоциативные переживания; оснований объявлять устойчивое улучшение нет. Комментарий о маяке и надежде написал другой участник, поэтому он не является свидетельством самочувствия автора.",
+      "rejected_interpretations": [
+        "Комментарий «если есть маяк, значит ещё есть надежда» написал автор дневника.",
+        "По позднему комментарию другого участника можно заключить, что автору устойчиво стало лучше.",
+        "Самоописания в дневнике сами по себе устанавливают клинический диагноз."
+      ]
+    },
+    {
+      "case_id": "stage4h-challenge-002",
+      "title": "Статус поэтического референта",
+      "question": "Можно ли по Diary:747 установить, был ли описанный человек реальным?",
+      "decision": "open",
+      "evidence": [
+        {"ref": "Diary:747", "source_id": "telegram/private-diary/messages/message-747.json", "role": "primary"}
+      ],
+      "links": [],
+      "owner_interpretation": "Сам текст задаёт поэтический образ, но не устанавливает онтологический статус референта. Корректный ответ по доступному источнику — не утверждать ни реальность, ни вымышленность человека.",
+      "rejected_interpretations": [
+        "Описанный человек обязательно существовал в реальности.",
+        "Из одного поэтического фрагмента следует, что человек обязательно вымышлен."
+      ]
+    }
+  ]
+}

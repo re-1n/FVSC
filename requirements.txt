@@ -2,9 +2,10 @@ numpy>=1.19
 matplotlib>=3.0
 networkx>=2.5
 wtpsplit>=2.0
+pymorphy3>=2.0,<3.0
 fastapi>=0.100.0
 uvicorn[standard]>=0.23.0
 # Note: spaCy intentionally removed — core pipeline runs on numpy alone.
 # spaCy legacy path preserved in core/ for tree_extractor/density_core/context_classifier;
-# active refactor target is pymorphy3-based adapter (whitepaper § XIX.2).
-
+# the active exact-relation adapter uses lightweight pymorphy3 morphology and
+# keeps its heuristic output defeasible (whitepaper § XIX.2).

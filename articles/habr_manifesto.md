@@ -311,4 +311,4 @@ $$w(t) = w_0 \cdot n \cdot \left(1 + \frac{\Delta t}{\tau}\right)^{-d}$$
 
 *Код открыт. numpy и spaCy. Собственные значения честнее нейронных сетей — они не галлюцинируют.*
 
-*FVSC разрабатывается [Rein](https://github.com/re-1n) при поддержке Claude. GitHub: [qualia-computing](https://github.com/re-1n/qualia-computing). MIT.*
+*FVSC разрабатывается [Rein](https://github.com/re-1n). GitHub: [qualia-computing](https://github.com/re-1n/qualia-computing). MIT.*
