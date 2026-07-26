@@ -152,6 +152,16 @@ end-to-end boundary-plus-planned-slot gate; it does not license private Q07 or c
   referent-aware relation support inside fixed slots, not another boundary prompt and
   not private Q07.
 
+  Update: the preregistered eight-case paired referent-aware gate failed. Both v1 and
+  candidate reached 1.000 positive required-facet recall, so the candidate repaired no
+  baseline miss. It reduced abstention accuracy from 0.875 to 0.750, increased mean
+  unsupported-facet rate from 0.125 to 0.250, and introduced two prohibited relation
+  assertions by treating a passed test as acceptance and lower cost as rejection.
+  Reject the instruction and retain v1. The next public candidate must separate
+  relation validation from entity nomination with explicit negative controls; do not
+  tune another referent prompt on the frozen cases. Protocol:
+  [`REFERENT_AWARE_SLOT_GATE.md`](../evaluation/REFERENT_AWARE_SLOT_GATE.md).
+
 Protocol and result context:
 
 - [`CONTEXT_RANKER_CUES_PROBE.md`](../evaluation/CONTEXT_RANKER_CUES_PROBE.md)

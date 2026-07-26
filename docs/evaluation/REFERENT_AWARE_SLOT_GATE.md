@@ -1,6 +1,6 @@
 # Referent-aware support inside fixed answer slots
 
-Status: public paired gate preregistered; generation not yet run.
+Status: public paired gate completed; candidate failed and was not promoted.
 
 ## Frozen diagnosis
 
@@ -49,3 +49,33 @@ without a safety regression.
 
 Run and review artifacts remain ignored under `.fvsc/`. Do not run private Q07 from
 either outcome.
+
+## Frozen result
+
+The run used `qwen2.5:14b-instruct-q4_K_M`, digest
+`7cdf5a0187d5c58cc5d369b255592f7841d1c4696d45a8c8a9489440385b22f6`,
+temperature zero and seed 42.
+
+| Metric | v1 | Referent-aware |
+|---|---:|---:|
+| Macro required-facet recall | 1.000 | 1.000 |
+| Citation correctness | 1.000 | 1.000 |
+| Unsupported-facet rate | 0.125 | 0.250 |
+| Abstention accuracy | 0.875 | 0.750 |
+| Prohibited violations | 0 | 2 |
+| Prompt tokens | 2,084 | 2,844 |
+| Output tokens | 602 | 653 |
+
+Both arms completed all six positive cases. V1 wrongly treated a tasting scheduled
+before a catering decision as something that “remains conditional.” The candidate
+made the same error and additionally converted a colour-fastness test into acceptance
+and lower cost into rejection in the adversarial mural case.
+
+## Decision
+
+Reject the candidate. It repaired no v1 miss, reduced abstention accuracy, doubled the
+mean unsupported-facet rate and introduced two prohibited relation assertions. The
+failure confirms that broader entity-role resolution in the prompt weakens the
+relation boundary. The next candidate must validate the requested relation separately
+from entity nomination, with negative controls for tests, prices, plans, chronology
+and pending decisions. Do not tune another referent prompt on these cases.
