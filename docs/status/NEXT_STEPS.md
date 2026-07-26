@@ -187,6 +187,14 @@ end-to-end boundary-plus-planned-slot gate; it does not license private Q07 or c
     separately frozen audits. Protocol:
     [`RELATION_GUARD_POLARITY_AUDIT.md`](../evaluation/RELATION_GUARD_POLARITY_AUDIT.md).
 
+    F1/S6 checkpoint: the surface guard admitted all six relation cues embedded inside
+    verified external quotation spans (`6/12`). The preregistered overlap filter passed
+    `12/12`, preserves direct and `owner_commentary` cues, verifies every span digest,
+    and consumes the existing `SourceAttribution` envelope. External expression cues
+    are now ineligible only for direct claims; a future reported-claim operation may
+    represent them without flattening attribution. Protocol:
+    [`RELATION_GUARD_ATTRIBUTION_AUDIT.md`](../evaluation/RELATION_GUARD_ATTRIBUTION_AUDIT.md).
+
 Protocol and result context:
 
 - [`CONTEXT_RANKER_CUES_PROBE.md`](../evaluation/CONTEXT_RANKER_CUES_PROBE.md)

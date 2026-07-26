@@ -1,6 +1,6 @@
 # F1/S6 expression-boundary audit
 
-Status: fixtures and intervention preregistered; surface baseline not yet run.
+Status: completed; preregistered F1 composition passed.
 
 ## Risk
 
@@ -37,3 +37,24 @@ Extend cue evaluation with existing F1 spans:
 This only controls direct claim eligibility. It does not discard the source or deny
 that a quoted assertion exists. A future typed reported-claim operation may expose
 that distinction separately.
+
+## Results
+
+The surface baseline passed `6/12`: all six ordinary cues were eligible, but the same
+six cues inside verified external quotation spans were also incorrectly eligible for
+direct claims.
+
+The preregistered F1 overlap filter passed `12/12`. It preserved all ordinary cues and
+blocked all expression-bound cues. Unit coverage additionally verifies that:
+
+- every span digest is checked against the exact source text;
+- explicit `owner_commentary` remains directly eligible;
+- the registered `S6` operation consumes the existing `SourceAttribution` envelope
+  carried by prompt sources rather than a parallel authorship model.
+
+## Decision
+
+Promote verified expression-boundary exclusion as the `F1 → S6` composition for direct
+claims. Quoted/external cues remain available to a future typed reported-claim
+operation; they are not silently discarded or rewritten as owner statements. Plain
+unannotated text remains unresolved, and punctuation is not used to invent spans.

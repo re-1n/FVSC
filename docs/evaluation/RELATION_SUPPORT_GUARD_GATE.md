@@ -99,3 +99,8 @@ Polarity checkpoint: a separately preregistered eighteen-case audit exposed six
 negated/modal false eligibilities in the surface baseline. The frozen local-prefix
 filter corrected all six without losing an affirmative case (`12/18` to `18/18`).
 See [`RELATION_GUARD_POLARITY_AUDIT.md`](RELATION_GUARD_POLARITY_AUDIT.md).
+
+Attribution checkpoint: a frozen F1/S6 audit moved from `6/12` to `12/12` after
+excluding direct relation cues that overlap verified external expression spans.
+Ordinary text and explicit `owner_commentary` remain eligible. See
+[`RELATION_GUARD_ATTRIBUTION_AUDIT.md`](RELATION_GUARD_ATTRIBUTION_AUDIT.md).

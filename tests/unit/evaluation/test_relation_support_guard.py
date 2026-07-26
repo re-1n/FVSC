@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from fvsc.evaluation.planned_slot_synthesis import (
@@ -15,6 +17,7 @@ from fvsc.evaluation.relation_support_guard import (
     source_affirms_relation,
 )
 from fvsc.evaluation.synthesis import SyntheticSource
+from fvsc.ingest import ExpressionSpan, source_attribution
 
 
 def test_relation_guard_accepts_explicit_cues_and_rejects_proxy_evidence() -> None:
@@ -87,3 +90,49 @@ def test_relation_cues_obey_local_polarity_and_modality(
     expected: bool,
 ) -> None:
     assert source_affirms_relation(text, relation) is expected
+
+
+def test_owner_commentary_span_preserves_direct_relation_cue() -> None:
+    text = "The owner commentary says the panel accepted the arch."
+    start = text.index("the panel accepted")
+    span = ExpressionSpan.from_text(
+        text,
+        start=start,
+        end=len(text),
+        kind="owner_commentary",
+        origin_status="owner",
+        owner_relation="authored",
+    )
+    assert source_affirms_relation(
+        text,
+        "accepted",
+        expression_spans=(span,),
+    )
+
+
+def test_registered_operation_consumes_existing_f1_attribution_envelope() -> None:
+    text = 'The message quotes: "The panel accepted the arch."'
+    quoted = "The panel accepted the arch."
+    start = text.index(quoted)
+    span = ExpressionSpan.from_text(
+        text,
+        start=start,
+        end=start + len(quoted),
+        kind="quotation",
+        origin_status="external",
+    )
+    source = SimpleNamespace(
+        label="S1",
+        text=text,
+        attribution=source_attribution(
+            transport_author_role="owner",
+            owner_adopted_expression=False,
+            expression_spans=(span,),
+        ),
+    )
+    plan = FrozenQuestionPlan(
+        "case",
+        (PlannedRequirement("R1", "what was accepted"),),
+    )
+    candidate = PUBLIC_RELATION_SUPPORT_GUARD.compile(plan, (source,))[0]
+    assert candidate.eligible_source_labels == ()

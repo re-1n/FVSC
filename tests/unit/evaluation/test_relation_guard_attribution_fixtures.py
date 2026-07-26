@@ -5,6 +5,7 @@ from collections import Counter
 from fvsc.evaluation.relation_guard_attribution_fixtures import (
     PUBLIC_RELATION_GUARD_ATTRIBUTION_FIXTURES,
 )
+from fvsc.evaluation.relation_support_guard import source_affirms_relation
 
 
 def test_attribution_audit_pairs_direct_and_external_expression_cases() -> None:
@@ -24,3 +25,12 @@ def test_attribution_audit_pairs_direct_and_external_expression_cases() -> None:
         for span in fixture.expression_spans:
             span.verify(fixture.text)
             assert span.origin_status == "external"
+
+
+def test_external_expression_spans_block_only_direct_relation_eligibility() -> None:
+    for fixture in PUBLIC_RELATION_GUARD_ATTRIBUTION_FIXTURES:
+        assert source_affirms_relation(
+            fixture.text,
+            fixture.relation,
+            expression_spans=fixture.expression_spans,
+        ) is fixture.should_be_directly_eligible

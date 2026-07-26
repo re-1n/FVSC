@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import re
 from typing import Literal, Mapping, Sequence
 
+from ..ingest.source_provenance import ExpressionSpan
 from .planned_slot_synthesis import FrozenQuestionPlan
 from .synthesis import SyntheticSource
 
@@ -114,9 +115,16 @@ def relation_for_requirement(description: str) -> GuardedRelation:
     return matches[0]
 
 
-def source_affirms_relation(text: str, relation: GuardedRelation) -> bool:
+def source_affirms_relation(
+    text: str,
+    relation: GuardedRelation,
+    *,
+    expression_spans: Sequence[ExpressionSpan] = (),
+) -> bool:
     """Return true when a cue survives the frozen local polarity/modal filter."""
 
+    for span in expression_spans:
+        span.verify(text)
     for pattern in _SOURCE_CUES[relation]:
         for match in pattern.finditer(text):
             clause_start = max(
@@ -134,8 +142,25 @@ def source_affirms_relation(text: str, relation: GuardedRelation) -> bool:
                 continue
             if _LOCAL_MODALS & set(prefix_tokens[-4:]):
                 continue
+            if any(
+                span.kind != "owner_commentary"
+                and match.start() < span.end
+                and match.end() > span.start
+                for span in expression_spans
+            ):
+                continue
             return True
     return False
+
+
+def _source_expression_spans(source: object) -> tuple[ExpressionSpan, ...]:
+    attribution = getattr(source, "attribution", None)
+    spans = (
+        getattr(attribution, "expression_spans", ())
+        if attribution is not None
+        else getattr(source, "expression_spans", ())
+    )
+    return tuple(spans)
 
 
 def compile_relation_support_candidates(
@@ -148,7 +173,11 @@ def compile_relation_support_candidates(
         labels = tuple(
             source.label
             for source in sources
-            if source_affirms_relation(source.text, relation)
+            if source_affirms_relation(
+                source.text,
+                relation,
+                expression_spans=_source_expression_spans(source),
+            )
         )
         result.append(
             RelationSupportCandidate(requirement.requirement_id, relation, labels)

@@ -23,7 +23,11 @@ def main(argv=None) -> int:
     args = _parser().parse_args(argv)
     rows = []
     for fixture in PUBLIC_RELATION_GUARD_ATTRIBUTION_FIXTURES:
-        eligible = source_affirms_relation(fixture.text, fixture.relation)
+        eligible = source_affirms_relation(
+            fixture.text,
+            fixture.relation,
+            expression_spans=fixture.expression_spans,
+        )
         rows.append(
             {
                 "case_id": fixture.case_id,
