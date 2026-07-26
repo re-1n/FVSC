@@ -12,6 +12,7 @@ from fvsc.evaluation.relation_support_guard import (
     RelationSupportGuardOperation,
     compile_relation_support_candidates,
     relation_for_requirement,
+    source_affirms_relation,
 )
 from fvsc.evaluation.synthesis import SyntheticSource
 
@@ -64,3 +65,25 @@ def test_guard_is_explicitly_registered_as_s6() -> None:
     assert RELATION_SUPPORT_GUARD_OPERATION_ID == "S6"
     with pytest.raises(ValueError, match="remain S6"):
         RelationSupportGuardOperation(operation_id="S7")
+
+
+@pytest.mark.parametrize(
+    ("text", "relation", "expected"),
+    (
+        ("The room is confirmed.", "confirmed", True),
+        ("The room is not confirmed.", "confirmed", False),
+        ("The room may be confirmed.", "confirmed", False),
+        ("It opens only if approved.", "conditional", True),
+        ("It may become subject to approval.", "conditional", False),
+        ("The receipt was retained.", "retained", True),
+        ("The receipt was not retained.", "retained", False),
+        ("A kiosk replaced the desk.", "replaced", True),
+        ("A kiosk has not replaced the desk.", "replaced", False),
+    ),
+)
+def test_relation_cues_obey_local_polarity_and_modality(
+    text: str,
+    relation,
+    expected: bool,
+) -> None:
+    assert source_affirms_relation(text, relation) is expected

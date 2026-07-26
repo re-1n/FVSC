@@ -1,6 +1,6 @@
 # S6 polarity and modality audit
 
-Status: fixtures and intervention preregistered; baseline not yet run.
+Status: completed; preregistered scope intervention passed.
 
 ## Risk
 
@@ -32,3 +32,24 @@ Clause boundaries are `.`, `;`, `:`, `!`, `?` and line breaks. The intervention 
 not add relation cues, infer entities, or handle reported speech. Any failed
 affirmative case or accepted negative/modal case rejects it. The baseline result is
 recorded before implementation.
+
+## Results
+
+The unchanged baseline passed `12/18`. It incorrectly admitted six locally
+negated/modal cues: `not confirmed`, `may be confirmed`, `may become subject to`,
+`not retained`, `would be retained`, and `has not replaced`.
+
+Four other negative/modal controls happened to pass because their inflected verbs did
+not match the registered surface cue. They remain in the audit and are not treated as
+evidence of scope awareness.
+
+The preregistered local-prefix filter then passed `18/18`: all six affirmative cases
+remained eligible and all twelve negated/modal cases became ineligible. The prior
+twelve-case S6 relation gate also remains green.
+
+## Decision
+
+Promote the local polarity/modal filter as part of `S6`. Its scope is deliberately
+bounded: it does not resolve reported speech, cross-clause negation, double negation,
+conditionals about the relation itself, or non-English morphology. Those phenomena
+require new frozen audits rather than cue changes on this set.

@@ -59,6 +59,9 @@ _SOURCE_CUES: Mapping[GuardedRelation, tuple[re.Pattern[str], ...]] = {
         re.compile(r"\bsubstituted for\b", re.IGNORECASE),
     ),
 }
+_CLAUSE_BOUNDARY = re.compile(r"[.;:!?\n]")
+_LOCAL_NEGATIONS = frozenset({"no", "not", "never"})
+_LOCAL_MODALS = frozenset({"could", "may", "might", "possibly", "would"})
 
 
 @dataclass(frozen=True)
@@ -111,6 +114,30 @@ def relation_for_requirement(description: str) -> GuardedRelation:
     return matches[0]
 
 
+def source_affirms_relation(text: str, relation: GuardedRelation) -> bool:
+    """Return true when a cue survives the frozen local polarity/modal filter."""
+
+    for pattern in _SOURCE_CUES[relation]:
+        for match in pattern.finditer(text):
+            clause_start = max(
+                (
+                    boundary.end()
+                    for boundary in _CLAUSE_BOUNDARY.finditer(text, 0, match.start())
+                ),
+                default=0,
+            )
+            prefix_tokens = re.findall(
+                r"[A-Za-z']+",
+                text[clause_start : match.start()].lower(),
+            )
+            if _LOCAL_NEGATIONS & set(prefix_tokens):
+                continue
+            if _LOCAL_MODALS & set(prefix_tokens[-4:]):
+                continue
+            return True
+    return False
+
+
 def compile_relation_support_candidates(
     plan: FrozenQuestionPlan,
     sources: Sequence[SyntheticSource],
@@ -121,7 +148,7 @@ def compile_relation_support_candidates(
         labels = tuple(
             source.label
             for source in sources
-            if any(pattern.search(source.text) for pattern in _SOURCE_CUES[relation])
+            if source_affirms_relation(source.text, relation)
         )
         result.append(
             RelationSupportCandidate(requirement.requirement_id, relation, labels)
@@ -137,4 +164,5 @@ __all__ = [
     "RelationSupportGuardOperation",
     "compile_relation_support_candidates",
     "relation_for_requirement",
+    "source_affirms_relation",
 ]

@@ -177,7 +177,15 @@ end-to-end boundary-plus-planned-slot gate; it does not license private Q07 or c
   its registration is locked to the six gated cue types, unknown or ambiguous
   relations fail before eligibility compilation, and `S6` remains an opt-in
   composition after `S4` rather than a global synthesis default. Any new relation or
-  paraphrastic cue now requires a separate held-out gate.
+    paraphrastic cue now requires a separate held-out gate.
+
+    S6 polarity checkpoint: a preregistered eighteen-case audit showed that the
+    initial surface guard admitted six locally negated/modal cues (`12/18`). A bounded
+    clause-local filter for negation and pre-cue modality passed `18/18` while
+    preserving the original relation-gate positives. Reported speech, cross-clause
+    scope, double negation and non-English morphology remain unsupported until
+    separately frozen audits. Protocol:
+    [`RELATION_GUARD_POLARITY_AUDIT.md`](../evaluation/RELATION_GUARD_POLARITY_AUDIT.md).
 
 Protocol and result context:
 
