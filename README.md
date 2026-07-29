@@ -103,7 +103,3 @@ the backend is ready. Edits to `.md` files are debounced and POSTed to
 - **Silent pool**: tokens uttered too rarely to enter density-matrix are still recorded — the system knows what you "barely said"
 - **Living map**: vault edits push incrementally; full rebuild restores precision
 - **Stenographic principle**: записывать что сказано, не додумывать
-
-## Author
-
-Created by **Rein** with the support of **Claude** (Anthropic).
