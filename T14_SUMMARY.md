@@ -1,7 +1,13 @@
 # T14: Temporal Evolution — Executive Summary
 
-**Research Status:** Complete  
-**Implementation Status:** Code sketches ready, blocked on T11/T13  
+> **Исторический исследовательский черновик от 2026-05-16. Статус пересмотрен 2026-09-06.** Временное моделирование остаётся направлением развития; приведённые эскизы не являются завершённой интеграцией или проверенной моделью личности.
+>
+> След ненормированного M измеряет массу агрегата, а след нормированной ρ равен 1. Ни след, ни энтропия, ни возраст компонентов сами по себе не измеряют qualia, tacit knowledge или embodiment. Эти интерпретации ниже — неподтверждённые исторические гипотезы. Метаданные времени можно извлекать независимо от морфологического T11; нужны раздельные времена источника, события и импорта, а также фиксированная версия encoder.
+>
+> Действующие требования: [whitepaper](FVSC%20whitepaper.md), [математические контракты](docs/MATHEMATICAL_CONTRACTS.md), [ограничения A4/A8](docs/KNOWN_LIMITATIONS.md), [ROADMAP](docs/ROADMAP.md). Прежние статусы «implementation ready», оценки сроков и зависимости T11/T13 ниже не являются текущим планом.
+
+**Historical research status (2026-05-16):** Complete
+**Historical implementation status (2026-05-16):** Code sketches ready, blocked on T11/T13
 **Date:** 2026-05-16
 
 ---
@@ -107,7 +113,7 @@ Eigenvalues λᵢ(t) track how meaning facets evolve:
 - `identify_semantic_crises()` — find moments of high drift
 - `identify_consolidation_periods()` — find stable periods
 
-**Status:** Ready to integrate into density_core.py
+**Historical status (2026-05-16):** Ready to integrate into density_core.py
 
 ### 3. Visualization: `T14_temporal_visualization.py`
 
@@ -120,7 +126,7 @@ Eigenvalues λᵢ(t) track how meaning facets evolve:
 - `plot_phase_space_trajectory()` — PCA projection of ρ(t)
 - `plot_temporal_summary()` — 2×2 summary plot
 
-**Status:** Ready to use (requires matplotlib)
+**Historical status (2026-05-16):** Ready to use (requires matplotlib)
 
 ### 4. Blockers & Issues: `T14_BLOCKERS_AND_ISSUES.md`
 
@@ -159,7 +165,7 @@ Eigenvalues λᵢ(t) track how meaning facets evolve:
 - "forgetting" — intensity decays over time
 - "oscillation" — intensity oscillates (ambivalence)
 
-**Status:** Ready to use for unit tests
+**Historical status (2026-05-16):** Ready to use for unit tests
 
 ---
 
@@ -338,4 +344,4 @@ plot_trace_evolution(concept).show()
 
 **Research completed by:** Kiro (AI development environment)  
 **Date:** 2026-05-16  
-**Status:** Ready for review and integration
+**Historical status (2026-05-16):** Ready for review and integration
