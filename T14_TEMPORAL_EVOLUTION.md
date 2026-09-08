@@ -1,6 +1,12 @@
 # T14: Temporal Evolution of Density Matrices — Research Summary
 
-**Status:** Research phase (blocks T11, T13)  
+> **Исторический исследовательский черновик от 2026-05-16. Статус пересмотрен 2026-09-06.** Временное моделирование остаётся направлением развития; приведённые эскизы не являются завершённой интеграцией или проверенной моделью личности.
+>
+> След ненормированного M измеряет массу агрегата, а след нормированной ρ равен 1. Ни след, ни энтропия, ни возраст компонентов сами по себе не измеряют qualia, tacit knowledge или embodiment. Эти интерпретации ниже — неподтверждённые исторические гипотезы. Метаданные времени можно извлекать независимо от морфологического T11; нужны раздельные времена источника, события и импорта, а также фиксированная версия encoder.
+>
+> Действующие требования: [whitepaper](FVSC%20whitepaper.md), [математические контракты](docs/MATHEMATICAL_CONTRACTS.md), [ограничения A4/A8](docs/KNOWN_LIMITATIONS.md), [ROADMAP](docs/ROADMAP.md). Прежние статусы «implementation ready», оценки сроков и зависимости T11/T13 ниже не являются текущим планом.
+
+**Historical status (2026-05-16):** Research phase (blocks T11, T13)
 **Date:** 2026-05-16  
 **Context:** FVSC breakthrough — personality as dynamic system, not static map
 
@@ -708,4 +714,3 @@ def plot_semantic_drift_heatmap(space: SemanticSpace, title: str = None):
 ### Linguistics
 - Fillmore, C. J. (1968). "The Case for Case." In E. Bach & R. T. Harms (Eds.), Universals in Linguistic Theory. Holt, Rinehart and Winston.
 - Apresjan, J. D. (1995). "Integral Description of Language and Systemic Lexicography." Oxford University Press.
-

@@ -1,6 +1,12 @@
 # T14: Temporal Evolution — Blockers, Issues, and Design Decisions
 
-**Status:** Research complete, implementation ready, blocked on T11/T13  
+> **Исторический исследовательский черновик от 2026-05-16. Статус пересмотрен 2026-09-06.** Временное моделирование остаётся направлением развития; приведённые эскизы не являются завершённой интеграцией или проверенной моделью личности.
+>
+> След ненормированного M измеряет массу агрегата, а след нормированной ρ равен 1. Ни след, ни энтропия, ни возраст компонентов сами по себе не измеряют qualia, tacit knowledge или embodiment. Эти интерпретации ниже — неподтверждённые исторические гипотезы. Метаданные времени можно извлекать независимо от морфологического T11; нужны раздельные времена источника, события и импорта, а также фиксированная версия encoder.
+>
+> Действующие требования: [whitepaper](FVSC%20whitepaper.md), [математические контракты](docs/MATHEMATICAL_CONTRACTS.md), [ограничения A4/A8](docs/KNOWN_LIMITATIONS.md), [ROADMAP](docs/ROADMAP.md). Прежние статусы «implementation ready», оценки сроков и зависимости T11/T13 ниже не являются текущим планом.
+
+**Historical status (2026-05-16):** Research complete, implementation ready, blocked on T11/T13
 **Date:** 2026-05-16
 
 ---
@@ -15,7 +21,7 @@
 - T11 (pymorphy2 + case grammar) handles the data pipeline and metadata extraction
 - Without T11, we have no reliable temporal data
 
-**Status:** Open (high priority)  
+**Historical status (2026-05-16):** Open (high priority)
 **Workaround:** Use synthetic discourse data with simulated timestamps for testing
 
 **Action:** Coordinate with T11 implementation to ensure:
@@ -34,7 +40,7 @@
   - Temporal ρ(t): can track how confidence and importance evolve separately
 - T13 enables frame-level ρ(t) tracking
 
-**Status:** Open (medium priority)  
+**Historical status (2026-05-16):** Open (medium priority)
 **Workaround:** Implement T14 for flat judgments first, extend to frames later
 
 **Action:** Design frame-level temporal tracking:
@@ -56,7 +62,7 @@
 - Pass to tree_extractor.py
 - Set `judgment.timestamp = message_date` (not processing time)
 
-**Status:** Open  
+**Historical status (2026-05-16):** Open
 **Workaround:** Manually assign timestamps in test data
 
 ---
