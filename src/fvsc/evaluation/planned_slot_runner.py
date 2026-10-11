@@ -18,6 +18,7 @@ from .planned_slot_synthesis import (
     render_planned_slot_answer,
 )
 from .synthesis import SynthesisFixture
+from .relation_support_guard import PUBLIC_RELATION_SUPPORT_GUARD
 
 
 class PlannedSlotBackend(Protocol):
@@ -115,6 +116,15 @@ def run_planned_slots(
     results: list[PlannedSlotGeneration] = []
     for fixture in fixtures:
         plan = plans[fixture.case_id]
+        owner_requirements = tuple(
+            item for item in plan.requirements if item.attribution_scope == "direct_owner"
+        )
+        owner_labels = {
+            item.requirement_id: item.eligible_source_labels
+            for item in PUBLIC_RELATION_SUPPORT_GUARD.compile(
+                FrozenQuestionPlan(plan.case_id, owner_requirements), fixture.sources,
+            )
+        } if owner_requirements else {}
         backend = backend_factory(instruction, prompt_version)
         raw = backend.generate_json_object(
             {
@@ -123,6 +133,8 @@ def run_planned_slots(
                     {
                         "requirement_id": item.requirement_id,
                         "description": item.description,
+                        **({"attribution_scope": "direct_owner"}
+                           if item.attribution_scope == "direct_owner" else {}),
                     }
                     for item in plan.requirements
                 ],
@@ -153,6 +165,13 @@ def run_planned_slots(
                     else _claims([claim_value])[0]
                 )
                 requirement_id = str(item.get("requirement_id", ""))
+                if (
+                    claim is not None and requirement_id in owner_labels
+                    and not set(claim.source_labels) <= set(owner_labels[requirement_id])
+                ):
+                    claim = None
+                    item = dict(item)
+                    item["status"] = "unsupported"
                 if (
                     claim is not None
                     and eligible_labels_by_case is not None

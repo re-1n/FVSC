@@ -7,6 +7,7 @@ import re
 from typing import Literal, Mapping, Sequence
 
 from ..ingest.source_provenance import ExpressionSpan
+from ..ingest.owner_attribution import OwnerEligibility, direct_owner_eligibility
 from .planned_slot_synthesis import FrozenQuestionPlan
 from .synthesis import SyntheticSource
 
@@ -66,10 +67,19 @@ _LOCAL_MODALS = frozenset({"could", "may", "might", "possibly", "would"})
 
 
 @dataclass(frozen=True)
+class SourceRelationDecision:
+    source_label: str
+    eligible: bool
+    reason: str
+    attribution: OwnerEligibility
+
+
+@dataclass(frozen=True)
 class RelationSupportCandidate:
     requirement_id: str
     relation: GuardedRelation
     eligible_source_labels: tuple[str, ...]
+    source_decisions: tuple[SourceRelationDecision, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -120,6 +130,7 @@ def source_affirms_relation(
     relation: GuardedRelation,
     *,
     expression_spans: Sequence[ExpressionSpan] = (),
+    eligible_regions: Sequence[tuple[int, int]] | None = None,
 ) -> bool:
     """Return true when a cue survives the frozen local polarity/modal filter."""
 
@@ -127,6 +138,11 @@ def source_affirms_relation(
         span.verify(text)
     for pattern in _SOURCE_CUES[relation]:
         for match in pattern.finditer(text):
+            if eligible_regions is not None and not any(
+                start <= match.start() and match.end() <= end
+                for start, end in eligible_regions
+            ):
+                continue
             clause_start = max(
                 (
                     boundary.end()
@@ -167,9 +183,37 @@ def compile_relation_support_candidates(
     plan: FrozenQuestionPlan,
     sources: Sequence[SyntheticSource],
 ) -> tuple[RelationSupportCandidate, ...]:
+    if any(item.attribution_scope == "direct_owner" for item in plan.requirements):
+        labels = tuple(source.label for source in sources)
+        if len(labels) != len(set(labels)):
+            raise ValueError("owner attribution requires unique source labels")
     result = []
     for requirement in plan.requirements:
         relation = relation_for_requirement(requirement.description)
+        if requirement.attribution_scope == "direct_owner":
+            decisions = []
+            for source in sources:
+                attribution = direct_owner_eligibility(
+                    source.text, getattr(source, "attribution", None),
+                )
+                eligible = attribution.eligible and source_affirms_relation(
+                    source.text, relation,
+                    expression_spans=_source_expression_spans(source),
+                    eligible_regions=attribution.regions,
+                )
+                reason = (
+                    "owner_relation_supported" if eligible
+                    else "no_affirmed_relation_in_owner_regions" if attribution.eligible
+                    else attribution.reason
+                )
+                decisions.append(SourceRelationDecision(
+                    source.label, eligible, reason, attribution,
+                ))
+            result.append(RelationSupportCandidate(
+                requirement.requirement_id, relation,
+                tuple(d.source_label for d in decisions if d.eligible), tuple(decisions),
+            ))
+            continue
         labels = tuple(
             source.label
             for source in sources
@@ -190,6 +234,7 @@ __all__ = [
     "PUBLIC_RELATION_SUPPORT_GUARD",
     "RELATION_SUPPORT_GUARD_OPERATION_ID",
     "RelationSupportCandidate",
+    "SourceRelationDecision",
     "RelationSupportGuardOperation",
     "compile_relation_support_candidates",
     "relation_for_requirement",

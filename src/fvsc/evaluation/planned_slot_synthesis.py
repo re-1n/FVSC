@@ -45,8 +45,11 @@ not establish the relation. Do not borrow an entity or relation across requireme
 class PlannedRequirement:
     requirement_id: str
     description: str
+    attribution_scope: Literal["source", "direct_owner"] = "source"
 
     def __post_init__(self) -> None:
+        if self.attribution_scope not in {"source", "direct_owner"}:
+            raise ValueError("unknown requirement attribution scope")
         if not self.requirement_id.startswith("R") or not self.requirement_id[1:].isdigit():
             raise ValueError("planned requirement id must use R<number>")
         description = str(self.description).strip()
