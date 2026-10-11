@@ -3,6 +3,11 @@
 > **Status:** accepted research-control document. A row names a testable operation,
 > not a closed class of human meaning and not an implementation promise.
 
+The [targeted academic prior-art review](../research/ACADEMIC_PRIOR_ART_2026-10.md)
+maps published attribution, cited-answer, semantic-graph, transition and
+semantic-change methods to the open operations below. It identifies candidate tests;
+it does not promote any view.
+
 ## Why the registry exists
 
 FVSC does not first divide all human meaning into an exhaustive ontology. It records
