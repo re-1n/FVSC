@@ -2,6 +2,7 @@ import { App, ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import type FvscPlugin from "./main";
 import type { BackendController } from "./backend";
 import { BootstrapModal } from "./bootstrap";
+import { Clarification, sourceRangeForSelection } from "./clarification";
 
 export const ANTOURAGE_VIEW_TYPE = "fvsc-antourage-view";
 
@@ -293,7 +294,7 @@ export class AntourageView extends ItemView {
         body: JSON.stringify({ query, top_k: 10, context_depth: 1 }),
         signal: this.requestAbort.signal,
       });
-      this.renderSearch(result);
+      this.renderSearch(result, query);
     } catch (error) {
       if ((error as { name?: string }).name !== "AbortError") this.renderError(error);
     } finally {
@@ -344,7 +345,7 @@ export class AntourageView extends ItemView {
     this.resultEl.createDiv({ cls: "fvsc-error", text: `Ошибка: ${String(error)}` });
   }
 
-  private renderSearch(result: SearchResponse): void {
+  private renderSearch(result: SearchResponse, question: string): void {
     if (!this.resultEl) return;
     this.resultEl.empty();
     const heading = this.resultEl.createDiv({ cls: "fvsc-result-heading" });
@@ -357,10 +358,10 @@ export class AntourageView extends ItemView {
       this.renderEmpty("Совпадений нет — FVSC воздержался.");
       return;
     }
-    for (const hit of result.hits) this.renderSourceHit(hit);
+    for (const hit of result.hits) this.renderSourceHit(hit, question);
   }
 
-  private renderSourceHit(hit: SearchHit): void {
+  private renderSourceHit(hit: SearchHit, question: string): void {
     if (!this.resultEl) return;
     const card = this.resultEl.createDiv({ cls: "fvsc-source-card" });
     const head = card.createDiv({ cls: "fvsc-source-head" });
@@ -368,6 +369,18 @@ export class AntourageView extends ItemView {
     source.onclick = () => void this.openSource(hit.source_id);
     head.createSpan({ text: `${(hit.score * 100).toFixed(1)}%`, cls: "fvsc-score" });
     card.createEl("p", { text: hit.preview });
+    const use = card.createEl("button", { text: "Использовать как мою позицию…" });
+    const clarification = card.createDiv({ cls: "fvsc-clarification" });
+    use.onclick = async () => {
+      use.disabled = true;
+      try {
+        await this.selectOwnerFragment(clarification, hit, question);
+      } catch (error) {
+        new Notice(String(error));
+      } finally {
+        use.disabled = false;
+      }
+    };
     if (hit.context_source_ids.length > 0) {
       const context = card.createDiv({ cls: "fvsc-context" });
       context.createSpan({ text: "Контекст: " });
@@ -375,6 +388,103 @@ export class AntourageView extends ItemView {
         const button = context.createEl("button", { text: sourceId });
         button.onclick = () => void this.openSource(sourceId);
       }
+    }
+  }
+
+  private async selectOwnerFragment(container: HTMLElement, hit: SearchHit, question: string): Promise<void> {
+    const doc = await this.fetchJson<{text: string; source_revision: string}>(
+      `/v1/source?source_id=${encodeURIComponent(hit.source_id)}`,
+    );
+    if (doc.source_revision !== hit.source_revision) throw new Error("Запись изменилась. Повтори поиск.");
+    if (!container.isConnected) return;
+    container.empty();
+    container.createEl("p", { text: `Для вопроса: ${question}` });
+    container.createEl("p", { text: "Выдели нужную мысль. Если выделения нет, будет использована вся запись (до 8192 символов)." });
+    const text = container.createEl("textarea", { cls: "fvsc-fragment-picker" });
+    text.value = doc.text;
+    text.readOnly = true;
+    text.setAttribute("aria-label", "Исходная запись: выдели фрагмент для уточнения");
+    const prepare = container.createEl("button", { text: "Продолжить с этим фрагментом" });
+    const cancel = container.createEl("button", { text: "Отмена" });
+    cancel.onclick = () => container.empty();
+    prepare.onclick = async () => {
+      prepare.disabled = true;
+      try {
+        const hasSelection = text.selectionStart !== text.selectionEnd;
+        const [start, end] = sourceRangeForSelection(doc.text,
+          hasSelection ? text.selectionStart : 0,
+          hasSelection ? text.selectionEnd : text.value.length);
+        if (end - start > 8192) throw new Error("Выдели фрагмент до 8192 символов.");
+        const state = await this.fetchJson<Clarification>("/v1/clarifications/prepare", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source_id: hit.source_id, source_revision: doc.source_revision, start, end, question }),
+        });
+        if (prepare.isConnected) this.renderClarification(container, state);
+      } catch (error) {
+        new Notice(String(error));
+      } finally {
+        prepare.disabled = false;
+      }
+    };
+  }
+
+  private renderClarification(container: HTMLElement, state: Clarification, editing = false): void {
+    container.empty();
+    container.createEl("p", { text: `Для вопроса: ${state.question}` });
+    container.createEl("blockquote", { text: state.fragment, cls: "fvsc-clarification-fragment" });
+    if (state.status !== "pending" && !editing) {
+      const labels = {
+        ready: state.basis === "agree" ? "Сохранено: ты согласен с этой мыслью. Авторство не меняется." : "Этот фрагмент отмечен как выражающий твою позицию в этом вопросе.",
+        excluded: "Сохранено: не использовать этот фрагмент как твою позицию в этом вопросе.",
+        unresolved: "Уточнение сохранено. Пока не считаем этот фрагмент подтверждением твоей позиции.",
+        deferred: "Пропущено. Для этого фрагмента и вопроса повторно не спрашиваем.",
+      };
+      container.createEl("p", { text: labels[state.status] });
+      if (state.answer?.note) container.createEl("p", { text: `Твоё уточнение: ${state.answer.note}` });
+      container.createEl("p", { text: "Уточнение относится только к показанному фрагменту и вопросу. Общая интерпретация пока не использует эти отметки." });
+      const edit = container.createEl("button", { text: "Изменить ответ" });
+      edit.onclick = () => this.renderClarification(container, state, true);
+      return;
+    }
+    container.createEl("p", { text: state.prompt });
+    const controls = container.createEl("fieldset", { cls: "fvsc-clarification-actions" });
+    controls.createEl("legend", { text: "Можно выбрать ответ, написать свой или пропустить" });
+    const errorEl = container.createEl("p", { cls: "fvsc-error" });
+    errorEl.setAttribute("role", "status");
+    const submit = async (action: string, note = "") => {
+      controls.disabled = true;
+      errorEl.setText("");
+      try {
+        const updated = await this.fetchJson<Clarification>("/v1/clarifications/answer", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clarification_id: state.clarification_id, action, note, expected_sequence: state.answer?.sequence ?? 0 }),
+        });
+        if (controls.isConnected) this.renderClarification(container, updated);
+      } catch (error) {
+        errorEl.setText(`Не сохранено: ${String(error)}`);
+      } finally {
+        controls.disabled = false;
+      }
+    };
+    for (const [action, label] of [
+      ["my_position", "Это моя позиция"], ["agree", "Согласен с чужой мыслью"],
+      ["saved_only", "Просто сохранил"], ["unsure", "Не уверен"], ["skip", "Пропустить"],
+    ]) {
+      const button = controls.createEl("button", { text: label });
+      button.onclick = () => void submit(action);
+    }
+    const note = controls.createEl("textarea", { placeholder: "Или объясни своими словами…" });
+    note.setAttribute("aria-label", "Уточнение своими словами");
+    note.maxLength = 8192;
+    note.value = state.answer?.note ?? "";
+    const save = controls.createEl("button", { text: "Сохранить своё объяснение" });
+    save.onclick = () => {
+      if (!note.value.trim()) { note.focus(); return; }
+      void submit("freeform", note.value);
+    };
+    if (editing) {
+      const cancel = controls.createEl("button", { text: "Оставить прежний ответ" });
+      cancel.onclick = () => this.renderClarification(container, state);
     }
   }
 

@@ -400,6 +400,13 @@
   align-items: center;
 }
 
+.fvsc-clarification:empty { display: none; }
+.fvsc-clarification { margin-top: 12px; }
+.fvsc-fragment-picker { width: 100%; min-height: 140px; }
+.fvsc-clarification-fragment { white-space: pre-wrap; max-height: 240px; overflow: auto; }
+.fvsc-clarification-actions { display: flex; flex-wrap: wrap; gap: 8px; border: 0; padding: 0; }
+.fvsc-clarification-actions textarea { width: 100%; min-height: 80px; }
+
 .fvsc-ollama-custom-input {
   flex: 1 1 auto;
   padding: 4px 8px;

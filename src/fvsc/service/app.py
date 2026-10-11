@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import os
 from pathlib import Path
 import time
+import threading
 from typing import cast
 
 from fastapi import FastAPI, HTTPException, Query
@@ -18,11 +19,15 @@ from ..integrations import (
     OllamaInterpretationBackend,
 )
 from ..interpretation import InterpretationBackend
+from ..interpretation.clarifications import ClarificationStore, ClarificationTarget
 from ..interpretation import (
     DEFAULT_INTERPRETATION_JOURNAL_RELATIVE_PATH,
     InterpretationStore,
 )
 from .models import (
+    ClarificationPrepareRequest,
+    ClarificationAnswerRequest,
+    ClarificationResponse,
     FeedbackRequest,
     FeedbackResponse,
     HealthResponse,
@@ -73,6 +78,7 @@ def create_app(
     *,
     interpretation_backend: InterpretationBackend | None | object = _BACKEND_UNSET,
     interpretation_store: InterpretationStore | None | object = _STORE_UNSET,
+    clarification_store: ClarificationStore | None = None,
     auto_load: bool = True,
 ) -> FastAPI:
     selected_runtime = (
@@ -94,6 +100,8 @@ def create_app(
         )
     }
     startup_state: dict[str, str | None] = {"error": None}
+    clarification_state = {"store": clarification_store}
+    clarification_lock = threading.RLock()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -108,7 +116,13 @@ def create_app(
                 startup_state["error"] = "cache_stale"
             except ValueError:
                 startup_state["error"] = "cache_invalid"
-        yield
+        try:
+            yield
+        finally:
+            # Injected stores are owned by the caller (also useful for in-memory tests).
+            if clarification_store is None and clarification_state["store"] is not None:
+                clarification_state["store"].close()
+                clarification_state["store"] = None
 
     application = FastAPI(
         title="FVSC Local Service",
@@ -158,6 +172,43 @@ def create_app(
             ) from exc
         store_state["store"] = created
         return created
+
+    def require_clarification_store() -> ClarificationStore:
+        with clarification_lock:
+            existing = clarification_state["store"]
+            if existing is None:
+                existing = ClarificationStore(require_runtime().vault_dir / ".fvsc" / "clarifications.sqlite3")
+                clarification_state["store"] = existing
+            return existing
+
+    @application.post("/v1/clarifications/prepare", response_model=ClarificationResponse)
+    def prepare_clarification(request: ClarificationPrepareRequest) -> ClarificationResponse:
+        try:
+            document = require_runtime().source_document(request.source_id)
+            if document.source_revision != request.source_revision:
+                raise HTTPException(status_code=409, detail="source changed; search again")
+            target = ClarificationTarget.create(document, start=request.start, end=request.end,
+                                                question=request.question)
+            return ClarificationResponse(**require_clarification_store().prepare(target, document))
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="source not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @application.post("/v1/clarifications/answer", response_model=ClarificationResponse)
+    def answer_clarification(request: ClarificationAnswerRequest) -> ClarificationResponse:
+        try:
+            store = require_clarification_store()
+            target = store.target(request.clarification_id)
+            document = require_runtime().source_document(target.source_id)
+            return ClarificationResponse(**store.answer(
+                request.clarification_id, document, action=request.action,
+                note=request.note, expected_sequence=request.expected_sequence,
+            ))
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="clarification or source not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @application.exception_handler(RuntimeNotLoadedError)
     async def runtime_not_loaded_handler(_, exc: RuntimeNotLoadedError):

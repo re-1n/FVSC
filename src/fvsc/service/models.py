@@ -93,6 +93,44 @@ class InterpretRequest(_StrictModel):
     context_depth: int = Field(default=1, ge=0, le=4)
 
 
+class ClarificationPrepareRequest(_StrictModel):
+    source_id: str = Field(min_length=1, max_length=4096)
+    source_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    start: int = Field(ge=0, strict=True)
+    end: int = Field(gt=0, strict=True)
+    question: str = Field(min_length=1, max_length=8192)
+
+
+class ClarificationAnswerRequest(_StrictModel):
+    clarification_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    action: Literal["my_position", "agree", "saved_only", "unsure", "freeform", "skip"]
+    note: str = Field(default="", max_length=8192)
+    expected_sequence: int = Field(default=0, ge=0, strict=True)
+
+
+class ClarificationAnswerResponse(_StrictModel):
+    sequence: int
+    action: str
+    note: str
+    recorded_at: float
+
+
+class ClarificationResponse(_StrictModel):
+    clarification_id: str
+    source_id: str
+    source_revision: str
+    start: int
+    end: int
+    text_sha256: str
+    question: str
+    fragment: str
+    status: Literal["pending", "ready", "excluded", "unresolved", "deferred"]
+    basis: str
+    answer: ClarificationAnswerResponse | None
+    usable_as_owner_position: bool
+    prompt: str
+
+
 class ProposalCitationResponse(_StrictModel):
     citation_id: str
     source_id: str
@@ -173,6 +211,10 @@ class ProposalAssessmentResponse(_StrictModel):
 
 
 __all__ = [
+    "ClarificationPrepareRequest",
+    "ClarificationAnswerRequest",
+    "ClarificationAnswerResponse",
+    "ClarificationResponse",
     "FeedbackRequest",
     "FeedbackResponse",
     "HealthResponse",
