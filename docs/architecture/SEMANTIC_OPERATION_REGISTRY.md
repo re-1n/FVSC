@@ -54,6 +54,14 @@ not semantic views and cannot be traded away for a better aggregate score.
 The candidate structure column is deliberately plural. A structure is promoted only
 for the operation on which it wins; no row grants it universal semantic status.
 
+2026-10-11: an explicit `direct_owner` requirement scope now composes conservative
+F1 author/region eligibility with S6, with abstention reasons and a separate view of
+annotated external expressions and endorsement. Its bounded contract passes 20/20;
+the earlier public set passes 42/48 with zero false positives and six coverage
+failures. Default `source` scope is unchanged. Speaker extraction, automatic scope
+selection and unannotated owner restatement remain unresolved; see the
+[implementation and measured limits](../evaluation/OWNER_ATTRIBUTION_RESULTS_V1.md).
+
 ## Composition contract
 
 A query planner may compose rows, but it must keep their scores and uncertainty
