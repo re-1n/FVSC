@@ -1,3 +1,31 @@
+# Current handoff - 2026-10-11
+
+This section supersedes the historical plan below.
+
+- Branch: `integration/fvsc-core-v1`; latest implementation commit: `3a0ff48`.
+- Implemented: persistent dialogue, explicit concept links, recursive owner-authored
+  containers, breadcrumbs, shared components, cycles, node physics, drag/pan/zoom.
+- Composition is separate from extracted associations and canonical evidence.
+  Empty containers are unspecified, not proven atomic concepts.
+- Verification: 67 Python tests, 10 frontend checks, TypeScript, bundling and legacy
+  import check passed. Live Obsidian visual testing remains for the owner.
+- Installed locally; private environment details are in ignored `.fvsc/NEXT_SESSION.md`.
+- Limits: 100 direct components, 500 displayed internal evidence edges; exact labels,
+  no contextual variants or rename/merge. New manual labels do not auto-link in chat.
+- General interpretation does not yet consume the clarification journal. Density
+  matrices are materialized but their retrieval benefit is not established.
+- User explicitly authorized pushing the accumulated work, not merging into main.
+- Push was blocked: shell network unavailable; GitHub connector writes rejected with
+  `MCP tool call requires approval, but approval policy is never`.
+- Remote head verified as `7b6195ea0655523526c911bff91fa1337f6cc220`.
+  No remote writes or local history rewrites occurred. Retry ordinary
+  `git push origin integration/fvsc-core-v1` once permitted.
+- Next product step: owner tests a personal concept and its nested composition;
+  refine navigation and physics from that feedback.
+- Public feature contract: `docs/architecture/DIALOGUE_AND_CONCEPT_NAVIGATION.md`.
+
+---
+
 # Следующая сессия — FVSC guarded semantic context
 
 ## Состояние на 2026-07-26
