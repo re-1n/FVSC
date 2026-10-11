@@ -2,6 +2,16 @@
 
 # FVSC — source-cited personal semantics
 
+**FVSC is a computable atlas of mathematical structures for personal meaning.**
+Each representation should be used for the semantic phenomenon it can express and
+test well. The atlas keeps explicit provenance, epistemic status, and the information
+lost when translating between representations. This research direction was stated in
+the [main-branch vision](https://github.com/re-1n/FVSC/blob/08e25c53af401736c5858cb3d883ef659a14d87e/README.md).
+
+The implementation below is one working, source-cited slice of that atlas. The
+additional mathematical structures and transitions in the vision are research
+targets, not claims that they are already implemented.
+
 FVSC keeps original personal sources and their provenance as the ground truth, then
 builds cheap, replaceable structures for retrieval, explanation, temporal comparison,
 and optional interpretation.
