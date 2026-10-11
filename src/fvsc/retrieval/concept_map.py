@@ -74,3 +74,15 @@ class ConceptMap:
             "edges": [{**self.edges[k], "source_ids": sorted(self.edges[k]["source_ids"])[:30]}
                       for k in adjacent if set(k[:2]) <= allowed][:100],
         }
+
+    def composition(self, focus, children):
+        allowed = set(children)
+        keys = {key for term in children for key in self.neighbors.get(term, ())}
+        edges = [self.edges[k] for k in sorted(keys) if set(k[:2]) <= allowed]
+        return {
+            "nodes": [{**self.nodes.get(t, {"term": t, "evidence_count": 0}),
+                       "source_count": len(self.sources.get(t, ())),
+                       "source_ids": sorted(self.sources.get(t, ()))[:30]} for t in [focus, *children]],
+            "edges": [{**e, "source_ids": sorted(e["source_ids"])[:30]} for e in edges[:500]],
+            "total_edges": len(edges),
+        }

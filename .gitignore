@@ -78,3 +78,4 @@ __pycache__/
 obsidian-plugin/node_modules/
 obsidian-plugin/main.js
 obsidian-plugin/main.js.map
+obsidian-plugin/.npm-cache/

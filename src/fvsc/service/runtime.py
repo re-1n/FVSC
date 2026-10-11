@@ -181,6 +181,10 @@ class VaultRuntime:
         with self._lock:
             return self._map().view(focus)
 
+    def concept_composition(self, focus: str, children: list[str]) -> dict:
+        with self._lock:
+            return self._map().composition(focus, children)
+
     def concept_mentions(self, texts: list[str]) -> list[list[dict]]:
         with self._lock:
             view = self._map()

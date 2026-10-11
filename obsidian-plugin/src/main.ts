@@ -146,6 +146,7 @@ export default class FvscPlugin extends Plugin {
     // Every reconciliation is atomically persisted by the clean service.
     await this.backend?.stop();
     this.app.workspace.detachLeavesOfType(ANTOURAGE_VIEW_TYPE);
+    this.app.workspace.detachLeavesOfType(CONCEPT_MAP_VIEW_TYPE);
   }
 
   async openAntourageView(): Promise<void> {

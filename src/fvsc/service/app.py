@@ -12,6 +12,14 @@ from typing import cast
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from ..retrieval.containers import ContainerStore, concept_name
+
+
+class ComponentRequest(BaseModel):
+    parent: str = Field(min_length=1, max_length=512)
+    child: str = Field(min_length=1, max_length=512)
+    present: bool = True
 
 from ..integrations import (
     DEFAULT_OLLAMA_HOST,
@@ -295,6 +303,39 @@ def create_app(
         if sum(len(text) for text in request.texts) > 65536:
             raise HTTPException(status_code=422, detail="text batch is too long")
         return require_runtime().concept_mentions(request.texts)
+
+    @application.get("/v1/map/containers")
+    def saved_containers():
+        return ContainerStore(require_runtime().vault_dir / ".fvsc" / "containers.sqlite3").terms()
+
+    @application.get("/v1/map/container")
+    def concept_container(focus: str = Query(min_length=1, max_length=512)):
+        runtime_value = require_runtime()
+        try:
+            focus = concept_name(focus)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        store = ContainerStore(runtime_value.vault_dir / ".fvsc" / "containers.sqlite3")
+        children = store.children(focus)
+        try:
+            neighborhood = runtime_value.concept_map(focus)
+        except KeyError:
+            neighborhood = {"nodes": [], "edges": [], "total_neighbors": 0}
+        composition = runtime_value.concept_composition(focus, children)
+        for node in composition["nodes"]:
+            node["component_count"] = len(store.children(node["term"]))
+        return {"focus": focus, **composition,
+                "components": children, "suggestions": [n for n in neighborhood["nodes"] if n["term"] != focus and n["term"] not in children],
+                "total_neighbors": neighborhood["total_neighbors"]}
+
+    @application.post("/v1/map/component")
+    def set_component(request: ComponentRequest):
+        store = ContainerStore(require_runtime().vault_dir / ".fvsc" / "containers.sqlite3")
+        try:
+            store.set_component(request.parent, request.child, request.present)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {"ok": True}
 
     @application.post(
         "/v1/interpret",
