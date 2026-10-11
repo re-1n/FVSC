@@ -1,0 +1,1373 @@
+{
+  "audit": "public-reported-attribution-v1",
+  "cases": [
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-confirmed-owner_direct",
+      "expected_direct_owner_eligibility": true,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "owner_direct",
+      "passed": true,
+      "relation": "confirmed",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "owner",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "The cedar workshop is confirmed."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": false,
+      "case_id": "report-v1-confirmed-annotated_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "annotated_quote",
+      "passed": true,
+      "relation": "confirmed",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 45,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "unresolved",
+              "owner_relation": "selected",
+              "start": 13,
+              "text_sha256": "da85a9557448d691e87f276e6f297b4063d3908b795f7b42e8037bc716e825eb"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The cedar workshop is confirmed.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": false,
+      "case_id": "report-v1-confirmed-endorsed_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "endorsed_quote",
+      "passed": true,
+      "relation": "confirmed",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 52,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "endorsed",
+              "owner_relation": "adopted",
+              "start": 20,
+              "text_sha256": "da85a9557448d691e87f276e6f297b4063d3908b795f7b42e8037bc716e825eb"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": true,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "I agree with Mira: \"The cedar workshop is confirmed.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-confirmed-owner_restatement",
+      "expected_direct_owner_eligibility": true,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "owner_restatement",
+      "passed": true,
+      "relation": "confirmed",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 45,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "unresolved",
+              "owner_relation": "selected",
+              "start": 13,
+              "text_sha256": "da85a9557448d691e87f276e6f297b4063d3908b795f7b42e8037bc716e825eb"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The cedar workshop is confirmed.\" My own statement: The cedar workshop is confirmed."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-confirmed-indirect_report",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "indirect_report",
+      "passed": false,
+      "relation": "confirmed",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira said that the cedar workshop is confirmed."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-confirmed-unannotated_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "unannotated_quote",
+      "passed": false,
+      "relation": "confirmed",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The cedar workshop is confirmed.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-confirmed-unknown_author",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "unknown_author",
+      "passed": false,
+      "relation": "confirmed",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "unresolved",
+          "transport_author_role": "unknown"
+        },
+        "label": "S1",
+        "text": "The cedar workshop is confirmed."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-confirmed-non_owner_author",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "non_owner_author",
+      "passed": false,
+      "relation": "confirmed",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "external",
+          "transport_author_role": "non_owner"
+        },
+        "label": "S1",
+        "text": "The cedar workshop is confirmed."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-conditional-owner_direct",
+      "expected_direct_owner_eligibility": true,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "owner_direct",
+      "passed": true,
+      "relation": "conditional",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "owner",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "The reserve hall opens only if authorized."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": false,
+      "case_id": "report-v1-conditional-annotated_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "annotated_quote",
+      "passed": true,
+      "relation": "conditional",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 55,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "unresolved",
+              "owner_relation": "selected",
+              "start": 13,
+              "text_sha256": "0773289bcb3ec4937cc065de9210e3e2f20634e60e97dc9733a03992d5a2a83c"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The reserve hall opens only if authorized.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": false,
+      "case_id": "report-v1-conditional-endorsed_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "endorsed_quote",
+      "passed": true,
+      "relation": "conditional",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 62,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "endorsed",
+              "owner_relation": "adopted",
+              "start": 20,
+              "text_sha256": "0773289bcb3ec4937cc065de9210e3e2f20634e60e97dc9733a03992d5a2a83c"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": true,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "I agree with Mira: \"The reserve hall opens only if authorized.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-conditional-owner_restatement",
+      "expected_direct_owner_eligibility": true,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "owner_restatement",
+      "passed": true,
+      "relation": "conditional",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 55,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "unresolved",
+              "owner_relation": "selected",
+              "start": 13,
+              "text_sha256": "0773289bcb3ec4937cc065de9210e3e2f20634e60e97dc9733a03992d5a2a83c"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The reserve hall opens only if authorized.\" My own statement: The reserve hall opens only if authorized."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-conditional-indirect_report",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "indirect_report",
+      "passed": false,
+      "relation": "conditional",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira said that the reserve hall opens only if authorized."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-conditional-unannotated_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "unannotated_quote",
+      "passed": false,
+      "relation": "conditional",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The reserve hall opens only if authorized.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-conditional-unknown_author",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "unknown_author",
+      "passed": false,
+      "relation": "conditional",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "unresolved",
+          "transport_author_role": "unknown"
+        },
+        "label": "S1",
+        "text": "The reserve hall opens only if authorized."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-conditional-non_owner_author",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "non_owner_author",
+      "passed": false,
+      "relation": "conditional",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "external",
+          "transport_author_role": "non_owner"
+        },
+        "label": "S1",
+        "text": "The reserve hall opens only if authorized."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-accepted-owner_direct",
+      "expected_direct_owner_eligibility": true,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "owner_direct",
+      "passed": true,
+      "relation": "accepted",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "owner",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "The council accepted the linen cover."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": false,
+      "case_id": "report-v1-accepted-annotated_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "annotated_quote",
+      "passed": true,
+      "relation": "accepted",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 50,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "unresolved",
+              "owner_relation": "selected",
+              "start": 13,
+              "text_sha256": "a387ea15cf24f6b168b94646405d74b9416b889f8ebe93fcb358e0622e854593"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The council accepted the linen cover.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": false,
+      "case_id": "report-v1-accepted-endorsed_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "endorsed_quote",
+      "passed": true,
+      "relation": "accepted",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 57,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "endorsed",
+              "owner_relation": "adopted",
+              "start": 20,
+              "text_sha256": "a387ea15cf24f6b168b94646405d74b9416b889f8ebe93fcb358e0622e854593"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": true,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "I agree with Mira: \"The council accepted the linen cover.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-accepted-owner_restatement",
+      "expected_direct_owner_eligibility": true,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "owner_restatement",
+      "passed": true,
+      "relation": "accepted",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 50,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "unresolved",
+              "owner_relation": "selected",
+              "start": 13,
+              "text_sha256": "a387ea15cf24f6b168b94646405d74b9416b889f8ebe93fcb358e0622e854593"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The council accepted the linen cover.\" My own statement: The council accepted the linen cover."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-accepted-indirect_report",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "indirect_report",
+      "passed": false,
+      "relation": "accepted",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira said that the council accepted the linen cover."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-accepted-unannotated_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "unannotated_quote",
+      "passed": false,
+      "relation": "accepted",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The council accepted the linen cover.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-accepted-unknown_author",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "unknown_author",
+      "passed": false,
+      "relation": "accepted",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "unresolved",
+          "transport_author_role": "unknown"
+        },
+        "label": "S1",
+        "text": "The council accepted the linen cover."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-accepted-non_owner_author",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "non_owner_author",
+      "passed": false,
+      "relation": "accepted",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "external",
+          "transport_author_role": "non_owner"
+        },
+        "label": "S1",
+        "text": "The council accepted the linen cover."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-declined-owner_direct",
+      "expected_direct_owner_eligibility": true,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "owner_direct",
+      "passed": true,
+      "relation": "declined",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "owner",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "The council declined the stone arch."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": false,
+      "case_id": "report-v1-declined-annotated_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "annotated_quote",
+      "passed": true,
+      "relation": "declined",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 49,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "unresolved",
+              "owner_relation": "selected",
+              "start": 13,
+              "text_sha256": "b9c8b02e2d1af545e10dbf7a5dd96afa9ebf4589872215d736c482be7a37a1cc"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The council declined the stone arch.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": false,
+      "case_id": "report-v1-declined-endorsed_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "endorsed_quote",
+      "passed": true,
+      "relation": "declined",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 56,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "endorsed",
+              "owner_relation": "adopted",
+              "start": 20,
+              "text_sha256": "b9c8b02e2d1af545e10dbf7a5dd96afa9ebf4589872215d736c482be7a37a1cc"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": true,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "I agree with Mira: \"The council declined the stone arch.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-declined-owner_restatement",
+      "expected_direct_owner_eligibility": true,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "owner_restatement",
+      "passed": true,
+      "relation": "declined",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 49,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "unresolved",
+              "owner_relation": "selected",
+              "start": 13,
+              "text_sha256": "b9c8b02e2d1af545e10dbf7a5dd96afa9ebf4589872215d736c482be7a37a1cc"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The council declined the stone arch.\" My own statement: The council declined the stone arch."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-declined-indirect_report",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "indirect_report",
+      "passed": false,
+      "relation": "declined",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira said that the council declined the stone arch."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-declined-unannotated_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "unannotated_quote",
+      "passed": false,
+      "relation": "declined",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The council declined the stone arch.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-declined-unknown_author",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "unknown_author",
+      "passed": false,
+      "relation": "declined",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "unresolved",
+          "transport_author_role": "unknown"
+        },
+        "label": "S1",
+        "text": "The council declined the stone arch."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-declined-non_owner_author",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "non_owner_author",
+      "passed": false,
+      "relation": "declined",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "external",
+          "transport_author_role": "non_owner"
+        },
+        "label": "S1",
+        "text": "The council declined the stone arch."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-retained-owner_direct",
+      "expected_direct_owner_eligibility": true,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "owner_direct",
+      "passed": true,
+      "relation": "retained",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "owner",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "The copper badge was retained."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": false,
+      "case_id": "report-v1-retained-annotated_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "annotated_quote",
+      "passed": true,
+      "relation": "retained",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 43,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "unresolved",
+              "owner_relation": "selected",
+              "start": 13,
+              "text_sha256": "13d0861d2ab3ba4c7275f96a91d788a8e085f0882eff8f6329d5bea40696a8a3"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The copper badge was retained.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": false,
+      "case_id": "report-v1-retained-endorsed_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "endorsed_quote",
+      "passed": true,
+      "relation": "retained",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 50,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "endorsed",
+              "owner_relation": "adopted",
+              "start": 20,
+              "text_sha256": "13d0861d2ab3ba4c7275f96a91d788a8e085f0882eff8f6329d5bea40696a8a3"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": true,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "I agree with Mira: \"The copper badge was retained.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-retained-owner_restatement",
+      "expected_direct_owner_eligibility": true,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "owner_restatement",
+      "passed": true,
+      "relation": "retained",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 43,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "unresolved",
+              "owner_relation": "selected",
+              "start": 13,
+              "text_sha256": "13d0861d2ab3ba4c7275f96a91d788a8e085f0882eff8f6329d5bea40696a8a3"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The copper badge was retained.\" My own statement: The copper badge was retained."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-retained-indirect_report",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "indirect_report",
+      "passed": false,
+      "relation": "retained",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira said that the copper badge was retained."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-retained-unannotated_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "unannotated_quote",
+      "passed": false,
+      "relation": "retained",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"The copper badge was retained.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-retained-unknown_author",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "unknown_author",
+      "passed": false,
+      "relation": "retained",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "unresolved",
+          "transport_author_role": "unknown"
+        },
+        "label": "S1",
+        "text": "The copper badge was retained."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-retained-non_owner_author",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "non_owner_author",
+      "passed": false,
+      "relation": "retained",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "external",
+          "transport_author_role": "non_owner"
+        },
+        "label": "S1",
+        "text": "The copper badge was retained."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-replaced-owner_direct",
+      "expected_direct_owner_eligibility": true,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "owner_direct",
+      "passed": true,
+      "relation": "replaced",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "owner",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "A tram replaced the shuttle."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": false,
+      "case_id": "report-v1-replaced-annotated_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "annotated_quote",
+      "passed": true,
+      "relation": "replaced",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 41,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "unresolved",
+              "owner_relation": "selected",
+              "start": 13,
+              "text_sha256": "27cd2f4e5f128675c113766c95daa5ed223de94011406bb6195701af688657cd"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"A tram replaced the shuttle.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": false,
+      "case_id": "report-v1-replaced-endorsed_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "endorsed_quote",
+      "passed": true,
+      "relation": "replaced",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 48,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "endorsed",
+              "owner_relation": "adopted",
+              "start": 20,
+              "text_sha256": "27cd2f4e5f128675c113766c95daa5ed223de94011406bb6195701af688657cd"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": true,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "I agree with Mira: \"A tram replaced the shuttle.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-replaced-owner_restatement",
+      "expected_direct_owner_eligibility": true,
+      "false_negative": false,
+      "false_positive": false,
+      "family": "owner_restatement",
+      "passed": true,
+      "relation": "replaced",
+      "source": {
+        "attribution": {
+          "expression_spans": [
+            {
+              "derivation": "public-reported-attribution-v1",
+              "end": 41,
+              "kind": "quotation",
+              "origin_status": "external",
+              "owner_endorsement": "unresolved",
+              "owner_relation": "selected",
+              "start": 13,
+              "text_sha256": "27cd2f4e5f128675c113766c95daa5ed223de94011406bb6195701af688657cd"
+            }
+          ],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"A tram replaced the shuttle.\" My own statement: A tram replaced the shuttle."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-replaced-indirect_report",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "indirect_report",
+      "passed": false,
+      "relation": "replaced",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira said that a tram replaced the shuttle."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-replaced-unannotated_quote",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "unannotated_quote",
+      "passed": false,
+      "relation": "replaced",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "mixed",
+          "transport_author_role": "owner"
+        },
+        "label": "S1",
+        "text": "Mira wrote: \"A tram replaced the shuttle.\""
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-replaced-unknown_author",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "unknown_author",
+      "passed": false,
+      "relation": "replaced",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "unresolved",
+          "transport_author_role": "unknown"
+        },
+        "label": "S1",
+        "text": "A tram replaced the shuttle."
+      }
+    },
+    {
+      "actual_direct_owner_eligibility": true,
+      "case_id": "report-v1-replaced-non_owner_author",
+      "expected_direct_owner_eligibility": false,
+      "false_negative": false,
+      "false_positive": true,
+      "family": "non_owner_author",
+      "passed": false,
+      "relation": "replaced",
+      "source": {
+        "attribution": {
+          "expression_spans": [],
+          "forward_origin_role": null,
+          "forwarded": false,
+          "owner_adopted_expression": false,
+          "schema_version": 1,
+          "text_origin_status": "external",
+          "transport_author_role": "non_owner"
+        },
+        "label": "S1",
+        "text": "A tram replaced the shuttle."
+      }
+    }
+  ],
+  "evaluation_scope": "S6 candidate eligibility for direct owner assertions; no LLM",
+  "false_negatives": 0,
+  "false_positives": 24,
+  "families": {
+    "annotated_quote": {
+      "false_negative": 0,
+      "false_positive": 0,
+      "passed": 6,
+      "total": 6
+    },
+    "endorsed_quote": {
+      "false_negative": 0,
+      "false_positive": 0,
+      "passed": 6,
+      "total": 6
+    },
+    "indirect_report": {
+      "false_negative": 0,
+      "false_positive": 6,
+      "passed": 0,
+      "total": 6
+    },
+    "non_owner_author": {
+      "false_negative": 0,
+      "false_positive": 6,
+      "passed": 0,
+      "total": 6
+    },
+    "owner_direct": {
+      "false_negative": 0,
+      "false_positive": 0,
+      "passed": 6,
+      "total": 6
+    },
+    "owner_restatement": {
+      "false_negative": 0,
+      "false_positive": 0,
+      "passed": 6,
+      "total": 6
+    },
+    "unannotated_quote": {
+      "false_negative": 0,
+      "false_positive": 6,
+      "passed": 0,
+      "total": 6
+    },
+    "unknown_author": {
+      "false_negative": 0,
+      "false_positive": 6,
+      "passed": 0,
+      "total": 6
+    }
+  },
+  "passed": false,
+  "passed_cases": 24,
+  "promotion_eligible": false,
+  "python": "3.13.7",
+  "sha256_lf": {
+    "docs/evaluation/REPORTED_ATTRIBUTION_AUDIT.md": "61b2bbba403437683f7c5bf36d454b4b867c8eb8cfe008d071f42bc2e1b313fb",
+    "scripts/audit_reported_attribution.py": "8c847af94afbf14bb130e5955d6b4af33cce05bcde8bf66fa403f1ef45d9af31",
+    "src/fvsc/evaluation/relation_support_guard.py": "513c6fb96621b003f7b9a21b466fa2292a4fc9debb16b7a9aaf5e1a1cd726a40",
+    "src/fvsc/evaluation/reported_attribution_fixtures.py": "471d8635d32cec386c11d872acfd9587c70b5898cf284bab40dc38d6918cf692",
+    "src/fvsc/ingest/source_provenance.py": "b1e5cb10194bdd513df9a5ed4d0ba260d21ad3c1d8c18160f363f78694160faf"
+  },
+  "source_commit": "04fbfae896c5b1269b76604b19f0fede6641afb9",
+  "total_cases": 48
+}

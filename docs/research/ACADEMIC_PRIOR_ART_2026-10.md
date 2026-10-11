@@ -147,3 +147,9 @@ change of meaning. Neither is a direct benchmark for a single person's narrative
 
 No new model, dataset, parser or personal corpus was downloaded or run for this review.
 The proposed gates above are research designs, not preregistered or executed results.
+
+Follow-up, 2026-10-11: the first [public reported-attribution diagnostic](../evaluation/REPORTED_ATTRIBUTION_RESULTS.md)
+has now been frozen and executed separately. Current S6 candidate eligibility passes
+24/48 synthetic cases, with 24 false positives and no false negatives under the
+direct-owner question scope. This measures a missing attribution boundary, not
+generated-answer quality or the performance of a proposed reporting parser.
