@@ -1,0 +1,1507 @@
+{
+  "audit": "explicit-owner-attribution-v1",
+  "protocol_commit": "2f28378",
+  "source_commit": "e0cc41e7bba8f0d098b8d10a2b792fbf3705ee42",
+  "sha256_lf": {
+    "docs/evaluation/OWNER_ATTRIBUTION_GATE_V1.md": "6963273e2120b9a19bac179badfbc8013422b96527d940b11e85197d427c0984",
+    "docs/evaluation/owner_attribution_v1_cases.json": "442bd0f48f9bce0cdd4f3814e3f9f98070ff7898b660c367ed381c73583fae3c",
+    "src/fvsc/ingest/owner_attribution.py": "315416ef93daff37efc8594097d9a42db6f36abe474f99f5a4be35fb41419e2e",
+    "src/fvsc/ingest/source_provenance.py": "b1e5cb10194bdd513df9a5ed4d0ba260d21ad3c1d8c18160f363f78694160faf",
+    "src/fvsc/evaluation/planned_slot_synthesis.py": "3966f2214c0d197a438f67114e4f6d42b1344aca19ee51062647a61fe5cc5419",
+    "src/fvsc/evaluation/relation_support_guard.py": "28213724b6114f2581fd2c262951345c85a320c5aade977f883bebee4e282b29",
+    "src/fvsc/evaluation/planned_slot_runner.py": "17d7bfe9f19a04aeb088bedc1dab77efbb0d8b30204b8c3fe9f5d2980ef7484b",
+    "src/fvsc/evaluation/reported_attribution_fixtures.py": "471d8635d32cec386c11d872acfd9587c70b5898cf284bab40dc38d6918cf692",
+    "scripts/audit_owner_attribution.py": "ab050ce1ef8825aa0cf591f046b55b464517b8780cfe123bc60b51f36c27635f"
+  },
+  "contract": {
+    "total": 20,
+    "passed": 20,
+    "false_positives": 0,
+    "false_negatives": 0
+  },
+  "coverage_challenges": {
+    "total": 2,
+    "passed": 0,
+    "false_positives": 0,
+    "false_negatives": 2
+  },
+  "previous_set_explicit_scope": {
+    "total": 48,
+    "passed": 42,
+    "false_positives": 0,
+    "false_negatives": 6
+  },
+  "cases": [
+    {
+      "id": "owner-en",
+      "text": "The observatory is confirmed.",
+      "role": "owner",
+      "origin": "owner",
+      "expected": true,
+      "actual": true,
+      "decision": {
+        "reason": "owner_origin_regions",
+        "regions": [
+          [
+            0,
+            29
+          ]
+        ]
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "owner-ru",
+      "text": "Я подтвердил встречу в обсерватории.",
+      "role": "owner",
+      "origin": "owner",
+      "expected": true,
+      "actual": true,
+      "decision": {
+        "reason": "owner_origin_regions",
+        "regions": [
+          [
+            0,
+            36
+          ]
+        ]
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "unknown",
+      "text": "The observatory is confirmed.",
+      "role": "unknown",
+      "origin": "owner",
+      "expected": false,
+      "actual": false,
+      "decision": {
+        "reason": "author_not_owner_or_unknown",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "nonowner",
+      "text": "Я подтвердил встречу.",
+      "role": "non_owner",
+      "origin": "owner",
+      "expected": false,
+      "actual": false,
+      "decision": {
+        "reason": "author_not_owner_or_unknown",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "missing",
+      "text": "The telescope was retained.",
+      "missing": true,
+      "expected": false,
+      "actual": false,
+      "decision": {
+        "reason": "missing_attribution",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "unresolved",
+      "text": "The telescope was retained.",
+      "role": "owner",
+      "origin": "unresolved",
+      "expected": false,
+      "actual": false,
+      "decision": {
+        "reason": "owner_spans_required",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "adopted-external",
+      "text": "The telescope was retained.",
+      "role": "owner",
+      "origin": "external",
+      "adopted": true,
+      "expected": false,
+      "actual": false,
+      "decision": {
+        "reason": "external_origin",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "forwarded",
+      "text": "The observatory is confirmed.",
+      "role": "owner",
+      "origin": "owner",
+      "forwarded": true,
+      "expected": false,
+      "actual": false,
+      "decision": {
+        "reason": "forwarded_source",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "quote-unmarked",
+      "text": "Lea wrote: \"The observatory is confirmed.\"",
+      "role": "owner",
+      "origin": "mixed",
+      "expected": false,
+      "actual": false,
+      "decision": {
+        "reason": "owner_spans_required",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "report-ru",
+      "text": "Лея сказала, что встреча подтверждена.",
+      "role": "owner",
+      "origin": "mixed",
+      "expected": false,
+      "actual": false,
+      "decision": {
+        "reason": "owner_spans_required",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "nested-report",
+      "text": "Лея сказала, что Олег сообщил: встреча подтверждена.",
+      "role": "owner",
+      "origin": "mixed",
+      "expected": false,
+      "actual": false,
+      "decision": {
+        "reason": "owner_spans_required",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "endorsed",
+      "text": "Я согласен: «Встреча подтверждена». ",
+      "role": "owner",
+      "origin": "mixed",
+      "adopted": true,
+      "spans": [
+        {
+          "text": "Встреча подтверждена",
+          "kind": "quotation",
+          "origin": "external",
+          "relation": "adopted",
+          "stance": "endorsed"
+        }
+      ],
+      "expected": false,
+      "reports": 1,
+      "endorsed": 1,
+      "actual": false,
+      "decision": {
+        "reason": "owner_spans_required",
+        "regions": []
+      },
+      "reported_expressions": [
+        {
+          "source_label": "S1",
+          "source_text_sha256": "588084ad5a39d440027e683efb371d75d09069b1ffa7e8260e5cbe41285b1b68",
+          "expression": {
+            "start": 13,
+            "end": 33,
+            "text_sha256": "a1ceacf9c58a9b97b3f8b8918ee902cd4f317f2a3d280e76931e5baf82786268",
+            "kind": "quotation",
+            "origin_status": "external",
+            "owner_relation": "adopted",
+            "owner_endorsement": "endorsed",
+            "derivation": "explicit-annotation"
+          },
+          "owner_endorsement": "endorsed",
+          "speaker": null
+        }
+      ],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "rejected",
+      "text": "Не согласен: «Встреча подтверждена». ",
+      "role": "owner",
+      "origin": "mixed",
+      "spans": [
+        {
+          "text": "Встреча подтверждена",
+          "kind": "quotation",
+          "origin": "external",
+          "relation": "not_adopted",
+          "stance": "rejected"
+        }
+      ],
+      "expected": false,
+      "reports": 1,
+      "actual": false,
+      "decision": {
+        "reason": "owner_spans_required",
+        "regions": []
+      },
+      "reported_expressions": [
+        {
+          "source_label": "S1",
+          "source_text_sha256": "07f8a61a616081bf54beda1163f435dc5b39402f041de95aef601ed3db10dd51",
+          "expression": {
+            "start": 14,
+            "end": 34,
+            "text_sha256": "a1ceacf9c58a9b97b3f8b8918ee902cd4f317f2a3d280e76931e5baf82786268",
+            "kind": "quotation",
+            "origin_status": "external",
+            "owner_relation": "not_adopted",
+            "owner_endorsement": "rejected",
+            "derivation": "explicit-annotation"
+          },
+          "owner_endorsement": "rejected",
+          "speaker": null
+        }
+      ],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "adopted-not-endorsed",
+      "text": "I saved: The telescope was retained.",
+      "role": "owner",
+      "origin": "mixed",
+      "adopted": true,
+      "spans": [
+        {
+          "text": "The telescope was retained.",
+          "kind": "quotation",
+          "origin": "external",
+          "relation": "adopted"
+        }
+      ],
+      "expected": false,
+      "reports": 1,
+      "actual": false,
+      "decision": {
+        "reason": "owner_spans_required",
+        "regions": []
+      },
+      "reported_expressions": [
+        {
+          "source_label": "S1",
+          "source_text_sha256": "a0c1205f3c65f7021d3691db68cf2fa81fa8c930458cc5377ec2954d2d5caf9a",
+          "expression": {
+            "start": 9,
+            "end": 36,
+            "text_sha256": "b2bedadd1fd11f21718700d229333a9d17fd255caab36b0f5bf06360fbb7289d",
+            "kind": "quotation",
+            "origin_status": "external",
+            "owner_relation": "adopted",
+            "owner_endorsement": "unresolved",
+            "derivation": "explicit-annotation"
+          },
+          "owner_endorsement": "unresolved",
+          "speaker": null
+        }
+      ],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "owner-span-mixed",
+      "text": "Лея: «Будет дождь». От себя: встреча подтверждена.",
+      "role": "owner",
+      "origin": "mixed",
+      "spans": [
+        {
+          "text": "Будет дождь",
+          "kind": "quotation",
+          "origin": "external",
+          "relation": "selected"
+        },
+        {
+          "text": "встреча подтверждена.",
+          "kind": "owner_commentary",
+          "origin": "owner",
+          "relation": "authored"
+        }
+      ],
+      "expected": true,
+      "reports": 1,
+      "actual": true,
+      "decision": {
+        "reason": "verified_owner_spans",
+        "regions": [
+          [
+            29,
+            50
+          ]
+        ]
+      },
+      "reported_expressions": [
+        {
+          "source_label": "S1",
+          "source_text_sha256": "4b6b355b6c1e3d40ec33822e614017c6eb8091170aad565f30db8ceb0075dad1",
+          "expression": {
+            "start": 6,
+            "end": 17,
+            "text_sha256": "366aca15543fd4d6babb1922852696663609ef5a583eac3e3899cb68653caf98",
+            "kind": "quotation",
+            "origin_status": "external",
+            "owner_relation": "selected",
+            "owner_endorsement": "unresolved",
+            "derivation": "explicit-annotation"
+          },
+          "owner_endorsement": "unresolved",
+          "speaker": null
+        }
+      ],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "owner-span-unresolved",
+      "text": "Background unclear. The telescope was retained.",
+      "role": "owner",
+      "origin": "unresolved",
+      "spans": [
+        {
+          "text": "The telescope was retained.",
+          "kind": "owner_commentary",
+          "origin": "owner",
+          "relation": "authored"
+        }
+      ],
+      "expected": true,
+      "actual": true,
+      "decision": {
+        "reason": "verified_owner_spans",
+        "regions": [
+          [
+            20,
+            47
+          ]
+        ]
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "ambiguous-commentary",
+      "text": "The telescope was retained.",
+      "role": "owner",
+      "origin": "mixed",
+      "spans": [
+        {
+          "text": "The telescope was retained.",
+          "kind": "owner_commentary",
+          "origin": "unresolved",
+          "relation": "unknown"
+        }
+      ],
+      "expected": false,
+      "actual": false,
+      "decision": {
+        "reason": "owner_spans_required",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "external-commentary",
+      "text": "The telescope was retained.",
+      "role": "owner",
+      "origin": "mixed",
+      "spans": [
+        {
+          "text": "The telescope was retained.",
+          "kind": "owner_commentary",
+          "origin": "external",
+          "relation": "authored"
+        }
+      ],
+      "expected": false,
+      "actual": false,
+      "decision": {
+        "reason": "owner_spans_required",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "span-cannot-override-sender",
+      "text": "The telescope was retained.",
+      "role": "non_owner",
+      "origin": "mixed",
+      "spans": [
+        {
+          "text": "The telescope was retained.",
+          "kind": "owner_commentary",
+          "origin": "owner",
+          "relation": "authored"
+        }
+      ],
+      "expected": false,
+      "actual": false,
+      "decision": {
+        "reason": "author_not_owner_or_unknown",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "all-external-span",
+      "text": "The telescope was retained.",
+      "role": "owner",
+      "origin": "owner",
+      "spans": [
+        {
+          "text": "The telescope was retained.",
+          "kind": "quotation",
+          "origin": "external",
+          "relation": "selected"
+        }
+      ],
+      "expected": false,
+      "reports": 1,
+      "actual": false,
+      "decision": {
+        "reason": "no_owner_text",
+        "regions": []
+      },
+      "reported_expressions": [
+        {
+          "source_label": "S1",
+          "source_text_sha256": "b2bedadd1fd11f21718700d229333a9d17fd255caab36b0f5bf06360fbb7289d",
+          "expression": {
+            "start": 0,
+            "end": 27,
+            "text_sha256": "b2bedadd1fd11f21718700d229333a9d17fd255caab36b0f5bf06360fbb7289d",
+            "kind": "quotation",
+            "origin_status": "external",
+            "owner_relation": "selected",
+            "owner_endorsement": "unresolved",
+            "derivation": "explicit-annotation"
+          },
+          "owner_endorsement": "unresolved",
+          "speaker": null
+        }
+      ],
+      "passed": true,
+      "annotations_preserved": true
+    },
+    {
+      "id": "coverage-en",
+      "text": "Lea wrote: \"The dome is open.\" My own statement: the telescope was retained.",
+      "role": "owner",
+      "origin": "mixed",
+      "expected": true,
+      "challenge": true,
+      "actual": false,
+      "decision": {
+        "reason": "owner_spans_required",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": false,
+      "annotations_preserved": true
+    },
+    {
+      "id": "coverage-ru",
+      "text": "Лея: «Купол открыт». От себя: встреча подтверждена.",
+      "role": "owner",
+      "origin": "mixed",
+      "expected": true,
+      "challenge": true,
+      "actual": false,
+      "decision": {
+        "reason": "owner_spans_required",
+        "regions": []
+      },
+      "reported_expressions": [],
+      "passed": false,
+      "annotations_preserved": true
+    }
+  ],
+  "regression_cases": [
+    {
+      "id": "report-v1-confirmed-owner_direct",
+      "family": "owner_direct",
+      "expected": true,
+      "actual": true,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": true,
+          "reason": "owner_relation_supported",
+          "attribution": {
+            "reason": "owner_origin_regions",
+            "regions": [
+              [
+                0,
+                32
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-confirmed-annotated_quote",
+      "family": "annotated_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": false,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-confirmed-endorsed_quote",
+      "family": "endorsed_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": false,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-confirmed-owner_restatement",
+      "family": "owner_restatement",
+      "expected": true,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": false,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-confirmed-indirect_report",
+      "family": "indirect_report",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-confirmed-unannotated_quote",
+      "family": "unannotated_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-confirmed-unknown_author",
+      "family": "unknown_author",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "author_not_owner_or_unknown",
+          "attribution": {
+            "reason": "author_not_owner_or_unknown",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-confirmed-non_owner_author",
+      "family": "non_owner_author",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "author_not_owner_or_unknown",
+          "attribution": {
+            "reason": "author_not_owner_or_unknown",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-conditional-owner_direct",
+      "family": "owner_direct",
+      "expected": true,
+      "actual": true,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": true,
+          "reason": "owner_relation_supported",
+          "attribution": {
+            "reason": "owner_origin_regions",
+            "regions": [
+              [
+                0,
+                42
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-conditional-annotated_quote",
+      "family": "annotated_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": false,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-conditional-endorsed_quote",
+      "family": "endorsed_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": false,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-conditional-owner_restatement",
+      "family": "owner_restatement",
+      "expected": true,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": false,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-conditional-indirect_report",
+      "family": "indirect_report",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-conditional-unannotated_quote",
+      "family": "unannotated_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-conditional-unknown_author",
+      "family": "unknown_author",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "author_not_owner_or_unknown",
+          "attribution": {
+            "reason": "author_not_owner_or_unknown",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-conditional-non_owner_author",
+      "family": "non_owner_author",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "author_not_owner_or_unknown",
+          "attribution": {
+            "reason": "author_not_owner_or_unknown",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-accepted-owner_direct",
+      "family": "owner_direct",
+      "expected": true,
+      "actual": true,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": true,
+          "reason": "owner_relation_supported",
+          "attribution": {
+            "reason": "owner_origin_regions",
+            "regions": [
+              [
+                0,
+                37
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-accepted-annotated_quote",
+      "family": "annotated_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": false,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-accepted-endorsed_quote",
+      "family": "endorsed_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": false,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-accepted-owner_restatement",
+      "family": "owner_restatement",
+      "expected": true,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": false,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-accepted-indirect_report",
+      "family": "indirect_report",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-accepted-unannotated_quote",
+      "family": "unannotated_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-accepted-unknown_author",
+      "family": "unknown_author",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "author_not_owner_or_unknown",
+          "attribution": {
+            "reason": "author_not_owner_or_unknown",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-accepted-non_owner_author",
+      "family": "non_owner_author",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "author_not_owner_or_unknown",
+          "attribution": {
+            "reason": "author_not_owner_or_unknown",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-declined-owner_direct",
+      "family": "owner_direct",
+      "expected": true,
+      "actual": true,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": true,
+          "reason": "owner_relation_supported",
+          "attribution": {
+            "reason": "owner_origin_regions",
+            "regions": [
+              [
+                0,
+                36
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-declined-annotated_quote",
+      "family": "annotated_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": false,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-declined-endorsed_quote",
+      "family": "endorsed_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": false,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-declined-owner_restatement",
+      "family": "owner_restatement",
+      "expected": true,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": false,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-declined-indirect_report",
+      "family": "indirect_report",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-declined-unannotated_quote",
+      "family": "unannotated_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-declined-unknown_author",
+      "family": "unknown_author",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "author_not_owner_or_unknown",
+          "attribution": {
+            "reason": "author_not_owner_or_unknown",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-declined-non_owner_author",
+      "family": "non_owner_author",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "author_not_owner_or_unknown",
+          "attribution": {
+            "reason": "author_not_owner_or_unknown",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-retained-owner_direct",
+      "family": "owner_direct",
+      "expected": true,
+      "actual": true,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": true,
+          "reason": "owner_relation_supported",
+          "attribution": {
+            "reason": "owner_origin_regions",
+            "regions": [
+              [
+                0,
+                30
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-retained-annotated_quote",
+      "family": "annotated_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": false,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-retained-endorsed_quote",
+      "family": "endorsed_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": false,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-retained-owner_restatement",
+      "family": "owner_restatement",
+      "expected": true,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": false,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-retained-indirect_report",
+      "family": "indirect_report",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-retained-unannotated_quote",
+      "family": "unannotated_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-retained-unknown_author",
+      "family": "unknown_author",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "author_not_owner_or_unknown",
+          "attribution": {
+            "reason": "author_not_owner_or_unknown",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-retained-non_owner_author",
+      "family": "non_owner_author",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "author_not_owner_or_unknown",
+          "attribution": {
+            "reason": "author_not_owner_or_unknown",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-replaced-owner_direct",
+      "family": "owner_direct",
+      "expected": true,
+      "actual": true,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": true,
+          "reason": "owner_relation_supported",
+          "attribution": {
+            "reason": "owner_origin_regions",
+            "regions": [
+              [
+                0,
+                28
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-replaced-annotated_quote",
+      "family": "annotated_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": false,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-replaced-endorsed_quote",
+      "family": "endorsed_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": false,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-replaced-owner_restatement",
+      "family": "owner_restatement",
+      "expected": true,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": false,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-replaced-indirect_report",
+      "family": "indirect_report",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-replaced-unannotated_quote",
+      "family": "unannotated_quote",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "owner_spans_required",
+          "attribution": {
+            "reason": "owner_spans_required",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-replaced-unknown_author",
+      "family": "unknown_author",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "author_not_owner_or_unknown",
+          "attribution": {
+            "reason": "author_not_owner_or_unknown",
+            "regions": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-v1-replaced-non_owner_author",
+      "family": "non_owner_author",
+      "expected": false,
+      "actual": false,
+      "source_scope_actual": true,
+      "passed": true,
+      "decisions": [
+        {
+          "source_label": "S1",
+          "eligible": false,
+          "reason": "author_not_owner_or_unknown",
+          "attribution": {
+            "reason": "author_not_owner_or_unknown",
+            "regions": []
+          }
+        }
+      ]
+    }
+  ],
+  "scope": "explicit annotation-consuming F1 and six-English-relation S6; no LLM or attribution extractor"
+}

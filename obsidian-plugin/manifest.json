@@ -3,7 +3,7 @@
   "name": "FVSC Antourage",
   "version": "0.1.0",
   "minAppVersion": "1.4.0",
-  "description": "Antourage — LLM-driven semantic map for your vault, powered by FVSC density-matrix engine.",
+  "description": "Source-cited local search and interpretation for your vault, powered by FVSC.",
   "author": "Rein",
   "isDesktopOnly": true
 }

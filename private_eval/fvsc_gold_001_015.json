@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case_id": "gold-001",
+      "title": "Роль паразитов в метафорах",
+      "question": "Какую роль играют паразиты в моих метафорах?",
+      "decision": "open",
+      "evidence": [
+        {"ref": "Diary:333", "source_id": "telegram/private-diary/messages/message-333.json", "role": "context"},
+        {"ref": "Diary:334", "source_id": "telegram/private-diary/messages/message-334.json", "role": "primary"},
+        {"ref": "Diary:335", "source_id": "telegram/private-diary/messages/message-335.json", "role": "context"}
+      ],
+      "links": [
+        {"left_ref": "Diary:333", "right_ref": "Diary:334", "decision": "context", "owner_note": "Фрейминг и основной образ остаются отдельными сообщениями."},
+        {"left_ref": "Diary:334", "right_ref": "Diary:335", "decision": "context", "owner_note": "Эмоциональное продолжение раскрывает образ, но не сливается с ним."}
+      ],
+      "owner_interpretation": "Открытый gold-вопрос: система должна восстановить роль образа по источнику и контексту, не подставляя заранее заданную тему.",
+      "rejected_interpretations": []
+    },
+    {
+      "case_id": "gold-002",
+      "title": "Самоотдача, растворение и любовь ко многим",
+      "question": "Как связаны самоотдача, растворение себя, любовь к нескольким людям и стремление причинять окружающим наименьший ущерб?",
+      "decision": "accepted",
+      "evidence": [
+        {"ref": "Rein:9 ↔ Diary:8", "source_id": "telegram/private-diary/messages/message-8.json", "role": "primary"},
+        {"ref": "Rein:24 ↔ Diary:22", "source_id": "telegram/private-diary/messages/message-22.json", "role": "support"},
+        {"ref": "Rein:38 ↔ Diary:36", "source_id": "telegram/private-diary/messages/message-36.json", "role": "support"},
+        {"ref": "Rein:81 ↔ Diary:80", "source_id": "telegram/private-diary/messages/message-80.json", "role": "support"}
+      ],
+      "links": [],
+      "owner_interpretation": "Идентичность продолжается через жизнь в сознании других и обратную связь с ними; самоотдача ради обратной связи может истощать и расходовать собственное я.",
+      "rejected_interpretations": ["Саморастворение само по себе является безусловно желательной целью."]
+    },
+    {
+      "case_id": "gold-003",
+      "title": "Цифровой след и продолжение после смерти",
+      "question": "Какой вид продолжения после смерти дают цифровые и физические следы?",
+      "decision": "split",
+      "evidence": [
+        {"ref": "Rein:18 ↔ Diary:17", "source_id": "telegram/private-diary/messages/message-17.json", "role": "primary"},
+        {"ref": "Rein:38 ↔ Diary:36", "source_id": "telegram/private-diary/messages/message-36.json", "role": "support"},
+        {"ref": "Rein:89 ↔ Diary:88", "source_id": "telegram/private-diary/messages/message-88.json", "role": "support"}
+      ],
+      "links": [
+        {"left_ref": "Rein:18 ↔ Diary:17", "right_ref": "Rein:89 ↔ Diary:88", "decision": "separate", "owner_note": "Это разные мысли о следах, а не одна непрерывная формулировка."}
+      ],
+      "owner_interpretation": "Следы следует разделять по контекстам. Мотив цифровых и физических следов здесь сосредоточен на ярких поступках, оставляемых потомкам.",
+      "rejected_interpretations": ["Все упоминания следа образуют одну мысль."]
+    },
+    {
+      "case_id": "gold-004",
+      "title": "Сны как вторая творческая жизнь",
+      "question": "Зачем нужна осознанность во сне и какую роль играет белое творческое пространство?",
+      "decision": "accepted",
+      "evidence": [
+        {"ref": "Rein:20 ↔ Diary:19", "source_id": "telegram/private-diary/messages/message-19.json", "role": "primary"},
+        {"ref": "Rein:22 ↔ Diary:20", "source_id": "telegram/private-diary/messages/message-20.json", "role": "support"},
+        {"ref": "Rein:41 ↔ Diary:38", "source_id": "telegram/private-diary/messages/message-38.json", "role": "support"},
+        {"ref": "Rein:45 ↔ Diary:43", "source_id": "telegram/private-diary/messages/message-43.json", "role": "support"},
+        {"ref": "Rein:49 ↔ Diary:47", "source_id": "telegram/private-diary/messages/message-47.json", "role": "support"},
+        {"ref": "Rein:50 ↔ Diary:48", "source_id": "telegram/private-diary/messages/message-48.json", "role": "support"}
+      ],
+      "links": [],
+      "owner_interpretation": "Сон одновременно лаборатория и безопасное место для созидания и созерцания. Белая сфера — архетипический образ. Контроль способен вредить, но применялся с намерением уберечь другого, а не повредить себе.",
+      "rejected_interpretations": ["Контроль во сне был намеренным самоповреждением."]
+    },
+    {
+      "case_id": "gold-005",
+      "title": "Переживание до языка",
+      "question": "Что означает опыт, который существовал до того, как нашлось его название?",
+      "decision": "accepted",
+      "evidence": [
+        {"ref": "Rein:64 ↔ Diary:63", "source_id": "telegram/private-diary/messages/message-63.json", "role": "primary"},
+        {"ref": "Rein:66 ↔ Diary:65", "source_id": "telegram/private-diary/messages/message-65.json", "role": "support"},
+        {"ref": "Rein:67 ↔ Diary:66", "source_id": "telegram/private-diary/messages/message-66.json", "role": "support"},
+        {"ref": "Rein:68 ↔ Diary:67", "source_id": "telegram/private-diary/messages/message-67.json", "role": "support"}
+      ],
+      "links": [],
+      "owner_interpretation": "Найденные названия отмечают путь самостоятельного внимательного познания, но досимвольный непереводимый остаток существует всегда. FVSC должен быть мостом: передать мою запись твоими словами и показать различие между нашими опытами.",
+      "rejected_interpretations": ["Переживание полностью исчерпывается найденным названием."]
+    },
+    {
+      "case_id": "gold-006",
+      "title": "Мембрана сознания и этика материи",
+      "question": "Почему граница сознательного и несознательного вызывает сопротивление и как с этим связаны дереализация, единение и любовь к естьности?",
+      "decision": "split",
+      "evidence": [
+        {"ref": "Rein:80 ↔ Diary:79", "source_id": "telegram/private-diary/messages/message-79.json", "role": "primary"},
+        {"ref": "Rein:82 ↔ Diary:81", "source_id": "telegram/private-diary/messages/message-81.json", "role": "support"},
+        {"ref": "Rein:95 ↔ Diary:94", "source_id": "telegram/private-diary/messages/message-94.json", "role": "support"}
+      ],
+      "links": [
+        {"left_ref": "Rein:80 ↔ Diary:79", "right_ref": "Rein:95 ↔ Diary:94", "decision": "separate", "owner_note": "Природа сознания/материи и природа личной радости — разные темы."}
+      ],
+      "owner_interpretation": "Живая и условно неживая материя не разделяются по сущности: есть материя с разными формами организации и свойствами. Эго-мембрана может защищать; дереализация при диссоциации естественна. Тема радости должна храниться отдельно.",
+      "rejected_interpretations": ["Все фрагменты описывают одну общую теорию мембраны."]
+    },
+    {
+      "case_id": "gold-007",
+      "title": "Таблицы восприятия и назначение FVSC",
+      "question": "Что должна сохранять карта субъективного опыта и какой результат считается успехом FVSC?",
+      "decision": "accepted",
+      "evidence": [
+        {"ref": "Rein:126 ↔ Diary:122", "source_id": "telegram/private-diary/messages/message-122.json", "role": "primary"},
+        {"ref": "Rein:131 ↔ Diary:133", "source_id": "telegram/private-diary/messages/message-133.json", "role": "support"},
+        {"ref": "Rein:132 ↔ Diary:134", "source_id": "telegram/private-diary/messages/message-134.json", "role": "support"},
+        {"ref": "Rein:185 ↔ Diary:469", "source_id": "telegram/private-diary/messages/message-469.json", "role": "support"}
+      ],
+      "links": [],
+      "owner_interpretation": "Исчерпывающая карта охватывает все наблюдённые контексты употребления, а не все будущие смыслы. Сравнения, трассировка, сон/плавление и раскрытие через чужие карты допустимы. Противоречия сохраняются, изменения читаются во времени, а области доступа полностью выбирает владелец.",
+      "rejected_interpretations": ["Исчерпывающая карта заранее перечисляет все возможные значения."]
+    },
+    {
+      "case_id": "gold-008",
+      "title": "Склянки, цвета и океан вечного",
+      "question": "Что обозначают склянки с цветной жидкостью, их взаимное окрашивание и разбитие смертью?",
+      "decision": "accepted",
+      "evidence": [
+        {"ref": "Rein:140 ↔ Diary:142", "source_id": "telegram/private-diary/messages/message-142.json", "role": "primary"},
+        {"ref": "Diary:766", "source_id": "telegram/private-diary/messages/message-766.json", "role": "negative"}
+      ],
+      "links": [
+        {"left_ref": "Rein:140 ↔ Diary:142", "right_ref": "Diary:766", "decision": "separate", "owner_note": "Океан смерти и внутренний океан Gold 014 — разные образы."}
+      ],
+      "owner_interpretation": "Океан сочетает метафизику и романтизацию смерти. Смерть освобождает от границ: идентичность теряется в единении, но уникальность сохраняется.",
+      "rejected_interpretations": ["Этот океан тождествен внутреннему океану и маякам Gold 014."]
+    },
+    {
+      "case_id": "gold-009",
+      "title": "Безобъектная любовь как устройство общества",
+      "question": "Как личная способность любить многих превращается в модель будущего общества?",
+      "decision": "accepted",
+      "evidence": [
+        {"ref": "Rein:24 ↔ Diary:22", "source_id": "telegram/private-diary/messages/message-22.json", "role": "primary"},
+        {"ref": "Rein:147 ↔ Diary:149", "source_id": "telegram/private-diary/messages/message-149.json", "role": "support"},
+        {"ref": "Rein:149 ↔ Diary:151", "source_id": "telegram/private-diary/messages/message-151.json", "role": "support"},
+        {"ref": "Rein:150 ↔ Diary:152", "source_id": "telegram/private-diary/messages/message-152.json", "role": "support"}
+      ],
+      "links": [],
+      "owner_interpretation": "Это мысленный эксперимент и фантазия о том, как всем могло бы быть лучше. Предпочтения не исчезают; взаимозаменяемость означает способность перестроиться после неудавшейся связи, понять непохожесть и принять другого, а не считать людей одинаковыми.",
+      "rejected_interpretations": ["Люди буквально взаимозаменяемы и лишены уникальности."]
+    },
+    {
+      "case_id": "gold-010",
+      "title": "Диалог как совместное строительство миров",
+      "question": "Какое взаимодействие является настоящим диалогом, а не передачей уже построенного знания?",
+      "decision": "accepted",
+      "evidence": [
+        {"ref": "Rein:64 ↔ Diary:63", "source_id": "telegram/private-diary/messages/message-63.json", "role": "support"},
+        {"ref": "Rein:218 ↔ Diary:604", "source_id": "telegram/private-diary/messages/message-604.json", "role": "primary"},
+        {"ref": "Rein:219 ↔ Diary:605", "source_id": "telegram/private-diary/messages/message-605.json", "role": "context"}
+      ],
+      "links": [
+        {"left_ref": "Rein:218 ↔ Diary:604", "right_ref": "Rein:219 ↔ Diary:605", "decision": "context", "owner_note": "Поэтическое продолжение связано по времени и образам, но исходная расшифровка забыта."}
+      ],
+      "owner_interpretation": "Единение возможно только по взаимному желанию. Взаимное обучение тоже строит миры, но поднимает более низкие башни знания; совместное создание нового слоя начинается после соотнесения контекстов.",
+      "rejected_interpretations": ["Единение требует обязательного согласия или стирания различий."]
+    },
+    {
+      "case_id": "gold-011",
+      "title": "Распробование квалиа и вычисления над переживанием",
+      "question": "Что значит распробовать квалию и что именно может вычисляться в субъективном опыте?",
+      "decision": "split",
+      "evidence": [
+        {"ref": "Rein:129 ↔ Diary:131", "source_id": "telegram/private-diary/messages/message-131.json", "role": "primary"},
+        {"ref": "Rein:168 ↔ Diary:169", "source_id": "telegram/private-diary/messages/message-169.json", "role": "support"},
+        {"ref": "Rein:175 ↔ Diary:188", "source_id": "telegram/private-diary/messages/message-188.json", "role": "support"},
+        {"ref": "Rein:176 ↔ Diary:190", "source_id": "telegram/private-diary/messages/message-190.json", "role": "negative"}
+      ],
+      "links": [
+        {"left_ref": "Rein:175 ↔ Diary:188", "right_ref": "Rein:176 ↔ Diary:190", "decision": "separate", "owner_note": "Поэтический текст о потерянности не был реплаем и не продолжал рассуждение о квалиа."}
+      ],
+      "owner_interpretation": "Внимание — инструмент сканирования реальности, явлений поля сознания и самого сознания. Проекцию можно диссоциировать и пересобирать множеством способов. Важный образ потерянности хранится отдельно и был вдохновлён Blame!.",
+      "rejected_interpretations": ["Diary:190 является прямым продолжением вычислений над квалиа."]
+    },
+    {
+      "case_id": "gold-012",
+      "title": "Свободная сеть и цена доверия",
+      "question": "Как алгоритмическое сравнение карт может снизить цену доверия, не объединяя разные заметки в одну мысль?",
+      "decision": "split",
+      "evidence": [
+        {"ref": "Rein:3", "source_id": null, "role": "support"},
+        {"ref": "Rein:88 ↔ Diary:87", "source_id": "telegram/private-diary/messages/message-87.json", "role": "support"},
+        {"ref": "Rein:108 ↔ Diary:108", "source_id": "telegram/private-diary/messages/message-108.json", "role": "primary"},
+        {"ref": "Rein:116 ↔ Diary:118", "source_id": "telegram/private-diary/messages/message-118.json", "role": "negative"}
+      ],
+      "links": [
+        {"left_ref": "Rein:108 ↔ Diary:108", "right_ref": "Rein:116 ↔ Diary:118", "decision": "separate", "owner_note": "Сходная область не делает заметки разных времён одной мыслью без явной ссылки."}
+      ],
+      "owner_interpretation": "Сохраняется только идея цены доверия: алгоритмы могут сравнить карты без раскрытия деталей, после чего безопаснее знакомиться и добровольно открывать области. Похожесть увеличивает ожидаемое взаимопонимание боли.",
+      "rejected_interpretations": ["Все заметки об анонимности, сети, доверии и принуждении образуют один композитный смысл."]
+    },
+    {
+      "case_id": "gold-013",
+      "title": "Формализация против живого смысла",
+      "question": "В какой момент формализация помогает сохранить смысл, а в какой растворяет его?",
+      "decision": "accepted",
+      "evidence": [
+        {"ref": "Rein:96 ↔ Diary:95", "source_id": "telegram/private-diary/messages/message-95.json", "role": "primary"},
+        {"ref": "Rein:190 ↔ Diary:488", "source_id": "telegram/private-diary/messages/message-488.json", "role": "support"},
+        {"ref": "Rein:234 ↔ Diary:662", "source_id": "telegram/private-diary/messages/message-662.json", "role": "support"}
+      ],
+      "links": [],
+      "owner_interpretation": "Формализация — запись семантических следов; уровень интерпретации полностью контролируется владельцем.",
+      "rejected_interpretations": ["Формализация должна автоматически навязать единственную интерпретацию."]
+    },
+    {
+      "case_id": "gold-014",
+      "title": "Оболочка, пустота, океан и маяки",
+      "question": "Что находится за оболочкой из чуждостей и что означает внутренний океан?",
+      "decision": "accepted",
+      "evidence": [
+        {"ref": "Rein:240 ↔ Diary:766", "source_id": "telegram/private-diary/messages/message-766.json", "role": "primary"},
+        {"ref": "Rein:241", "source_id": null, "role": "support"}
+      ],
+      "links": [],
+      "owner_interpretation": "Личность — сплетение перенятого у других, поэтому собственного я как отдельной сущности не находится. Внутри остаётся живая непустая пустота: первозданный субстрат-наблюдатель. Идеи стоят в ней маяками, не дают свету погаснуть и удерживают от смерти.",
+      "rejected_interpretations": ["Пустота означает только отсутствие или тождественна океану смерти Gold 008."]
+    },
+    {
+      "case_id": "gold-015",
+      "title": "Бессонный и Необходимый взгляд",
+      "question": "Что такое Бессонный, почему его взгляд необходим и от чего он защищает?",
+      "decision": "accepted",
+      "evidence": [
+        {"ref": "Diary:738", "source_id": "telegram/private-diary/messages/message-738.json", "role": "primary"},
+        {"ref": "Diary:739", "source_id": "telegram/private-diary/messages/message-739.json", "role": "support"},
+        {"ref": "Diary:741", "source_id": "telegram/private-diary/messages/message-741.json", "role": "support"},
+        {"ref": "Diary:742", "source_id": "telegram/private-diary/messages/message-742.json", "role": "support"},
+        {"ref": "Diary:743", "source_id": "telegram/private-diary/messages/message-743.json", "role": "context"},
+        {"ref": "Diary:744", "source_id": "telegram/private-diary/messages/message-744.json", "role": "context"}
+      ],
+      "links": [
+        {"left_ref": "Diary:742", "right_ref": "Diary:743", "decision": "context", "owner_note": "Анти-смысл развивает образ; AI-формулировка сохраняет отдельное происхождение при принятии владельцем."},
+        {"left_ref": "Diary:743", "right_ref": "Diary:744", "decision": "context", "owner_note": "Дальнейшая SCP-структуризация — отдельная внешняя elaboration, не исходный образ."}
+      ],
+      "owner_interpretation": "Бессонный — всепроникающий архетипический наблюдатель: не враждебный, но небезопасный. Необходимый взгляд защищает от анти-смысла и онтологической пустоты; метакогнитивное распознавание ставит наблюдателя на один уровень с ним и нарушает защиту.",
+      "rejected_interpretations": ["Это просто монстр, вызывающий бессонницу или преследующий человека физически."]
+    }
+  ]
+}

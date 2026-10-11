@@ -1,368 +1,186 @@
-# FVSC — Fractal-Vector Semantic Core
+> Русская установка: [INSTALL_RU.md](./INSTALL_RU.md)
 
-**Вычислимый атлас математических структур для отображения персонального смысла.**
+# FVSC — source-cited personal semantics
 
-FVSC исследует возможность представить человеческую семантику не одной универсальной моделью, а системой взаимосвязанных математических пространств.
+**FVSC is a computable atlas of mathematical structures for personal meaning.**
+Each representation should be used for the semantic phenomenon it can express and
+test well. The atlas keeps explicit provenance, epistemic status, and the information
+lost when translating between representations. This research direction was stated in
+the [semantic mathematics atlas vision](docs/architecture/SEMANTIC_MATHEMATICS_ATLAS_VISION.md)
+in `main` commit `08e25c5`.
 
-Разные аспекты смысла имеют разную природу:
+The implementation below is one working, source-cited slice of that atlas. The
+additional mathematical structures and transitions in the vision are research
+targets, not claims that they are already implemented.
 
-- смешение и расщепление значений;
-- направленное включение понятий;
-- отношения между несколькими участниками;
-- контекстная зависимость;
-- изменение во времени;
-- противоречие и отменяемость;
-- аналогия и перенос;
-- композиция;
-- локальная перспектива;
-- различие между сказанным, подразумеваемым и переживаемым.
+FVSC keeps original personal sources and their provenance as the ground truth, then
+builds cheap, replaceable structures for retrieval, explanation, temporal comparison,
+and optional interpretation.
 
-Нет оснований ожидать, что одна математическая структура естественно выразит всё это одновременно.
+The active implementation is under `src/fvsc/`. The older `core/` and root `service/`
+trees remain as a research record; clean code is forbidden from importing them.
 
-Матрицы плотности хорошо описывают одни свойства семантики, но плохо или искусственно описывают другие. Графы, частичные порядки, гиперграфы, тензоры, динамические системы, вероятностные пространства, топологические конструкции и другие формализмы могут быть ближе к другим аспектам человеческого смыслообразования.
+The canonical, complete statement of purpose is
+[docs/PROJECT_PURPOSE.md](./docs/PROJECT_PURPOSE.md).
 
-Поэтому FVSC не выбирает одну окончательную математику смысла.
+## Project purpose
 
-> **FVSC строит атлас математических представлений, каждое из которых применяется там, где его внутренняя структура наиболее близка к наблюдаемому семантическому явлению.**
+FVSC is an external semantic memory: it records how a particular person expressed or
+adopted meaning, compresses those traces into a computational map, and uses that map to
+retrieve, compare, and test relationships across time. It is not primarily a chatbot,
+topic classifier, or graph visualization. Its success criterion is whether analysis
+reflects the meanings people put into the sources, with inspectable evidence for every
+material claim.
 
----
+The map is intentionally lossy with respect to wording. It does **not** have to recreate
+the original text from compressed structure alone. Its mandatory form of reversibility
+is evidential: a node, relation, or derived claim must resolve through provenance to the
+exact source revision and span that supports it. Natural-language expansion of a map is
+a new, cited, defeasible interpretation, never the recovered original. See
+[ADR-006](./docs/adr/ADR-006-semantic-compression-is-referentially-reversible.md).
 
-## Raison d’être
+The computational map is a **provenance-grounded semantic atlas**, not one mandatory
+embedding, graph, container, or density matrix. Existing whitepaper ideas—typed
+Judgments, directed containers, relation transforms, tensor factors, contextual
+facets, graph traversal, time, metaphor mappings, and L0–L3 policy—remain, but each is
+a relation-conditioned view that must earn its complexity on an owner-validated task.
+See [ADR-007](./docs/adr/ADR-007-semantic-atlas-uses-relation-conditioned-views.md) and
+the [semantic-atlas design](./docs/architecture/SEMANTIC_ATLAS.md).
 
-Современные системы обычно пытаются поместить всю семантику в один тип пространства:
+## What works now
 
-- языковые модели — в пространство статистических представлений;
-- knowledge graphs — в граф сущностей и отношений;
-- vector databases — в пространство близости;
-- логические системы — в пространство пропозиций и правил вывода;
-- вероятностные модели — в распределения;
-- FVSC ранних итераций — в матрицы плотности.
+- Obsidian Markdown and Telegram JSON become revisioned `SourceDocument` records.
+- `EvidenceLedger` preserves append-only assertion/retraction history.
+- Source replacement, deletion, reactivation, replies, forwards, temporal context,
+  authorship, locators, and deferred media retain provenance.
+- A Unicode character n-gram index searches current original text without persisting a
+  raw-text index.
+- A lightweight `pymorphy3` adapter proposes exact Russian S→V→O/adjective relations,
+  all marked defeasible and source-spanned.
+- Owner feedback, temporal contradiction views, interpretation-layer policies, and a
+  [released open-meaning owner-gold seed](private_eval/README.md) are implemented.
+- Ollama can produce structured L3 claims. Every supported claim must cite transient
+  `S1…Sn` sources that FVSC resolves into revision/hash citations.
+- Proposals and claim-level owner assessments are stored outside canonical evidence in
+  `.fvsc/interpretations.json`.
+- FastAPI and the Obsidian plugin are thin clients over these contracts.
+- [Saved dialogues and clickable concepts](docs/architecture/DIALOGUE_AND_CONCEPT_NAVIGATION.md)
+  connect Antourage's messages to a source-linked concept map. Map navigation happens
+  only on click; conversation context remains separate from owner evidence.
+- An [on-demand clarification prototype](docs/architecture/OWNER_CLARIFICATION_LOOP.md)
+  lets owners clarify a selected search fragment for a specific question, skip it,
+  or explain in their own words. Choices persist separately and can be amended;
+  general answer generation does not consume this journal yet.
 
-Каждая из этих структур захватывает реальную часть смысла. Ни одна не исчерпывает его.
+## Epistemic boundary
 
-Проблема заключается не в том, чтобы найти ещё одну «правильную» структуру и заменить ею остальные. Проблема — построить вычислимую систему, в которой несколько математических моделей смогут:
-
-- представлять разные семантические аспекты;
-- сохранять собственные инварианты;
-- обмениваться информацией;
-- переводить результаты друг в друга;
-- совместно формировать персональное смысловое пространство;
-- оставаться проверяемыми относительно исходного человеческого материала.
-
-FVSC — попытка построить такую систему.
-
----
-
-## Смысловой атлас
-
-Термин «атлас» используется не как метафора интерфейса.
-
-В математике сложный объект часто невозможно корректно описать одной глобальной системой координат. Его представляют набором локальных карт, каждая из которых хорошо работает в своей области. Между пересекающимися картами задаются переходы.
-
-FVSC переносит этот принцип на семантику.
-
-```text
-Человеческий материал
-        │
-        ▼
-Наблюдаемые семантические явления
-        │
-        ├── смешанность значений
-        ├── направленные отношения
-        ├── многоместные связи
-        ├── временная эволюция
-        ├── контекст и перспектива
-        ├── неопределённость
-        ├── композиция
-        └── противоречие
-        │
-        ▼
-Локальные математические представления
-        │
-        ├── матрицы плотности
-        ├── ориентированные графы
-        ├── гиперграфы и комплексы
-        ├── тензорные структуры
-        ├── вероятностные модели
-        ├── динамические системы
-        ├── порядковые структуры
-        └── другие специализированные формализмы
-        │
-        ▼
-Переходы и общие инварианты
-        │
-        ▼
-Единое вычислимое пространство смыслов
+```mermaid
+flowchart TD
+    A["Original sources"] --> B["EvidenceLedger"]
+    A --> C["Lexical retrieval"]
+    B --> D["Relation-conditioned atlas views"]
+    C --> E["Cited L2/L3 proposal"]
+    D --> E
+    E --> F["Owner claim review"]
+    E --> G["Separate journal"]
+    F --> G
 ```
 
-Каждая локальная структура является **картой определённого семантического аспекта**, а не полной моделью сознания.
+An Antourage answer is not owner evidence. Accepting/rejecting a claim records review
+metadata but does not rewrite its source or silently insert model text into the ledger.
 
-Единым объектом FVSC становится не конкретная матрица, граф или вектор, а весь атлас вместе с:
+## Honest real-data result
 
-- областями применимости его карт;
-- правилами перехода между представлениями;
-- сохранённым происхождением данных;
-- уровнями эпистемической надёжности;
-- историей изменений;
-- обратной связью человека.
+On released owner-reviewed Gold 001–015 (`k=10`, source bodies resolved locally):
 
----
+| Retriever | MRR | Mean recall | Context recall | Negative hits |
+|---|---:|---:|---:|---:|
+| Lexical character n-grams | **0.5262** | **0.6389** | **0.3333** | 0 |
+| Exact Judgment | 0.2611 | 0.3778 | 0.1667 | 0 |
+| Equal RRF | 0.4000 | 0.4000 | 0.3333 | 0 |
+| Lexical 5:1 RRF | 0.3950 | 0.5389 | 0.3333 | 0 |
 
-## Принцип соответствия структуры явлению
+Lexical retrieval remains the default. Exact relations are useful for provenance,
+explanation, feedback, and temporal structure, but semantic superiority has not been
+demonstrated. Density and ContainerCore remain optional experimental views.
 
-FVSC не должен принуждать семантическое явление к удобному формату только потому, что этот формат уже реализован.
+The [Gold JSON](private_eval/fvsc_gold_001_015.json) publishes questions, evidence
+locators/roles, owner interpretations, rejected readings, and separation constraints.
+It intentionally excludes the raw Telegram corpus and runtime interpretation journal.
 
-Напротив:
+## Quick start
 
-> **Математическая структура выбирается по тому, насколько естественно её внутренние свойства соответствуют наблюдаемому способу формирования смысла.**
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 
-Например:
+# Build/update a local append-only vault cache with exact Russian proposals.
+PYTHONPATH=src python -m fvsc.ingest.vault_sync \
+  --vault "/path/to/vault" --exact-judgments
 
-### Матрицы плотности
-
-Подходят для:
-
-- смешанных состояний значения;
-- наложения контекстов;
-- спектрального выделения граней;
-- количественной оценки чистоты и полисемии;
-- весового объединения наблюдений.
-
-Но они не обязаны быть лучшим представлением:
-
-- явной причинной структуры;
-- многоместных событий;
-- условных зависимостей;
-- иерархии типов;
-- последовательности действий;
-- изменения перспективы;
-- дискурсивной композиции.
-
-### Ориентированные графы и порядки
-
-Могут естественнее выражать:
-
-- асимметричное включение;
-- причинность;
-- требования и ограничения;
-- зависимости;
-- иерархии;
-- противоречащие направления связи.
-
-### Гиперграфы и симплициальные структуры
-
-Могут описывать смысл, который возникает не из пары понятий, а из их совместного присутствия:
-
-```text
-человек + действие + цель + ситуация + результат
+# Start the local API (bind loopback only).
+FVSC_VAULT_PATH="/path/to/vault" \
+FVSC_LLM_MODEL="qwen2.5:14b-instruct-q4_K_M" \
+python -m uvicorn fvsc.service.app:app --app-dir src \
+  --host 127.0.0.1 --port 8765
 ```
 
-Такая структура не сводится без потерь к независимым попарным рёбрам.
+Useful endpoints:
 
-### Тензорные и мультилинейные структуры
+| Route | Purpose |
+|---|---|
+| `GET /health` | local configuration/load health |
+| `GET /v1/status` | source, ledger, exact, feedback, snapshot counts |
+| `POST /v1/vault/sync` | scan and reconcile the complete vault |
+| `POST /v1/search` | lexical original-source search |
+| `GET /v1/source` | revision-checked current source body |
+| `POST /v1/feedback` | append-only evidence feedback |
+| `GET /v1/interpretation/status` | Ollama/model availability |
+| `POST /v1/interpret` | source-cited defeasible interpretation |
+| `POST /v1/interpret/assess` | claim-level owner review |
 
-Могут представлять:
+## Obsidian plugin
 
-- зависимость отношения от роли;
-- композицию нескольких контекстных факторов;
-- взаимодействие субъекта, объекта, действия и ситуации;
-- преобразование значения при смене перспективы.
-
-### Динамические системы
-
-Могут описывать:
-
-- развитие значения во времени;
-- устойчивые и переходные состояния;
-- смысловые аттракторы;
-- резкие перестройки;
-- забывание, повторение и консолидацию.
-
-### Вероятностные и отменяемые модели
-
-Могут хранить:
-
-- неопределённость извлечения;
-- конкурирующие трактовки;
-- контекстно зависимые гипотезы;
-- пересмотр убеждений;
-- различие между наблюдением и предположением.
-
-Это не окончательный каталог структур. FVSC должен оставаться открытым для любого математического аппарата, который оказывается более точным и естественным для конкретного семантического процесса.
-
----
-
-## Что связывает атлас воедино
-
-Чтобы набор разных моделей не превратился в несвязанный склад формул, FVSC должен иметь общий вычислительный контракт.
-
-Каждое представление должно отвечать как минимум на следующие вопросы:
-
-```text
-Semantic Representation
-├── Какое явление оно моделирует?
-├── Какова область его применимости?
-├── Из каких наблюдений оно построено?
-├── Какие преобразования были применены?
-├── Какие инварианты оно сохраняет?
-├── Какова надёжность результата?
-├── Какие выводы из него допустимы?
-├── В какие другие структуры его можно перевести?
-└── Какие потери возникают при переводе?
+```bash
+cd obsidian-plugin
+npm install
+npm run build
 ```
 
-Связность FVSC обеспечивается не общей размерностью векторов, а общими принципами:
+Copy `main.js`, `manifest.json`, and `styles.css` into
+`<vault>/.obsidian/plugins/fvsc-antourage/`, enable the plugin, and configure Python / FVSC
+paths if autodetection does not find them. The plugin launches the clean service,
+debounces vault changes into atomic reconciliation, searches original notes, opens cited
+Markdown, calls local Ollama, and records accept/reject decisions per claim.
 
-- единым происхождением данных;
-- идентичностью понятий между структурами;
-- явными переходами;
-- маркировкой потерь;
-- временной согласованностью;
-- эпистемическими уровнями;
-- возможностью человеческой коррекции.
+## Verification
 
----
-
-## Переходы между структурами
-
-Перевод между математическими представлениями не должен считаться нейтральной технической операцией.
-
-Например:
-
-- гиперграф можно проецировать в обычный граф, но при этом теряется целостность многоместной связи;
-- временную траекторию можно агрегировать в матрицу, но исчезает последовательность изменений;
-- вероятностное распределение можно заменить наиболее вероятным состоянием, но исчезает неопределённость;
-- несколько контекстов можно смешать в одну матрицу плотности, но может исчезнуть условие их активации.
-
-Поэтому каждый переход должен быть явным объектом системы:
-
-```text
-Transition
-├── source_structure
-├── target_structure
-├── preserved_information
-├── lost_information
-├── assumptions
-├── confidence
-└── provenance
+```bash
+PYTHONPATH=src python -m pytest -q
+PYTHONPATH=src python scripts/check_no_legacy_imports.py
+cd obsidian-plugin && npm run build
 ```
 
-Цель FVSC — не скрывать эти потери, а делать их вычислимыми и наблюдаемыми.
+Current local checkpoint: **229 passed, 2 skipped, 11 deselected**; boundary check and
+production plugin build green. See
+[project status](./docs/status/PROJECT_STATUS.md) and
+[Stage 4f/4g architecture](./docs/architecture/STAGE_4F_CITED_INTERPRETATION_AND_TRANSPORTS.md).
 
----
+## Active package layout
 
-## Матрицы плотности в текущей системе
+| Path | Responsibility |
+|---|---|
+| `src/fvsc/evidence/` | canonical events, ledger, policy, feedback, timelines |
+| `src/fvsc/ingest/` | source adapters, lifecycle, exact/co-occurrence extraction |
+| `src/fvsc/retrieval/` | lexical floor, exact lookup, experimental fusion |
+| `src/fvsc/interpretation/` | cited proposals, assessment, local journal |
+| `src/fvsc/evaluation/` | open gold mechanics and metrics |
+| `src/fvsc/runtime/` | deterministic materialization and atomic cache |
+| `src/fvsc/integrations/ollama.py` | strict loopback structured L3 backend |
+| `src/fvsc/service/` | vault application runtime and thin FastAPI routes |
+| `obsidian-plugin/` | local native client |
 
-Текущая реализация FVSC исторически выросла вокруг матриц плотности.
+## Author
 
-Они остаются важной и рабочей частью проекта:
-
-- понятия кодируются операторами;
-- наблюдения становятся взвешенными компонентами;
-- вычисляются направленные меры содержания;
-- спектр используется для анализа граней;
-- энтропия отражает смешанность значения;
-- поддерживаются decay, consolidation и recursive deepening.
-
-Однако этот слой следует понимать как:
-
-> **первую реализованную карту смыслового атласа, а не окончательную онтологию FVSC.**
-
-Название `density_core` отражает историю реализации, но не задаёт предел будущей архитектуры.
-
----
-
-## Текущее и целевое состояние
-
-### Реализовано сейчас
-
-- матричное представление понятий;
-- направленная коокуррентная структура;
-- provenance;
-- временное затухание;
-- консолидация;
-- recursive deepening;
-- silent pool;
-- сопоставление персональных карт;
-- локальный Антураж;
-- feedback-контур;
-- слабые внешние priors;
-- Obsidian-интерфейс.
-
-### Исследуется и проектируется
-
-- реестр семантических структур;
-- формальное описание областей применимости;
-- многопредставленное понятие;
-- переходы между математическими картами;
-- оценка потерь при преобразовании;
-- выбор структуры по типу семантического явления;
-- согласование результатов нескольких представлений;
-- единое API вычислимого смыслового атласа;
-- semantic certificates для выводов;
-- контекстно-перспективные операторы;
-- процедурные и многоместные структуры смысла.
-
----
-
-## Понятие в целевой архитектуре
-
-В ранней реализации понятие преимущественно представлено одной матрицей плотности.
-
-В смысловом атласе понятие должно стать составным объектом:
-
-```text
-Concept: «свобода»
-│
-├── density representation
-│   └── смешанность, грани, веса контекстов
-│
-├── directed relational representation
-│   └── требует, включает, исключает, порождает
-│
-├── temporal representation
-│   └── как значение менялось
-│
-├── contextual representation
-│   └── какие грани активируются в разных ситуациях
-│
-├── higher-order representation
-│   └── в каких многоместных структурах участвует
-│
-├── uncertainty representation
-│   └── конкурирующие и отменяемые интерпретации
-│
-└── provenance
-    └── из каких человеческих высказываний всё это следует
-```
-
-Ни один слой не является «настоящим значением» понятия сам по себе.
-
-Значение возникает как вычислимая согласованность и напряжение между несколькими представлениями.
-
----
-
-## Граница проекта
-
-FVSC не утверждает, что человеческий смысл полностью математизируем.
-
-Система работает с теми следами смыслообразования, которые могут быть выражены, извлечены, сохранены и вычислены.
-
-Некоторые аспекты будут доступны через строгие структуры. Другие — только через вероятностные или отменяемые приближения. Субъективное переживание может оставаться принципиально за пределами формального пространства.
-
-Цель проекта — не устранить этот зазор.
-
-Цель — точно показать:
-
-- что удалось представить;
-- какой математикой это представлено;
-- почему была выбрана именно эта структура;
-- из каких данных она построена;
-- какие выводы допустимы;
-- где начинаются потери и неопределённость.
-
----
-
-## Одним предложением
-
-**FVSC — это вычислимый атлас взаимосвязанных математических структур, каждая из которых отражает тот аспект персонального смыслообразования, которому она соответствует лучше всего.**
+Created by **Rein**, with AI-assisted research and implementation.

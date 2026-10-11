@@ -4,6 +4,7 @@ import { detectPython, detectRepo, getPluginAbsDir } from "./paths";
 import { detectOllamaModelsDir } from "./ollama";
 
 export interface FvscSettings {
+  activeConversationId: string;
   pythonPath: string;
   fvscRepoPath: string;
   port: number;
@@ -16,6 +17,7 @@ export interface FvscSettings {
 }
 
 export const DEFAULT_SETTINGS: FvscSettings = {
+  activeConversationId: "",
   pythonPath: "",
   fvscRepoPath: "",
   port: 8765,

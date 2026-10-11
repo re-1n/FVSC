@@ -1,0 +1,490 @@
+"""Deterministically freeze Stage 4h source candidates before generation."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import json
+from typing import Any, Iterable, Mapping, Protocol, Sequence
+
+from ...ingest import SourceAttribution, SourceDocument
+from ...retrieval import LexicalSearchIndex, SourceLocatorIndex, expand_source_context
+from ..gold import GoldCase
+from .contracts import (
+    FrozenCandidate,
+    FrozenCandidateSet,
+    Stage4hRunSpec,
+    content_digest,
+)
+
+
+class StructuralHit(Protocol):
+    source_id: str
+    score: float
+    evidence_event_ids: tuple[str, ...]
+
+
+class StructuralSearchIndex(Protocol):
+    def search(self, query: str, *, top_k: int = 10) -> Sequence[StructuralHit]: ...
+
+
+def corpus_digest(documents: Iterable[SourceDocument]) -> str:
+    """Identify one transient corpus without serializing any source body."""
+    ordered = tuple(sorted(documents, key=lambda item: item.source_id))
+    source_ids = tuple(item.source_id for item in ordered)
+    if len(source_ids) != len(set(source_ids)):
+        raise ValueError("Stage 4h corpus source ids must be unique")
+    records = []
+    for item in ordered:
+        metadata = item.metadata
+        attribution = SourceAttribution.from_metadata(metadata)
+        attribution.verify(item.text)
+        temporal = metadata.get("temporal_context")
+        temporal_previous = (
+            temporal.get("previous_source_id") if isinstance(temporal, dict) else None
+        )
+        prompt_metadata_digest = content_digest(
+            {
+                "display_time": metadata.get("display_time"),
+                "message_id": metadata.get("message_id"),
+                "owner_annotation_overlay_id": metadata.get(
+                    "owner_annotation_overlay_id"
+                ),
+                "reply_to_source_id": metadata.get("reply_to_source_id"),
+                "source_attribution": attribution.to_dict(),
+                "temporal_previous_source_id": temporal_previous,
+            }
+        )
+        records.append(
+            {
+                "adapter": item.adapter,
+                "observed_at": item.observed_at,
+                "prompt_metadata_sha256": prompt_metadata_digest,
+                "source_id": item.source_id,
+                "source_kind": item.source_kind,
+                "source_revision": item.source_revision,
+            }
+        )
+    return content_digest(
+        {
+            "documents": records,
+            "schema_version": 2,
+        }
+    )
+
+
+def _document_index(
+    documents: Iterable[SourceDocument],
+) -> tuple[tuple[SourceDocument, ...], dict[str, SourceDocument]]:
+    ordered = tuple(sorted(documents, key=lambda item: item.source_id))
+    by_id = {item.source_id: item for item in ordered}
+    if len(by_id) != len(ordered):
+        raise ValueError("Stage 4h documents must have unique source ids")
+    return ordered, by_id
+
+
+def _has_prompt_text(document: SourceDocument) -> bool:
+    """Return whether one retained corpus record can enter a text-only prompt."""
+    return bool(document.text.strip())
+
+
+def _locator_anchors(
+    *,
+    case: GoldCase,
+    spec: Stage4hRunSpec,
+    locator_index: SourceLocatorIndex,
+) -> tuple[SourceDocument, ...]:
+    resolutions = locator_index.resolve_query(case.question)
+    if not resolutions:
+        return ()
+    invalid = tuple(item for item in resolutions if item.status != "resolved")
+    if invalid:
+        summary = ", ".join(f"{item.locator.raw}={item.status}" for item in invalid)
+        raise ValueError(f"case {case.case_id} has unresolved explicit locators: {summary}")
+    source_ids = tuple(item.source_id for item in resolutions)
+    if len(source_ids) != len(set(source_ids)):
+        raise ValueError(f"case {case.case_id} resolves repeated explicit source locators")
+    if len(source_ids) > spec.prompt_source_cap:
+        raise ValueError(f"case {case.case_id} explicit locators exceed prompt_source_cap")
+    documents = tuple(locator_index.document(source_id) for source_id in source_ids if source_id)
+    if any(not _has_prompt_text(document) for document in documents):
+        raise ValueError(f"case {case.case_id} explicit locator resolves to textless source")
+    return documents
+
+
+def _ranked_anchors(documents: tuple[SourceDocument, ...]) -> list[FrozenCandidate]:
+    return [
+        FrozenCandidate(
+            rank=index,
+            source_id=document.source_id,
+            source_revision=document.source_revision,
+            role="ranked",
+            score=1.0,
+        )
+        for index, document in enumerate(documents, start=1)
+    ]
+
+
+def _append_context(
+    *,
+    candidates: list[FrozenCandidate],
+    ranked_source_ids: tuple[str, ...],
+    documents: tuple[SourceDocument, ...],
+    by_id: Mapping[str, SourceDocument],
+    max_depth: int,
+    cap: int,
+) -> None:
+    if max_depth == 0 or len(candidates) >= cap:
+        return
+    known = {item.source_id for item in candidates}
+    for parent_source_id in ranked_source_ids:
+        for document in expand_source_context(
+            documents,
+            parent_source_id,
+            max_depth=max_depth,
+        ):
+            if document.source_id in known:
+                continue
+            if document.source_id not in by_id:
+                raise AssertionError("context expansion returned an unknown document")
+            # Textless records remain in the frozen corpus so reply/temporal topology
+            # and provenance do not change. They are not prompt candidates until a
+            # future media adapter materializes source text for this evaluation view.
+            if not _has_prompt_text(document):
+                continue
+            candidates.append(
+                FrozenCandidate(
+                    rank=len(candidates) + 1,
+                    source_id=document.source_id,
+                    source_revision=document.source_revision,
+                    role="context",
+                    expanded_from_source_id=parent_source_id,
+                )
+            )
+            known.add(document.source_id)
+            if len(candidates) >= cap:
+                return
+
+
+def _lexical_candidates(
+    *,
+    case: GoldCase,
+    spec: Stage4hRunSpec,
+    documents: tuple[SourceDocument, ...],
+    by_id: Mapping[str, SourceDocument],
+    index: LexicalSearchIndex,
+    anchors: tuple[SourceDocument, ...],
+) -> tuple[FrozenCandidate, ...]:
+    hits = index.search(case.question, top_k=spec.top_k)
+    candidates = _ranked_anchors(anchors)
+    known = {item.source_id for item in candidates}
+    for hit in hits:
+        if len(candidates) >= spec.top_k:
+            break
+        if hit.source_id in known:
+            continue
+        document = by_id.get(hit.source_id)
+        if document is None or document.source_revision != hit.document.source_revision:
+            raise ValueError(
+                "lexical index does not match the preregistered Stage 4h corpus"
+            )
+        if not _has_prompt_text(document):
+            raise ValueError("lexical retrieval returned a source without prompt text")
+        candidates.append(
+            FrozenCandidate(
+                rank=len(candidates) + 1,
+                source_id=hit.source_id,
+                source_revision=document.source_revision,
+                role="ranked",
+                score=hit.score,
+            )
+        )
+        known.add(hit.source_id)
+    _append_context(
+        candidates=candidates,
+        ranked_source_ids=tuple(item.source_id for item in candidates),
+        documents=documents,
+        by_id=by_id,
+        max_depth=spec.context_depth,
+        cap=spec.prompt_source_cap,
+    )
+    return tuple(candidates)
+
+
+def _oracle_candidates(
+    *,
+    case: GoldCase,
+    spec: Stage4hRunSpec,
+    by_id: Mapping[str, SourceDocument],
+) -> tuple[FrozenCandidate, ...]:
+    selected = tuple(
+        item
+        for item in case.evidence
+        if item.role in {"primary", "support", "context"} and item.source_id is not None
+    )
+    if len(selected) > spec.prompt_source_cap:
+        raise ValueError(
+            f"case {case.case_id} oracle evidence exceeds prompt_source_cap; "
+            "do not silently truncate owner gold"
+        )
+    candidates: list[FrozenCandidate] = []
+    seen: set[str] = set()
+    for item in selected:
+        source_id = item.source_id
+        assert source_id is not None
+        if source_id in seen:
+            raise ValueError(f"case {case.case_id} repeats one oracle source id")
+        document = by_id.get(source_id)
+        if document is None:
+            raise ValueError(
+                f"case {case.case_id} oracle source is absent from the frozen corpus: "
+                f"{source_id}"
+            )
+        if not _has_prompt_text(document):
+            raise ValueError(
+                f"case {case.case_id} oracle source has no text for the text-only pilot: "
+                f"{source_id}"
+            )
+        candidates.append(
+            FrozenCandidate(
+                rank=len(candidates) + 1,
+                source_id=source_id,
+                source_revision=document.source_revision,
+                role="context" if item.role == "context" else "oracle",
+            )
+        )
+        seen.add(source_id)
+    return tuple(candidates)
+
+
+def _structural_candidates(
+    *,
+    case: GoldCase,
+    spec: Stage4hRunSpec,
+    documents: tuple[SourceDocument, ...],
+    by_id: Mapping[str, SourceDocument],
+    index: StructuralSearchIndex,
+    anchors: tuple[SourceDocument, ...],
+) -> tuple[FrozenCandidate, ...]:
+    hits = tuple(index.search(case.question, top_k=spec.top_k))
+    candidates = _ranked_anchors(anchors)
+    known = {item.source_id for item in candidates}
+    for hit in hits:
+        if len(candidates) >= spec.top_k:
+            break
+        if hit.source_id in known:
+            continue
+        document = by_id.get(hit.source_id)
+        if document is None:
+            raise ValueError(
+                f"structural retrieval returned source outside the corpus: {hit.source_id}"
+            )
+        if not _has_prompt_text(document):
+            raise ValueError("structural retrieval returned a source without prompt text")
+        candidates.append(
+            FrozenCandidate(
+                rank=len(candidates) + 1,
+                source_id=hit.source_id,
+                source_revision=document.source_revision,
+                role="ranked",
+                score=hit.score,
+                evidence_event_ids=tuple(hit.evidence_event_ids),
+            )
+        )
+        known.add(hit.source_id)
+    ranked_source_ids = tuple(item.source_id for item in candidates)
+    _append_context(
+        candidates=candidates,
+        ranked_source_ids=ranked_source_ids,
+        documents=documents,
+        by_id=by_id,
+        max_depth=spec.context_depth,
+        cap=spec.prompt_source_cap,
+    )
+    return tuple(candidates)
+
+
+@dataclass(frozen=True)
+class FrozenCandidateBundle:
+    bundle_id: str
+    run_id: str
+    candidate_sets: tuple[FrozenCandidateSet, ...]
+    schema_version: int = 1
+
+    def __post_init__(self) -> None:
+        if self.schema_version != 1:
+            raise ValueError("unsupported frozen-candidate bundle version")
+        if any(item.run_id != self.run_id for item in self.candidate_sets):
+            raise ValueError("candidate bundle contains another run id")
+        keys = tuple((item.case_id, item.arm) for item in self.candidate_sets)
+        if len(keys) != len(set(keys)):
+            raise ValueError("candidate bundle contains duplicate case/arm pairs")
+        if keys != tuple(sorted(keys)):
+            raise ValueError("candidate bundle must be sorted by case and arm")
+        payload = self._payload()
+        if self.bundle_id != content_digest(payload):
+            raise ValueError("bundle_id does not match the frozen candidate bundle")
+
+    def _payload(self) -> dict[str, Any]:
+        return {
+            "candidate_sets": [item.to_dict() for item in self.candidate_sets],
+            "run_id": self.run_id,
+            "schema_version": self.schema_version,
+        }
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        spec: Stage4hRunSpec,
+        candidate_sets: Iterable[FrozenCandidateSet],
+    ) -> "FrozenCandidateBundle":
+        ordered = tuple(sorted(candidate_sets, key=lambda item: (item.case_id, item.arm)))
+        actual = {(item.case_id, item.arm) for item in ordered}
+        expected = {(case_id, arm) for case_id in spec.case_ids for arm in spec.arms}
+        if actual != expected:
+            missing = sorted(expected - actual)
+            extra = sorted(actual - expected)
+            raise ValueError(
+                f"candidate bundle does not cover the run; missing={missing}, extra={extra}"
+            )
+        payload = {
+            "candidate_sets": [item.to_dict() for item in ordered],
+            "run_id": spec.run_id,
+            "schema_version": 1,
+        }
+        return cls(
+            bundle_id=content_digest(payload),
+            run_id=spec.run_id,
+            candidate_sets=ordered,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"bundle_id": self.bundle_id, **self._payload()}
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "FrozenCandidateBundle":
+        raw_sets = value.get("candidate_sets", [])
+        if not isinstance(raw_sets, list):
+            raise ValueError("candidate_sets must be an array")
+        return cls(
+            bundle_id=value.get("bundle_id", ""),
+            run_id=value.get("run_id", ""),
+            candidate_sets=tuple(FrozenCandidateSet.from_dict(item) for item in raw_sets),
+            schema_version=value.get("schema_version", 0),
+        )
+
+    def for_case_arm(self, case_id: str, arm: str) -> FrozenCandidateSet:
+        for item in self.candidate_sets:
+            if item.case_id == case_id and item.arm == arm:
+                return item
+        raise KeyError((case_id, arm))
+
+
+def freeze_stage4h_candidates(
+    *,
+    spec: Stage4hRunSpec,
+    cases: Iterable[GoldCase],
+    documents: Iterable[SourceDocument],
+    lexical_index: LexicalSearchIndex,
+    structural_index: StructuralSearchIndex,
+    lexical_method: str = "source-locator-v1+lexical-char-tfidf-v1+text-context-v1",
+    structural_method: str = "source-locator-v1+judgment-char-tfidf-v1+text-context-v1",
+) -> FrozenCandidateBundle:
+    """Freeze A0/A1/A2/A4 candidates with no hidden cross-arm fallback."""
+    ordered_documents, by_id = _document_index(documents)
+    locator_index = SourceLocatorIndex(ordered_documents)
+    actual_corpus_digest = corpus_digest(ordered_documents)
+    if actual_corpus_digest != spec.corpus_sha256:
+        raise ValueError("Stage 4h corpus does not match the preregistered digest")
+    case_values = tuple(cases)
+    by_case = {case.case_id: case for case in case_values}
+    if len(by_case) != len(case_values):
+        raise ValueError("Stage 4h cases must have unique ids")
+    selected: list[GoldCase] = []
+    for case_id in spec.case_ids:
+        case = by_case.get(case_id)
+        if case is None:
+            raise ValueError(f"Stage 4h case is missing: {case_id}")
+        missing_sources = sorted(
+            {
+                item.source_id
+                for item in case.evidence
+                if item.source_id is not None and item.source_id not in by_id
+            }
+        )
+        if missing_sources:
+            raise ValueError(
+                f"case {case.case_id} gold sources are absent from the frozen corpus: "
+                f"{missing_sources}"
+            )
+        selected.append(case)
+
+    frozen: list[FrozenCandidateSet] = []
+    for case in selected:
+        anchors = _locator_anchors(case=case, spec=spec, locator_index=locator_index)
+        locator_only = bool(anchors) and spec.explicit_locator_policy == "exclusive"
+        if locator_only:
+            lexical = tuple(_ranked_anchors(anchors))
+            lexical_case_method = "source-locator-only-v1"
+        else:
+            lexical = _lexical_candidates(
+                case=case,
+                spec=spec,
+                documents=ordered_documents,
+                by_id=by_id,
+                index=lexical_index,
+                anchors=anchors,
+            )
+            lexical_case_method = lexical_method
+        oracle = _oracle_candidates(case=case, spec=spec, by_id=by_id)
+        if locator_only:
+            structural = tuple(_ranked_anchors(anchors))
+            structural_case_method = "source-locator-only-v1"
+        else:
+            structural = _structural_candidates(
+                case=case,
+                spec=spec,
+                documents=ordered_documents,
+                by_id=by_id,
+                index=structural_index,
+                anchors=anchors,
+            )
+            structural_case_method = structural_method
+        candidates_by_arm = {
+            "A0": (lexical_case_method, lexical),
+            "A1": (lexical_case_method, lexical),
+            "A2": ("owner-gold-oracle-v1", oracle),
+            "A3": (lexical_case_method, lexical),
+            "A4": (structural_case_method, structural),
+        }
+        for arm in spec.arms:
+            method, arm_candidates = candidates_by_arm[arm]
+            frozen.append(
+                FrozenCandidateSet.create(
+                    run_id=spec.run_id,
+                    case_id=case.case_id,
+                    arm=arm,
+                    retrieval_method=method,
+                    candidates=arm_candidates,
+                )
+            )
+    return FrozenCandidateBundle.create(spec=spec, candidate_sets=frozen)
+
+
+def candidate_bundle_json(bundle: FrozenCandidateBundle) -> str:
+    return json.dumps(
+        bundle.to_dict(),
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+        allow_nan=False,
+    )
+
+
+__all__ = [
+    "FrozenCandidateBundle",
+    "StructuralSearchIndex",
+    "candidate_bundle_json",
+    "corpus_digest",
+    "freeze_stage4h_candidates",
+]

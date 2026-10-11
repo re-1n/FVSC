@@ -1,0 +1,224 @@
+# Next steps
+
+Migration order (foundation-first; each commit must build and pass tests):
+
+1. ✅ **Commit №0 — scaffold + tooling**: `src/fvsc/` skeleton,
+   CI (`tests.yml`), pytest markers, `data/.gitignore`, legacy-boundary check, ADRs,
+   architecture / status docs.
+2. ✅ **Foundation** — `EvidenceEvent`, `EvidenceLedger`, `SemanticState`, persistence,
+   snapshot contracts → `src/fvsc/evidence/` + `runtime/`.
+3. ✅ **Representations** — mass-invariant shape metrics (`semantic/metrics.py`) →
+   ContainerCore v1 experimental (`semantic/containers/`, ADR-002) → density optional
+   backend (`semantic/density/`, ADR-003). No Obsidian/HTTP/parser deps. Commits
+   `717da42` `3165784` `95c3830` `2809c39`; **104 passed / 1 skipped**.
+4. **Applied / clickable MVP**:
+   - ✅ ingest foundation — language-agnostic parser, provenance adapter,
+     `semantic_input`, and deterministic basis vectors. Working chain:
+     `raw text -> parser -> concept tree -> vectors / rho`; **117 passed / 1 skipped**.
+   - ✅ **Stage 4d — vault ingest** — Obsidian Markdown → typed `SourceDocument` →
+     canonical `EvidenceLedger` → deterministic `MaterializedSnapshot` → versioned,
+     atomic JSON cache. Includes idempotent replay, append-only change/delete/reactivate
+     lifecycle, protected generated-folder exclusions, explicit source kinds, and a
+     portable Telegram JSON source adapter. Commits `817bd2f` `180f6c0` `964b296`
+     `e63ee84` `ba7c893` `c512367`; **152 passed / 1 skipped**.
+   - ✅ **Stage 4d.1 — real-data ingest correction** — message-level Telegram sources,
+     explicit owner adoption, private participant provenance, reply/time/forward/media
+     evidence excluded from semantic concepts, and a character n-gram lexical floor.
+     Commits `1bea6d7` `f6f4389` `48f9916` `7a7b175`; **160 passed / 1 skipped /
+     11 deselected** and GitHub CI green.
+   - ✅ **Stage 4e — real-data semantic evaluation** — portable exact-relation
+     Judgments, source spans, policy-controlled layers, feedback, temporal
+     contradictions, released Gold 001–015 with locally resolved source bodies, and
+     lexical/exact/fusion comparison.
+     Lexical wins (MRR@10 0.5262 vs 0.2611 exact); no semantic arm is promoted.
+   - ✅ **Stage 4f — source-cited interpretation proposals** — typed L2/L3 claims,
+     revision/hash citations, forbidden-link checks, claim-level owner assessment,
+     and a separate atomic interpretation journal. No automatic owner evidence.
+   - ✅ **Stage 4g — FastAPI + Ollama + Obsidian** — clean `VaultRuntime`, thin local
+     HTTP routes, strict loopback JSON Ollama adapter, native lexical source search,
+     cited interpretation, source opening, and claim review in Obsidian.
+   - ✅ **Semantic-representation audit** — ADR-007 and the semantic-atlas architecture
+     preserve the whitepaper's Judgment, container, relation-transform, tensor-factor,
+     graph, recursive, temporal, metaphor, and L0–L3 work while demoting density from a
+     universal substrate to an optional local view. The audit also corrects the legacy
+     unbounded containment ratio, eigenvector/facet overclaim, non-unique matrix
+     decomposition, and unproven fractal/convergence claims.
+   - **First vertical dialogue census — participant review pending.** A bounded private
+     two-party episode now has source-linked candidate `M/R/G/N/Q` units, external
+     reply-antecedent checks, provenance for model-assisted wording, and an independent
+     challenge pass. One participant's meaning layer is reviewed; the other participant
+     has a neutral source-cited review pack. Keep every source body and review artifact
+     under ignored `private_eval/`; freeze a new private revision only after the second
+     review and a final challenge pass. This is evaluation construction, not evidence of
+     semantic-representation superiority.
+   - ✅ **Stage 4h harness** — immutable manifest and preregistered thresholds;
+     source-body-free challenge addendum; frozen A0/A1/A2/A4 candidates; exact local
+     model digest/seed/token/duration telemetry; paired local generation; keyed blinded
+     owner-review pack; paired scoring and conservative diagnosis. Raw proposals,
+     excerpts, arm map, and owner review stay under ignored `.fvsc/stage4h/`.
+   - ✅ **Original Stage 4h generation** — after the recorded CPU timeout, empty-context
+     and Windows-writer corrections, the owner's GPU run produced all 18 blinded
+     A1/A2/A4 items. Five items have preliminary qualitative review; the blind map is
+     still closed, so no arm comparison or promotion is valid yet. Review every
+     remaining claim/citation and measure false authorship, unknown-referent assumptions,
+     forbidden composites, abstention, latency, and tokens. `A3` remains deferred until
+     a separate external-source privacy scope is explicitly authorized.
+   - **Stage 4h.1 source-boundary correction — ready for rerun.** The operation registry,
+     typed transport-author/origin/adoption envelope, 61 verified Telegram blockquote
+     spans on the private corpus, attribution-aware prompt v4, auditable review-pack
+     context, deterministic explicit-locator anchoring and sparse revision-bound owner
+     annotation overlay are implemented. The overlay separates origin, adoption and
+     endorsement, stores no body, and is bound into the new immutable run id. The known
+     song/AI two-span seed validates against the 645-document corpus. These are
+     canonical-safety corrections, not a promoted semantic view. Next: push, run the
+     no-model validator, then execute and blind-review the corrected pilot. Protocol:
+     [`STAGE_4H1_SOURCE_BOUNDARIES.md`](../architecture/STAGE_4H1_SOURCE_BOUNDARIES.md).
+   - **Decision after Stage 4h** — choose at most one relation-conditioned view whose
+     inductive bias matches the dominant error (for example contextual usage retrieval,
+     directed inclusion, temporal trajectory, or ambiguity state). Register a baseline
+     and ablation before implementation. Do not build the full research menu.
+     Protocol: [`STAGE_4H_CONTROLLED_ATTRIBUTION_TEST.md`](../architecture/STAGE_4H_CONTROLLED_ATTRIBUTION_TEST.md).
+     The whitepaper subsection **«Заимствуемые паттерны MAGMA и MemMachine»** records
+     five bounded candidates (M1–M3, MM1–MM2), their FVSC guardrails, and the required
+     ablations. Treat them as post-pilot options and baselines, not as an authorized
+     dependency or simultaneous implementation plan.
+   Keep HTTP, plugin, and LLM dependencies outside the ingest layer. Do not commit
+   vault data, voice data, or generated folders.
+5. **Verify** — current owner-overlay checkpoint: **283 passed / 1 skipped / 11
+   deselected**, legacy boundary green, Obsidian production build green, and unchanged
+   frozen Gold/addendum files. GitHub Actions run 29708329826 for the preceding pushed
+   source-boundary head is queued, not failed; push this tranche and wait for its own
+   remote result.
+   Draft PR #2 already exists and validates each pushed `integration/fvsc-core-v1`
+   head; do not create or merge another PR without separate user instruction.
+
+## Current handoff — coverage-aware synthesis
+
+The private dialogue census and owner-reviewed atomic `G001` view have separated the
+remaining Q07 failure from retrieval: bounded typed traversal places both the
+interaction protocol and the caveated tactile facet in a 492-token evidence block, but
+the generation model still omits one facet.
+
+Next:
+
+1. build public synthetic multi-facet questions with positive, optional, alternative
+   and prohibited facets;
+2. preregister one minimal coverage-aware synthesis contract against the current
+   one-shot baseline;
+3. score facet recall, unsupported-facet rate, citation correctness, abstention,
+   latency and tokens;
+4. preserve per-question isolation and never force guards/alternatives into positive
+   prose;
+5. repeat private Q07 only after the synthetic gate.
+
+Do not tune another ranker, increase the global budget, promote embeddings/density, or
+rewrite the frozen parent Gold for this failure.
+
+Update (2026-07-26): the first public synthetic gate is complete. The minimal coverage
+instruction failed: macro required-facet recall remained 1.000 in both arms, citation
+correctness decreased from 1.000 to 0.933, and both arms failed the
+insufficient-evidence case. Do not repeat private Q07 under this contract. The next
+step is to classify the abstention failure and design a new public fixture family or
+structured synthesis operation before registering another intervention.
+
+Second update (2026-07-26): a frozen eight-case answer/claim consistency gate passed.
+Claim-first deterministic rendering preserved required-facet recall at 1.000, raised
+abstention accuracy from 0.625 to 1.000, and reduced prohibited relation violations
+from 2 to 0. One diagnostic repeat of private Q07 is now allowed under exactly this
+operation. Do not tune it on the private response; retain either outcome.
+
+Private transfer result: partial. The frozen claim-first diagnostic cited both Q07
+units and restored tactility, but still omitted the explicit no-immediate-solution
+contrast inside the interaction protocol. The permitted repeat has been consumed.
+Do not rerun or tune on Q07. Build the next compositional-coverage operation on a
+broader public phenomenon atlas.
+
+Third update (2026-07-26): the source-free QDMR-like planner failed its reused public
+gate because model-selected `emits_requirement` merged or suppressed answer
+obligations. A separate deterministic boundary compiler now passes a new twelve-case
+held-out question-only gate at 12/12, fails closed outside four registered explicit
+grammars, and adapts directly to `FrozenQuestionPlan`. This licenses a new public
+end-to-end boundary-plus-planned-slot gate; it does not license private Q07 or claim
+  general semantic parsing. Protocol:
+  [`ANSWER_SLOT_BOUNDARY_GATE.md`](../evaluation/ANSWER_SLOT_BOUNDARY_GATE.md).
+
+  Diagnostic transfer on the newly constructed boundary-plus-slot source set reached
+  0.950 required-facet recall, 1.000 citation correctness, 1.000 abstention accuracy,
+  zero unsupported/prohibited/role violations, and zero schema errors. It remains
+  non-promotional because the source fixture tranche was not committed before
+  execution. The only miss preserved its slot but failed to resolve the implicit
+  referent in “what remains conditional” to the source-supported second delivery.
+  Freeze this tranche as diagnostic evidence; the next public candidate is
+  referent-aware relation support inside fixed slots, not another boundary prompt and
+  not private Q07.
+
+  Update: the preregistered eight-case paired referent-aware gate failed. Both v1 and
+  candidate reached 1.000 positive required-facet recall, so the candidate repaired no
+  baseline miss. It reduced abstention accuracy from 0.875 to 0.750, increased mean
+  unsupported-facet rate from 0.125 to 0.250, and introduced two prohibited relation
+  assertions by treating a passed test as acceptance and lower cost as rejection.
+  Reject the instruction and retain v1. The next public candidate must separate
+  relation validation from entity nomination with explicit negative controls; do not
+  tune another referent prompt on the frozen cases. Protocol:
+  [`REFERENT_AWARE_SLOT_GATE.md`](../evaluation/REFERENT_AWARE_SLOT_GATE.md).
+
+  Fourth update (2026-07-26): a deterministic typed relation-support guard passed its
+  preregistered twelve-case gate using shared generation for raw and guarded arms.
+  Positive recall and citation correctness stayed at 1.000; abstention accuracy rose
+  from 0.750 to 1.000; unsupported-facet rate fell from 0.250 to 0; and four prohibited
+  relation assertions fell to zero. Promote it only for the six registered English
+  relations (`confirmed`, `conditional`, `accepted`, `declined`, `retained`,
+  `replaced`). It is not general entailment and its cue set must not expand without a
+  new held-out gate. Next: integrate it behind explicit planned-slot operation
+  registration and prove unregistered slots fail closed. Protocol:
+  [`RELATION_SUPPORT_GUARD_GATE.md`](../evaluation/RELATION_SUPPORT_GUARD_GATE.md).
+
+  Integration checkpoint: the promoted guard is now explicitly registered as `S6`;
+  its registration is locked to the six gated cue types, unknown or ambiguous
+  relations fail before eligibility compilation, and `S6` remains an opt-in
+  composition after `S4` rather than a global synthesis default. Any new relation or
+    paraphrastic cue now requires a separate held-out gate.
+
+    S6 polarity checkpoint: a preregistered eighteen-case audit showed that the
+    initial surface guard admitted six locally negated/modal cues (`12/18`). A bounded
+    clause-local filter for negation and pre-cue modality passed `18/18` while
+    preserving the original relation-gate positives. Reported speech, cross-clause
+    scope, double negation and non-English morphology remain unsupported until
+    separately frozen audits. Protocol:
+    [`RELATION_GUARD_POLARITY_AUDIT.md`](../evaluation/RELATION_GUARD_POLARITY_AUDIT.md).
+
+    F1/S6 checkpoint: the surface guard admitted all six relation cues embedded inside
+    verified external quotation spans (`6/12`). The preregistered overlap filter passed
+    `12/12`, preserves direct and `owner_commentary` cues, verifies every span digest,
+    and consumes the existing `SourceAttribution` envelope. External expression cues
+    are now ineligible only for direct claims; a future reported-claim operation may
+    represent them without flattening attribution. Protocol:
+    [`RELATION_GUARD_ATTRIBUTION_AUDIT.md`](../evaluation/RELATION_GUARD_ATTRIBUTION_AUDIT.md).
+
+Protocol and result context:
+
+- [`CONTEXT_RANKER_CUES_PROBE.md`](../evaluation/CONTEXT_RANKER_CUES_PROBE.md)
+- [`ATOMIC_GROUP_COMPILATION.md`](../evaluation/ATOMIC_GROUP_COMPILATION.md)
+- [`NEXT_SESSION.md`](../../NEXT_SESSION.md)
+
+## Follow-ups (not blocking)
+
+- ✅ Track `obsidian-plugin/package-lock.json`, use reproducible `npm ci` with dependency
+  caching in CI, and restore the plugin `typecheck` step. The direct esbuild development
+  dependency is updated beyond the affected `<=0.24.2` advisory range.
+- Profile the plugin's debounced full-vault reconciliation and add a source-scoped
+  endpoint only if live vault latency warrants the extra lifecycle surface.
+- Port `core.viability_benchmark` and the `natural-language-live.yml` workflow once the
+  benchmark modules are ported (Stage 5).
+- **`benchmarks/results/` is absent on this branch** despite ADR-002 ("Negative results
+  are recorded in `benchmarks/results/`, not hidden"). Port the registered negative
+  results as a `chore(benchmarks)` commit in Stage 5 alongside the runners. None of the
+  Stage-3 modules read them, so not a blocker.
+- ✅ **Parser + provenance + vault ingest** now use only `src/fvsc/` contracts; the new
+  modules do not import legacy `core/`, HTTP, plugin, visualization, export, or LLM code.
+- Decide on `data/conceptnet_ru.json` (12.7 MB, tracked) — keep as a curated asset or
+  untrack with a download fallback.
+- Unify tests under `tests/{unit,integration,e2e}/` as subsystems port. Note: test dirs
+  carry no `__init__.py` (foundation convention), so test-file basenames must be unique
+  across the whole tree — `density/test_density.py` not `test_core.py` (collides with
+  `containers/test_core.py`).

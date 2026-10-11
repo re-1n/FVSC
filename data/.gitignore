@@ -1,0 +1,12 @@
+# Raw/personal data is NOT version-controlled: vault, voice recordings, transcripts,
+# full corpora, ASR/LLM models, runtime snapshots. Only small synthetic fixtures live here.
+#
+# NOTE: data/conceptnet_ru.json IS tracked intentionally (curated RU conceptnet subset
+# used at runtime). Do not untrack without providing a download fallback.
+
+# Ignore everything by default...
+*
+# ...except this file and the fixtures/ tree.
+!.gitignore
+!fixtures/
+!fixtures/**

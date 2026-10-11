@@ -2,6 +2,7 @@ import { Plugin, WorkspaceLeaf, Notice } from "obsidian";
 import { DEFAULT_SETTINGS, FvscSettings, FvscSettingTab } from "./settings";
 import { BackendController, BackendStatus } from "./backend";
 import { AntourageView, ANTOURAGE_VIEW_TYPE } from "./view";
+import { ConceptMapView, CONCEPT_MAP_VIEW_TYPE } from "./map-view";
 import { VaultWatcher } from "./vault_watcher";
 import { BootstrapModal } from "./bootstrap";
 import { autoFillSettings } from "./paths";
@@ -35,6 +36,9 @@ export default class FvscPlugin extends Plugin {
 
     this.statusEl = this.addStatusBarItem();
     this.renderStatus("stopped");
+
+    this.registerView(CONCEPT_MAP_VIEW_TYPE,
+      leaf => new ConceptMapView(leaf, () => this.backend.baseUrl()));
 
     this.registerView(
       ANTOURAGE_VIEW_TYPE,
@@ -94,11 +98,7 @@ export default class FvscPlugin extends Plugin {
         void this.startOllamaIfAvailable();
         void this.backend.start().then(() => {
           if (this.backend.getStatus() === "up") {
-            // Backend reports "up" the moment uvicorn's port opens, but
-            // /viz/status may still 500 for a beat while the router warms
-            // (lazy load of vault cache, conceptnet prior, etc.). Retry the
-            // first-time-build check up to ~10s so the modal reliably appears
-            // for new users instead of "через раз".
+            // Retry the first-sync check while the local runtime loads cache.
             void this.scheduleBootstrapCheck();
           }
         });
@@ -129,7 +129,7 @@ export default class FvscPlugin extends Plugin {
     for (let i = 0; i < 10; i++) {
       await new Promise((r) => window.setTimeout(r, 1000));
       try {
-        const r = await fetch(`${this.backend.baseUrl()}/viz/status`);
+        const r = await fetch(`${this.backend.baseUrl()}/health`);
         if (r.ok) {
           void BootstrapModal.maybeShow(this, this.backend, () => this.reloadOpenAntourageViews());
           return;
@@ -143,12 +143,10 @@ export default class FvscPlugin extends Plugin {
       try { await this.watcher.flush(); } catch { /* ignore */ }
       this.watcher.stop();
     }
-    if (this.backend?.getStatus() === "up") {
-      // Best-effort: ask backend to persist any unsaved live ingests.
-      try { await fetch(`${this.backend.baseUrl()}/viz/save_cache`, { method: "POST" }); } catch { /* ignore */ }
-    }
+    // Every reconciliation is atomically persisted by the clean service.
     await this.backend?.stop();
     this.app.workspace.detachLeavesOfType(ANTOURAGE_VIEW_TYPE);
+    this.app.workspace.detachLeavesOfType(CONCEPT_MAP_VIEW_TYPE);
   }
 
   async openAntourageView(): Promise<void> {
@@ -175,6 +173,16 @@ export default class FvscPlugin extends Plugin {
       const v = leaf.view;
       if (v instanceof AntourageView) v.reload();
     }
+  }
+
+  async focusConcept(term?: string): Promise<void> {
+    let leaf = this.app.workspace.getLeavesOfType(CONCEPT_MAP_VIEW_TYPE)[0];
+    if (!leaf) {
+      leaf = this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getLeaf("split", "vertical");
+      await leaf.setViewState({ type: CONCEPT_MAP_VIEW_TYPE, active: false });
+    }
+    if (leaf.view instanceof ConceptMapView) await leaf.view.focus(term);
+    await this.app.workspace.revealLeaf(leaf);
   }
 
   async loadSettings() {

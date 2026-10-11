@@ -11,6 +11,9 @@ Usage:
 from __future__ import annotations
 
 import httpx
+import pytest
+
+pytestmark = pytest.mark.integration
 
 BASE = "http://127.0.0.1:8765"
 
