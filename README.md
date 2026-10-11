@@ -6,7 +6,8 @@
 Each representation should be used for the semantic phenomenon it can express and
 test well. The atlas keeps explicit provenance, epistemic status, and the information
 lost when translating between representations. This research direction was stated in
-the [main-branch vision](https://github.com/re-1n/FVSC/blob/08e25c53af401736c5858cb3d883ef659a14d87e/README.md).
+the [semantic mathematics atlas vision](docs/architecture/SEMANTIC_MATHEMATICS_ATLAS_VISION.md)
+in `main` commit `08e25c5`.
 
 The implementation below is one working, source-cited slice of that atlas. The
 additional mathematical structures and transitions in the vision are research
