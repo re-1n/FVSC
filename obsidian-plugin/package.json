@@ -8,6 +8,7 @@
     "build": "node esbuild.config.mjs production",
     "typecheck": "tsc --noEmit",
     "test:clarification": "node tests/clarification.test.mjs",
+    "test:dialogue-map": "node tests/dialogue-map.test.mjs",
     "install-to-vault": "install-to-vault.cmd"
   },
   "keywords": ["obsidian", "fvsc", "semantic"],

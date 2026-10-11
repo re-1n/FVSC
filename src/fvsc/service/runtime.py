@@ -34,6 +34,7 @@ from ..runtime.vault_cache import (
     load_vault_cache,
     save_vault_cache,
 )
+from ..retrieval.concept_map import ConceptMap
 
 
 class RuntimeNotLoadedError(RuntimeError):
@@ -126,6 +127,7 @@ class VaultRuntime:
         self._documents_by_id: dict[str, SourceDocument] = {}
         self._lexical_index: LexicalSearchIndex | None = None
         self._judgment_index: JudgmentSearchIndex | None = None
+        self._concept_map: ConceptMap | None = None
 
     @property
     def ledger(self) -> EvidenceLedger:
@@ -167,6 +169,22 @@ class VaultRuntime:
         self._documents_by_id = documents_by_id
         self._lexical_index = lexical_index
         self._judgment_index = judgment_index
+        self._concept_map = None
+
+    def _map(self) -> ConceptMap:
+        cache = self._require_cache()
+        if self._concept_map is None:
+            self._concept_map = ConceptMap(cache.snapshot, cache.ledger)
+        return self._concept_map
+
+    def concept_map(self, focus: str | None = None) -> dict:
+        with self._lock:
+            return self._map().view(focus)
+
+    def concept_mentions(self, texts: list[str]) -> list[list[dict]]:
+        with self._lock:
+            view = self._map()
+            return [view.mentions(text) for text in texts]
 
     def _display_cache_path(self) -> str:
         try:

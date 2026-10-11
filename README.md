@@ -64,6 +64,9 @@ the [semantic-atlas design](./docs/architecture/SEMANTIC_ATLAS.md).
 - Proposals and claim-level owner assessments are stored outside canonical evidence in
   `.fvsc/interpretations.json`.
 - FastAPI and the Obsidian plugin are thin clients over these contracts.
+- [Saved dialogues and clickable concepts](docs/architecture/DIALOGUE_AND_CONCEPT_NAVIGATION.md)
+  connect Antourage's messages to a source-linked concept map. Map navigation happens
+  only on click; conversation context remains separate from owner evidence.
 - An [on-demand clarification prototype](docs/architecture/OWNER_CLARIFICATION_LOOP.md)
   lets owners clarify a selected search fragment for a specific question, skip it,
   or explain in their own words. Choices persist separately and can be amended;

@@ -35,12 +35,29 @@ class VaultInterpreter:
         top_k: int = 5,
         context_depth: int = 1,
         generated_at: float | None = None,
+        conversation_id: str | None = None,
+        previous_proposal_ids: tuple[str, ...] = (),
     ) -> InterpretationProposal:
         timestamp = time.time() if generated_at is None else float(generated_at)
         if not math.isfinite(timestamp):
             raise ValueError("generated_at must be finite")
+        dialogue = []
+        if previous_proposal_ids and (not conversation_id or self.store is None):
+            raise ValueError("dialogue requires a conversation and proposal journal")
+        if len(previous_proposal_ids) > 6 or len(set(previous_proposal_ids)) != len(previous_proposal_ids):
+            raise ValueError("dialogue accepts up to six distinct previous turns")
+        for proposal_id in previous_proposal_ids:
+            previous = self.store.get_proposal(proposal_id)
+            if previous is None or previous.metadata.get("conversation_id") != conversation_id:
+                raise ValueError("previous turn does not belong to this conversation")
+            if dialogue and previous.generated_at < dialogue[-1].generated_at:
+                raise ValueError("previous turns must be chronological")
+            dialogue.append(previous)
+        # Only user questions expand retrieval. Model answers never become evidence
+        # or lexical query terms. The latest question remains the generation target.
+        retrieval_query = "\n".join([*(p.question[:2048] for p in dialogue), question])
         documents = self.runtime.source_documents_for_query(
-            question,
+            retrieval_query,
             top_k=top_k,
             context_depth=context_depth,
         )
@@ -59,6 +76,7 @@ class VaultInterpreter:
             generated_at=timestamp,
             retrieval_method="lexical-char-ngram-v1",
             evidence_event_ids_by_source=event_ids,
+            dialogue=tuple(dialogue), conversation_id=conversation_id,
         )
         if self.store is not None:
             self.store.append_proposal(proposal)

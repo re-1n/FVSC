@@ -160,6 +160,8 @@ class InterpretationBackend(Protocol):
         self,
         question: str,
         sources: tuple[PromptSource, ...],
+        *,
+        history: tuple[dict[str, str], ...] = (),
     ) -> GeneratedInterpretation: ...
 
 
@@ -171,6 +173,8 @@ def generate_interpretation_proposal(
     generated_at: float,
     retrieval_method: str = "lexical-char-ngram-v1",
     evidence_event_ids_by_source: dict[str, tuple[str, ...]] | None = None,
+    dialogue: tuple[InterpretationProposal, ...] = (),
+    conversation_id: str | None = None,
 ) -> InterpretationProposal:
     """Generate an isolated proposal and resolve backend labels to citations."""
     question_value = _nonempty(question, field="interpretation question")
@@ -189,7 +193,11 @@ def generate_interpretation_proposal(
         )
         for index, document in enumerate(nonempty_documents, start=1)
     )
-    generated = backend.generate(question_value, prompt_sources)
+    if dialogue:
+        history = tuple({"question": p.question[:1024], "answer": p.answer[:1024]} for p in dialogue[-6:])
+        generated = backend.generate(question_value, prompt_sources, history=history)
+    else:
+        generated = backend.generate(question_value, prompt_sources)
     source_by_label = {item.label: item for item in prompt_sources}
     claims: list[InterpretationClaim] = []
     used_labels: set[str] = set()
@@ -227,6 +235,8 @@ def generate_interpretation_proposal(
         metadata={
             "candidate_source_count": len(prompt_sources),
             "cited_source_count": len(citations),
+            **({"conversation_id": conversation_id,
+                "previous_proposal_ids": [p.proposal_id for p in dialogue]} if conversation_id else {}),
         },
     )
 

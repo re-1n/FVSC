@@ -1,4 +1,6 @@
 import { spawn, ChildProcess } from "child_process";
+import { createHash } from "crypto";
+import { realpathSync } from "fs";
 import { Notice } from "obsidian";
 import type { FvscSettings } from "./settings";
 
@@ -13,7 +15,7 @@ export interface BackendOptions {
 }
 
 const HEALTH_POLL_MS = 500;
-const HEALTH_TIMEOUT_MS = 20_000;
+const HEALTH_TIMEOUT_MS = 90_000;
 const SHUTDOWN_GRACE_MS = 2_000;
 
 export class BackendController {
@@ -34,7 +36,7 @@ export class BackendController {
   }
 
   async start(): Promise<void> {
-    if (this.proc) {
+    if (this.proc || this.status === "starting" || this.status === "up") {
       return;
     }
     const s = this.getSettings();
@@ -46,6 +48,14 @@ export class BackendController {
     }
 
     this.setStatus("starting");
+
+    const existing = await this.probe();
+    if (this.getStatus() !== "starting") return;
+    if (existing === "match") { this.setStatus("up"); return; }
+    if (existing === "occupied") {
+      this.setStatus("failed", "На этом порту работает другой сервис или другое хранилище. Выбери свободный порт.");
+      return;
+    }
 
     const env = {
       ...process.env,
@@ -82,6 +92,7 @@ export class BackendController {
     proc.stdout?.on("data", (b) => console.log("[fvsc-backend]", b.toString().trimEnd()));
     proc.stderr?.on("data", (b) => console.log("[fvsc-backend]", b.toString().trimEnd()));
     proc.on("error", (err) => {
+      if (this.proc !== proc) return;
       const msg = (err as NodeJS.ErrnoException).code === "ENOENT"
         ? `Python не найден по пути: ${s.pythonPath}. Открой Настройки → FVSC Antourage.`
         : `Не удалось запустить движок карты: ${err.message}`;
@@ -92,6 +103,7 @@ export class BackendController {
       this.opts.onConfigError?.();
     });
     proc.on("exit", (code, signal) => {
+      if (this.proc !== proc) return;
       console.log(`[fvsc-backend] exited code=${code} signal=${signal}`);
       this.proc = null;
       if (this.status !== "stopped" && this.status !== "failed") {
@@ -107,7 +119,7 @@ export class BackendController {
     const ok = await this.waitForHealth();
     if (ok) {
       this.setStatus("up");
-    } else if (this.status === "starting") {
+    } else if (this.getStatus() === "starting") {
       this.setStatus("failed", "движок карты не ответил вовремя — проверь Консоль (Ctrl+Shift+I)");
       new Notice("FVSC: движок карты не ответил вовремя. Открой Консоль (Ctrl+Shift+I).");
     }
@@ -142,8 +154,7 @@ export class BackendController {
     while (Date.now() < deadline) {
       if (!this.proc) return false;
       try {
-        const r = await fetch(`${this.baseUrl()}/health`, { method: "GET" });
-        if (r.ok) {
+        if (await this.probe() === "match") {
           return true;
         }
       } catch {
@@ -157,6 +168,19 @@ export class BackendController {
   private setStatus(s: BackendStatus, detail?: string) {
     this.status = s;
     this.opts.onStatus(s, detail);
+  }
+
+  private async probe(): Promise<"match" | "occupied" | "offline"> {
+    let path: string;
+    try { path = realpathSync(this.opts.vaultPath); } catch { return "offline"; }
+    if (process.platform === "win32") path = path.toLowerCase();
+    const expected = createHash("sha256").update(path, "utf8").digest("hex");
+    try {
+      const response = await fetch(`${this.baseUrl()}/health`, { signal: AbortSignal.timeout(2500) });
+      if (!response.ok) return "occupied";
+      const health = await response.json() as { vault_id?: string; configured?: boolean };
+      return health.configured && health.vault_id === expected ? "match" : "occupied";
+    } catch { return "offline"; }
   }
 }
 

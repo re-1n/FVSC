@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import os
+import hashlib
 from pathlib import Path
 import time
 import threading
@@ -25,6 +26,7 @@ from ..interpretation import (
     InterpretationStore,
 )
 from .models import (
+    ConceptMentionsRequest,
     ClarificationPrepareRequest,
     ClarificationAnswerRequest,
     ClarificationResponse,
@@ -227,6 +229,8 @@ def create_app(
         configured = selected_runtime is not None
         loaded = configured and selected_runtime.status().loaded
         return HealthResponse(
+            vault_id=(hashlib.sha256(os.path.normcase(os.path.realpath(str(selected_runtime.vault_dir))).encode("utf-8")).hexdigest()
+                      if configured else None),
             status="ok" if configured else "unconfigured",
             configured=configured,
             loaded=loaded,
@@ -279,6 +283,19 @@ def create_app(
             hits=[SearchHitResponse.from_runtime(hit) for hit in hits]
         )
 
+    @application.get("/v1/map")
+    def concept_map(focus: str | None = Query(default=None, max_length=512)):
+        try:
+            return require_runtime().concept_map(focus)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="concept not found in current map") from exc
+
+    @application.post("/v1/map/mentions")
+    def concept_mentions(request: ConceptMentionsRequest):
+        if sum(len(text) for text in request.texts) > 65536:
+            raise HTTPException(status_code=422, detail="text batch is too long")
+        return require_runtime().concept_mentions(request.texts)
+
     @application.post(
         "/v1/interpret",
         response_model=InterpretationProposalResponse,
@@ -299,12 +316,33 @@ def create_app(
                 request.question,
                 top_k=request.top_k,
                 context_depth=request.context_depth,
+                conversation_id=request.conversation_id,
+                previous_proposal_ids=tuple(request.previous_proposal_ids),
             )
         except OllamaIntegrationError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return InterpretationProposalResponse.from_proposal(proposal)
+
+    @application.get("/v1/dialogues")
+    def dialogues():
+        grouped = {}
+        for proposal in require_interpretation_store().journal.proposals:
+            identity = proposal.metadata.get("conversation_id") or "legacy"
+            if identity not in grouped:
+                grouped[identity] = {"conversation_id": identity, "title": "Ранее заданные отдельные вопросы" if identity == "legacy" else proposal.question[:100],
+                                     "updated_at": proposal.generated_at, "turns": 0}
+            grouped[identity]["turns"] += 1
+            grouped[identity]["updated_at"] = max(grouped[identity]["updated_at"], proposal.generated_at)
+        return sorted(grouped.values(), key=lambda item: item["updated_at"], reverse=True)[:100]
+
+    @application.get("/v1/dialogues/{conversation_id}", response_model=list[InterpretationProposalResponse])
+    def dialogue(conversation_id: str):
+        return [InterpretationProposalResponse.from_proposal(p) for p in sorted(
+            (p for p in require_interpretation_store().journal.proposals
+             if (p.metadata.get("conversation_id") or "legacy") == conversation_id), key=lambda p: p.generated_at
+        )][-200:]
 
     @application.post(
         "/v1/interpret/assess",

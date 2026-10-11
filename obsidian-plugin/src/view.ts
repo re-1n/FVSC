@@ -60,6 +60,7 @@ interface ProposalClaim {
 
 interface InterpretationProposal {
   proposal_id: string;
+  question: string;
   answer: string;
   claims: ProposalClaim[];
   citations: ProposalCitation[];
@@ -87,6 +88,13 @@ export class AntourageView extends ItemView {
   private backendEl: HTMLElement | null = null;
   private pollTimer: number | null = null;
   private requestAbort: AbortController | null = null;
+  private chatEl: HTMLElement | null = null;
+  private dialoguePicker: HTMLSelectElement | null = null;
+  private turns: InterpretationProposal[] = [];
+  private conversationId = "";
+  private sending = false;
+  private dialogueLoad = 0;
+  private historyReady = false;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -126,9 +134,9 @@ export class AntourageView extends ItemView {
     syncButton.onclick = () => void this.synchronize(syncButton);
     const graphButton = toolbar.createEl("button", {
       cls: "fvsc-toolbar-btn",
-      text: "Obsidian-граф",
+      text: "Карта понятий",
     });
-    graphButton.onclick = () => void this.openObsidianGraphSplit();
+    graphButton.onclick = () => void this.getPlugin().focusConcept();
     const reloadButton = toolbar.createEl("button", {
       cls: "fvsc-toolbar-btn",
       text: "Обновить",
@@ -138,6 +146,16 @@ export class AntourageView extends ItemView {
     const statusRow = this.contentEl.createDiv({ cls: "fvsc-runtime-status" });
     this.statusEl = statusRow.createDiv();
     this.backendEl = statusRow.createDiv();
+
+    const conversations = this.contentEl.createDiv({ cls: "fvsc-toolbar" });
+    this.dialoguePicker = conversations.createEl("select");
+    this.dialoguePicker.setAttribute("aria-label", "Сохранённые диалоги");
+    this.dialoguePicker.onchange = () => void this.loadDialogue(this.dialoguePicker!.value);
+    conversations.createEl("button", { text: "Новый диалог" }).onclick = () => {
+      if (this.sending) { new Notice("Дождись текущего ответа."); return; }
+      void this.loadDialogue(crypto.randomUUID());
+    };
+    conversations.createEl("button", { text: "Диалог" }).onclick = () => this.showChat();
 
     const composer = this.contentEl.createDiv({ cls: "fvsc-composer" });
     this.queryInput = composer.createEl("textarea", {
@@ -158,16 +176,19 @@ export class AntourageView extends ItemView {
     const searchButton = actions.createEl("button", { text: "Найти источники" });
     searchButton.onclick = () => void this.search(searchButton);
     const interpretButton = actions.createEl("button", {
-      text: "Интерпретировать",
+      text: "Отправить",
       cls: "mod-cta",
     });
     interpretButton.onclick = () => void this.interpret(interpretButton);
     actions.createSpan({
       cls: "fvsc-composer-hint",
-      text: "Ctrl/⌘ + Enter — интерпретировать",
+      text: "Ctrl/⌘ + Enter — отправить · учитываются последние 6 ответов беседы",
     });
 
     this.resultEl = this.contentEl.createDiv({ cls: "fvsc-results" });
+    this.chatEl = this.contentEl.createDiv({ cls: "fvsc-results fvsc-dialogue" });
+    this.conversationId = this.getPlugin().settings.activeConversationId || crypto.randomUUID();
+    await this.loadDialogue(this.conversationId);
     await this.refreshStatus();
     this.startPolling();
   }
@@ -308,27 +329,46 @@ export class AntourageView extends ItemView {
       new Notice("FVSC: введи вопрос к дневнику.");
       return;
     }
+    if (this.sending) return;
+    if (this.conversationId === "legacy") { new Notice("Это архив отдельных вопросов. Нажми «Новый диалог», чтобы начать беседу."); return; }
+    if (!this.historyReady) { new Notice("Сначала дождись загрузки диалога или нажми «Обновить»."); return; }
+    this.sending = true;
     if (button) button.disabled = true;
-    this.requestAbort?.abort();
-    this.requestAbort = new AbortController();
-    this.setBusy("Нахожу источники и строю проверяемую интерпретацию…");
+    this.showChat();
+    const conversationId = this.conversationId;
+    const user = this.chatEl!.createDiv({ cls: "fvsc-message fvsc-message-user" });
+    user.createEl("strong", { text: "Ты" });
+    const questionText = user.createEl("p", { text: question });
+    void this.linkConcepts([{ element: questionText, text: question }]);
+    const reply = this.chatEl!.createDiv({ cls: "fvsc-message fvsc-message-assistant" });
+    reply.setText("Нахожу источники и готовлю ответ…");
+    this.chatEl!.scrollTop = this.chatEl!.scrollHeight;
     try {
       const proposal = await this.fetchJson<InterpretationProposal>("/v1/interpret", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, top_k: 5, context_depth: 1 }),
-        signal: this.requestAbort.signal,
+        body: JSON.stringify({ question, top_k: 5, context_depth: 1, conversation_id: conversationId,
+          previous_proposal_ids: this.turns.slice(-6).map(p => p.proposal_id) }),
       });
-      this.renderProposal(proposal);
+      if (conversationId !== this.conversationId || !reply.isConnected) return;
+      this.turns.push(proposal);
+      reply.empty();
+      this.renderProposal(proposal, reply);
+      if (this.queryInput?.value.trim() === question) this.queryInput.value = "";
+      await this.updateDialoguePicker().catch(() => undefined);
+      this.chatEl!.scrollTop = this.chatEl!.scrollHeight;
     } catch (error) {
-      if ((error as { name?: string }).name !== "AbortError") this.renderError(error);
+      if (reply.isConnected) reply.setText(`Ответ не получен: ${String(error)}. Текст вопроса оставлен в поле ввода.`);
     } finally {
       if (button) button.disabled = false;
+      this.sending = false;
     }
   }
 
   private setBusy(message: string): void {
     if (!this.resultEl) return;
+    this.resultEl.style.display = "";
+    if (this.chatEl) this.chatEl.style.display = "none";
     this.resultEl.empty();
     this.resultEl.createDiv({ cls: "fvsc-busy", text: message });
   }
@@ -488,19 +528,18 @@ export class AntourageView extends ItemView {
     }
   }
 
-  private renderProposal(proposal: InterpretationProposal): void {
-    if (!this.resultEl) return;
-    this.resultEl.empty();
-    const heading = this.resultEl.createDiv({ cls: "fvsc-result-heading" });
+  private renderProposal(proposal: InterpretationProposal, target: HTMLElement): void {
+    const heading = target.createDiv({ cls: "fvsc-result-heading" });
     heading.createEl("h3", { text: "Предложенная интерпретация" });
     heading.createSpan({
       text: `L${proposal.interpretation_layer} · ${proposal.model || "backend"} · отменяема`,
       cls: "fvsc-method",
     });
-    this.resultEl.createEl("p", { text: proposal.answer, cls: "fvsc-answer" });
+    const answer = target.createEl("p", { text: proposal.answer, cls: "fvsc-answer" });
+    const linkedTexts: { element: HTMLElement; text: string }[] = [{ element: answer, text: proposal.answer }];
 
     const citations = new Map(proposal.citations.map((citation) => [citation.citation_id, citation]));
-    const list = this.resultEl.createDiv({ cls: "fvsc-claims" });
+    const list = target.createDiv({ cls: "fvsc-claims" });
     const accepted = new Set<string>();
     const rejected = new Set<string>();
     const claimCards = new Map<string, HTMLElement>();
@@ -512,7 +551,7 @@ export class AntourageView extends ItemView {
         cls: `fvsc-support fvsc-support-${claim.support_level}`,
       });
       support.setAttr("title", claim.support_level);
-      card.createEl("p", { text: claim.text });
+      linkedTexts.push({ element: card.createEl("p", { text: claim.text }), text: claim.text });
       const links = card.createDiv({ cls: "fvsc-citations" });
       for (const citationId of claim.citation_ids) {
         const citation = citations.get(citationId);
@@ -538,7 +577,7 @@ export class AntourageView extends ItemView {
         this.markClaimDecision(card, "rejected");
       };
     }
-    const review = this.resultEl.createDiv({ cls: "fvsc-review" });
+    const review = target.createDiv({ cls: "fvsc-review" });
     const save = review.createEl("button", { text: "Сохранить мою оценку", cls: "mod-cta" });
     const reviewStatus = review.createSpan({ cls: "fvsc-review-status" });
     save.onclick = async () => {
@@ -577,11 +616,84 @@ export class AntourageView extends ItemView {
         save.disabled = false;
       }
     };
-    const foot = this.resultEl.createDiv({ cls: "fvsc-proposal-foot" });
+    const foot = target.createDiv({ cls: "fvsc-proposal-foot" });
     foot.setText(
       "Это предложение Антуража, не запись в вашей канонической памяти. " +
       "Оценка claims хранится отдельно и не переписывает исходники.",
     );
+    void this.linkConcepts(linkedTexts);
+  }
+
+  private showChat(): void {
+    if (this.resultEl) this.resultEl.style.display = "none";
+    if (this.chatEl) this.chatEl.style.display = "";
+  }
+
+  private async updateDialoguePicker(): Promise<void> {
+    const sessions = await this.fetchJson<{ conversation_id: string; title: string }[]>("/v1/dialogues");
+    const picker = this.dialoguePicker;
+    if (!picker) return;
+    picker.empty();
+    if (!sessions.some(s => s.conversation_id === this.conversationId))
+      picker.createEl("option", { value: this.conversationId, text: "Новый диалог" });
+    for (const session of sessions) picker.createEl("option", { value: session.conversation_id, text: session.title });
+    picker.value = this.conversationId;
+  }
+
+  private async loadDialogue(id: string): Promise<void> {
+    if (this.sending) {
+      if (this.dialoguePicker) this.dialoguePicker.value = this.conversationId;
+      new Notice("Дождись текущего ответа."); return;
+    }
+    const request = ++this.dialogueLoad;
+    this.historyReady = false;
+    this.conversationId = id;
+    this.getPlugin().settings.activeConversationId = id;
+    await this.getPlugin().saveSettings();
+    this.showChat();
+    if (!this.chatEl) return;
+    this.chatEl.empty();
+    this.chatEl.setText("Загружаю диалог…");
+    this.turns = [];
+    try {
+      const turns = await this.fetchJson<InterpretationProposal[]>(`/v1/dialogues/${encodeURIComponent(id)}`);
+      if (request !== this.dialogueLoad || !this.chatEl) return;
+      this.turns = turns;
+      this.historyReady = true;
+      this.chatEl.empty();
+      for (const proposal of turns) {
+        const user = this.chatEl.createDiv({ cls: "fvsc-message fvsc-message-user" });
+        user.createEl("strong", { text: "Ты" });
+        const question = user.createEl("p", { text: proposal.question });
+        void this.linkConcepts([{ element: question, text: proposal.question }]);
+        this.renderProposal(proposal, this.chatEl.createDiv({ cls: "fvsc-message fvsc-message-assistant" }));
+      }
+      if (!turns.length) this.chatEl.createEl("p", { text: "Задай вопрос. Затем можно уточнять ответ — история останется здесь." });
+      await this.updateDialoguePicker();
+      this.chatEl.scrollTop = this.chatEl.scrollHeight;
+    } catch (error) {
+      if (request === this.dialogueLoad && this.chatEl) this.chatEl.setText(`Диалог пока недоступен: ${String(error)}. Нажми «Обновить» после запуска сервиса.`);
+    }
+  }
+
+  private async linkConcepts(items: { element: HTMLElement; text: string }[]): Promise<void> {
+    try {
+      const results = await this.fetchJson<{text: string; term: string | null}[][]>("/v1/map/mentions", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texts: items.map(item => item.text) }),
+      });
+      items.forEach((item, index) => {
+        if (!item.element.isConnected || !results[index]) return;
+        item.element.empty();
+        for (const segment of results[index]) {
+          if (!segment.term) { item.element.appendText(segment.text); continue; }
+          const term = segment.term;
+          const link = item.element.createEl("button", { text: segment.text, cls: "fvsc-concept-link" });
+          link.title = `Открыть «${term}» на карте`;
+          link.onclick = () => void this.getPlugin().focusConcept(term);
+        }
+      });
+    } catch { /* Text remains readable when the map is unavailable. */ }
   }
 
   private markClaimDecision(
@@ -620,6 +732,7 @@ export class AntourageView extends ItemView {
   }
 
   reload(): void {
+    if (this.sending) { new Notice("Дождись текущего ответа."); return; }
     void this.onOpen();
   }
 
@@ -636,6 +749,9 @@ export class AntourageView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    ++this.dialogueLoad;
+    this.chatEl = null;
+    this.dialoguePicker = null;
     this.stopPolling();
     this.requestAbort?.abort();
     this.contentEl.empty();

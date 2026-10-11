@@ -36,6 +36,10 @@ class SearchRequest(_StrictModel):
     context_depth: int = Field(default=1, ge=0, le=4)
 
 
+class ConceptMentionsRequest(_StrictModel):
+    texts: list[str] = Field(max_length=130)
+
+
 class SearchHitResponse(_StrictModel):
     source_id: str
     source_revision: str
@@ -85,12 +89,15 @@ class HealthResponse(_StrictModel):
     loaded: bool
     interpretation_configured: bool
     startup_error: Literal["cache_stale", "cache_invalid"] | None = None
+    vault_id: str | None = None
 
 
 class InterpretRequest(_StrictModel):
     question: str = Field(min_length=1, max_length=8_192)
     top_k: int = Field(default=5, ge=1, le=20)
     context_depth: int = Field(default=1, ge=0, le=4)
+    conversation_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    previous_proposal_ids: list[str] = Field(default_factory=list, max_length=6)
 
 
 class ClarificationPrepareRequest(_StrictModel):
